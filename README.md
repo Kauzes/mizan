@@ -24,16 +24,24 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 
 ## Services
 
-| Module | Responsibility |
-|---|---|
-| `gateway` | Routing, JWT validation, rate limiting, correlation id propagation |
-| `identity-service` | Merchants, users, roles, JWT tokens, merchant API keys |
-| `payment-service` | Payment lifecycle and saga orchestration, idempotency |
-| `ledger-service` | Double entry accounts, journal entries, postings, reconciliation |
-| `risk-service` | Real time scoring, analyst review queue, threshold feedback |
-| `notification-service` | Signed merchant webhooks with retry and dead letter handling |
-| `bank-simulator` | Fake acquirer that approves, declines, times out and duplicates |
-| `common` | Shared money type, event schemas, error model, correlation context |
+| Module | Port | Responsibility |
+|---|---|---|
+| `gateway` | 8080 | Routing, JWT validation, rate limiting, correlation id propagation |
+| `identity-service` | 8081 | Merchants, users, roles, JWT tokens, merchant API keys |
+| `ledger-service` | 8082 | Double entry accounts, journal entries, postings, reconciliation |
+| `payment-service` | 8083 | Payment lifecycle and saga orchestration, idempotency |
+| `risk-service` | 8084 | Real time scoring, analyst review queue, threshold feedback |
+| `notification-service` | 8085 | Signed merchant webhooks with retry and dead letter handling |
+| `bank-simulator` | 8086 | Fake acquirer that approves, declines, times out and duplicates |
+| `common` | n/a | Shared money type, event schemas, error model, correlation context |
+
+Only the gateway is meant to be public. Every service port is published locally for
+debugging, and `bank-simulator` is deliberately unreachable through the gateway because
+it stands in for a system outside the platform.
+
+Each service is reachable through the gateway under `/api/v1/...`, and its health is
+reachable at `/internal/<service>/actuator/health`. Those internal routes are scaffolding
+for the smoke check and get locked down when authentication lands.
 
 ## Design rules
 
@@ -53,12 +61,12 @@ integration tests start Postgres and Kafka in containers through Testcontainers.
 
 ## Running
 
-The backing infrastructure runs now; the services do not exist yet.
+    ./gradlew build                    # compile and test
+    docker compose up -d --build --wait
 
-    docker compose up -d          # Postgres, Kafka, Redis
-    ./gradlew build               # compile and test
-
-A single command startup for the whole platform lands at the end of M1.
+That starts Postgres, Kafka, Redis and all seven services, and returns once every one of
+them reports healthy. The services are skeletons: they start, report health and route, but
+carry no domain logic yet.
 
 ## Documentation
 
