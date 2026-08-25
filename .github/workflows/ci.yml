@@ -3,8 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
+  # No branch filter. A pull request targeting anything other than main, which is what a
+  # stacked pull request is, otherwise runs no checks at all and shows nothing to say so.
   pull_request:
-    branches: [main]
 
 concurrency:
   group: ci-${{ github.ref }}
