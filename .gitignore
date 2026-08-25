@@ -1,0 +1,47 @@
+# Build output
+build/
+out/
+bin/
+target/
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# Gradle
+.gradle/
+gradle-app.setting
+
+# Node
+node_modules/
+dist/
+.vite/
+*.local
+
+# Android
+*.apk
+*.aab
+local.properties
+.cxx/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+
+# Logs and local data
+*.log
+logs/
+pgdata/
+kafka-data/
+
+# OS
+.DS_Store
+Thumbs.db
