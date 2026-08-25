@@ -53,11 +53,17 @@ integration tests start Postgres and Kafka in containers through Testcontainers.
 
 ## Running
 
-Not yet available. This section fills in at the end of M1.
+The backing infrastructure runs now; the services do not exist yet.
+
+    docker compose up -d          # Postgres, Kafka, Redis
+    ./gradlew build               # compile and test
+
+A single command startup for the whole platform lands at the end of M1.
 
 ## Documentation
 
-Architecture decisions live in [docs/adr](docs/adr).
+Architecture decisions live in [docs/adr](docs/adr). The feature by feature plan is in
+[docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## License
 
