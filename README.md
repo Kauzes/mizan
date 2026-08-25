@@ -33,7 +33,8 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 | `risk-service` | 8084 | Real time scoring, analyst review queue, threshold feedback |
 | `notification-service` | 8085 | Signed merchant webhooks with retry and dead letter handling |
 | `bank-simulator` | 8086 | Fake acquirer that approves, declines, times out and duplicates |
-| `common` | n/a | Shared money type, event schemas, error model, correlation context |
+| `common` | n/a | Shared money type, error codes, correlation context. No Spring |
+| `common-web` | n/a | Auto configured problem details and correlation id propagation |
 
 Only the gateway is meant to be public. Every service port is published locally for
 debugging, and `bank-simulator` is deliberately unreachable through the gateway because
@@ -53,6 +54,13 @@ for the smoke check and get locked down when authentication lands.
 - Every state change that produces an event writes both in one local transaction, through
   a transactional outbox.
 - Every write endpoint accepts an idempotency key and a replay returns the original result.
+- Every error is an RFC 9457 problem detail with a stable `code` from a closed enum, and
+  the HTTP status is derived from that code so the two cannot disagree.
+- Only deliberate errors carry detail. Anything else is an internal error with a fixed
+  message, so no stack trace or class name reaches a caller.
+- One correlation id per request, generated at the edge if the caller sends none, echoed on
+  the response, propagated on outbound calls and across Kafka, and printed on every log
+  line. An inbound id is only trusted if it is short and alphanumeric.
 
 ## Requirements
 
