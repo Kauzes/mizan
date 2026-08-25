@@ -2,6 +2,7 @@ rootProject.name = "mizan"
 
 include(
     "common",
+    "common-web",
     "services:gateway",
     "services:identity-service",
     "services:ledger-service",

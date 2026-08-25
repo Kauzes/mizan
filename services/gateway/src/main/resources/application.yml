@@ -69,3 +69,7 @@ management:
     health:
       probes:
         enabled: true
+
+logging:
+  pattern:
+    correlation: "[%X{correlationId:-}] "

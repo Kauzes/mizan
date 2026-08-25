@@ -4,8 +4,9 @@ FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /src
 COPY gradle gradle
 COPY gradlew settings.gradle.kts build.gradle.kts gradle.properties ./
-COPY common common
-COPY services services
+# Everything else, so adding a module cannot silently break the image build. What stays
+# out of the context is in .dockerignore.
+COPY . .
 RUN ./gradlew --no-daemon bootJar
 
 FROM eclipse-temurin:21-jre-alpine
