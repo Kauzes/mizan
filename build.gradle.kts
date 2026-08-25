@@ -2,6 +2,13 @@ plugins {
     alias(libs.plugins.spring.boot) apply false
 }
 
+// Compose reads .env directly. The same values reach the tests, so the harness cannot
+// start a different Postgres or Kafka than the one the platform runs on.
+val platformImages: Map<String, String> = file("$rootDir/.env").readLines()
+    .map { it.trim() }
+    .filter { it.isNotEmpty() && !it.startsWith("#") && it.contains("=") }
+    .associate { it.substringBefore("=").trim() to it.substringAfter("=").trim() }
+
 val springBootBom = libs.spring.boot.bom
 val springCloudBom = libs.spring.cloud.bom
 val testcontainersBom = libs.testcontainers.bom
@@ -39,7 +46,12 @@ subprojects {
     }
 
     tasks.withType<Test>().configureEach {
-        useJUnitPlatform()
+        useJUnitPlatform {
+            if (providers.gradleProperty("fastTests").isPresent) {
+                excludeTags("integration")
+            }
+        }
+        platformImages.forEach { (key, value) -> systemProperty("mizan.env.$key", value) }
         testLogging {
             events("passed", "skipped", "failed")
         }

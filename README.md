@@ -35,6 +35,7 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 | `bank-simulator` | 8086 | Fake acquirer that approves, declines, times out and duplicates |
 | `common` | n/a | Shared money type, error codes, correlation context. No Spring |
 | `common-web` | n/a | Auto configured problem details and correlation id propagation |
+| `common-test` | n/a | Integration test harness: containers pinned to the compose images |
 
 Only the gateway is meant to be public. Every service port is published locally for
 debugging, and `bank-simulator` is deliberately unreachable through the gateway because
@@ -66,6 +67,29 @@ for the smoke check and get locked down when authentication lands.
 
 Java 21, Docker, Node 20 or newer. Nothing else needs to be installed locally; the
 integration tests start Postgres and Kafka in containers through Testcontainers.
+
+## Testing
+
+    ./gradlew build                 # everything, including container backed tests
+    ./gradlew build -PfastTests     # skips anything tagged integration, no Docker needed
+
+Integration tests run against real Postgres and real Kafka, never an in memory substitute,
+so a test cannot pass on something the deployment does not use. The containers start once
+per JVM and are shared across test classes.
+
+`.env` pins the image tags. Docker Compose reads it directly and the Gradle build passes
+the same values into the test JVM, so the containers a test starts and the containers
+Compose starts cannot drift apart. A test asserts that wiring rather than trusting it.
+
+Runtime budget, measured on a developer machine with the images already pulled:
+
+| Command | Time |
+|---|---|
+| `./gradlew build` | about 80 seconds |
+| `./gradlew build -PfastTests` | about 25 seconds |
+| `./gradlew :common-test:test` | about 21 seconds |
+
+If the full build passes two minutes, something has regressed and is worth looking at.
 
 ## Running
 
