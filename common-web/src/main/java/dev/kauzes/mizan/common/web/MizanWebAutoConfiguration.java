@@ -1,5 +1,6 @@
 package dev.kauzes.mizan.common.web;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -44,6 +45,24 @@ public class MizanWebAutoConfiguration {
         @ConditionalOnMissingBean
         public ReactiveCorrelationIdFilter reactiveCorrelationIdFilter() {
             return new ReactiveCorrelationIdFilter();
+        }
+    }
+
+    /**
+     * The shared half of the API contract, contributed to whichever service is generating a
+     * spec. A service without springdoc on its classpath is documenting nothing and gets
+     * nothing.
+     */
+    @AutoConfiguration
+    @ConditionalOnClass(name = "org.springdoc.core.customizers.OpenApiCustomizer")
+    public static class OpenApi {
+
+        @Bean
+        @ConditionalOnMissingBean
+        public MizanOpenApiCustomizer mizanOpenApiCustomizer(
+                @Value("${spring.application.name:mizan}") String applicationName,
+                @Value("${mizan.openapi.version:0.1.0}") String version) {
+            return new MizanOpenApiCustomizer(applicationName, version);
         }
     }
 }

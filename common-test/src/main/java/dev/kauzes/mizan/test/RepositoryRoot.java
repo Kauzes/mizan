@@ -6,12 +6,12 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /** Finds the checkout, so a test can read the files the platform is actually deployed from. */
-final class RepositoryRoot {
+public final class RepositoryRoot {
 
     private RepositoryRoot() {
     }
 
-    static Path path() {
+    public static Path path() {
         Path candidate = Paths.get(System.getProperty("user.dir")).toAbsolutePath();
         while (candidate != null && !Files.exists(candidate.resolve("settings.gradle.kts"))) {
             candidate = candidate.getParent();
@@ -22,7 +22,7 @@ final class RepositoryRoot {
         return candidate;
     }
 
-    static String read(String relativePath) {
+    public static String read(String relativePath) {
         try {
             return Files.readString(path().resolve(relativePath));
         } catch (IOException e) {
