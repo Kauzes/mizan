@@ -37,6 +37,11 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 | `common-web` | n/a | Auto configured problem details and correlation id propagation |
 | `common-test` | n/a | Integration test harness: containers pinned to the compose images |
 
+`identity-service`, `ledger-service`, `payment-service`, `risk-service` and
+`notification-service` each own one database on the shared Postgres, named after the service
+without the suffix, and no service connects to another's. `gateway` and `bank-simulator` hold
+no state.
+
 Only the gateway is meant to be public. Every service port is published locally for
 debugging, and `bank-simulator` is deliberately unreachable through the gateway because
 it stands in for a system outside the platform.
@@ -52,6 +57,9 @@ for the smoke check and get locked down when authentication lands.
 - Journal entries are immutable. A correction is a new compensating entry, never an update
   or a delete.
 - No service reads another service's tables. Only its API or its events.
+- A service owns its schema through forward only migrations applied when it starts. No
+  entity generates schema; Hibernate only validates that the migrations built what the code
+  expects, so drift fails the service on startup instead of reshaping a live database.
 - Every state change that produces an event writes both in one local transaction, through
   a transactional outbox.
 - Every write endpoint accepts an idempotency key and a replay returns the original result.
@@ -85,11 +93,29 @@ Runtime budget, measured on a developer machine with the images already pulled:
 
 | Command | Time |
 |---|---|
-| `./gradlew build` | about 80 seconds |
-| `./gradlew build -PfastTests` | about 25 seconds |
-| `./gradlew :common-test:test` | about 21 seconds |
+| `./gradlew build` | about 145 seconds |
+| `./gradlew build -PfastTests` | about 45 seconds |
+| `./gradlew :common-test:test` | about 20 seconds |
 
-If the full build passes two minutes, something has regressed and is worth looking at.
+Every service owns a database, so proving that a service starts means starting Postgres, and
+those tests are tagged integration. `-PfastTests` no longer covers a service starting up.
+Test tasks that start containers take turns rather than racing each other for the Docker
+daemon, which is most of why the full build costs what it does.
+
+If the full build passes three minutes, something has regressed and is worth looking at.
+
+## Migrations
+
+Each service keeps its schema in `src/main/resources/db/migration`, as
+`V<number>__<description>.sql`, numbered from one and applied in order by Flyway when the
+service starts. A migration that has been applied is never edited; a correction is a new
+migration with the next number. The reasoning is in
+[ADR 0004](docs/adr/0004-database-per-service-and-migrations.md).
+
+Editing a migration that has already run locally will fail the next startup on a checksum
+mismatch. The fix is to throw the local data away rather than repair it:
+
+    docker compose down -v
 
 ## Running
 
@@ -97,8 +123,10 @@ If the full build passes two minutes, something has regressed and is worth looki
     docker compose up -d --build --wait
 
 That starts Postgres, Kafka, Redis and all seven services, and returns once every one of
-them reports healthy. The services are skeletons: they start, report health and route, but
-carry no domain logic yet.
+them reports healthy. A service that migrates its database waits for a healthy Postgres
+first, and reports its datasource in its own health, so a service that cannot reach its
+database never reports itself up. The services are skeletons: they start, migrate, report
+health and route, but carry no domain logic yet.
 
 ## Documentation
 

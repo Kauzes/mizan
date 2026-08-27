@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -34,7 +32,7 @@ class PlatformImagesTest {
 
     @Test
     void composeReferencesTheVariablesRatherThanHardCodedTags() throws IOException {
-        String compose = Files.readString(repositoryRoot().resolve("docker-compose.yml"));
+        String compose = RepositoryRoot.read("docker-compose.yml");
 
         assertThat(compose)
                 .contains("image: ${POSTGRES_IMAGE}")
@@ -44,7 +42,7 @@ class PlatformImagesTest {
 
     private static Map<String, String> readDotEnv() throws IOException {
         Map<String, String> values = new HashMap<>();
-        for (String line : Files.readAllLines(repositoryRoot().resolve(".env"))) {
+        for (String line : Files.readAllLines(RepositoryRoot.path().resolve(".env"))) {
             String trimmed = line.trim();
             if (trimmed.isEmpty() || trimmed.startsWith("#") || !trimmed.contains("=")) {
                 continue;
@@ -54,16 +52,5 @@ class PlatformImagesTest {
                     trimmed.substring(trimmed.indexOf('=') + 1).trim());
         }
         return values;
-    }
-
-    private static Path repositoryRoot() {
-        Path candidate = Paths.get(System.getProperty("user.dir")).toAbsolutePath();
-        while (candidate != null && !Files.exists(candidate.resolve("settings.gradle.kts"))) {
-            candidate = candidate.getParent();
-        }
-        if (candidate == null) {
-            throw new IllegalStateException("could not find the repository root from user.dir");
-        }
-        return candidate;
     }
 }

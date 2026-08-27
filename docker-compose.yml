@@ -4,16 +4,16 @@ services:
   postgres:
     image: ${POSTGRES_IMAGE}
     environment:
-      POSTGRES_USER: mizan
-      POSTGRES_PASSWORD: mizan
-      POSTGRES_DB: mizan
+      POSTGRES_USER: ${POSTGRES_USER:-mizan}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
+      POSTGRES_DB: ${POSTGRES_DB:-mizan}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql
       - ./deploy/local/init-databases.sql:/docker-entrypoint-initdb.d/10-databases.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mizan -d mizan"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mizan} -d ${POSTGRES_DB:-mizan}"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -77,6 +77,15 @@ services:
       context: .
       args:
         MODULE: identity-service
+    environment:
+      MIZAN_DB_URL: jdbc:postgresql://postgres:5432/identity
+      MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
+      MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
+    depends_on:
+      # Flyway runs on startup, so a service that comes up before Postgres is ready is a
+      # service that fails to come up at all.
+      postgres:
+        condition: service_healthy
     ports:
       - "8081:8081"
     healthcheck:
@@ -91,6 +100,13 @@ services:
       context: .
       args:
         MODULE: ledger-service
+    environment:
+      MIZAN_DB_URL: jdbc:postgresql://postgres:5432/ledger
+      MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
+      MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8082:8082"
     healthcheck:
@@ -105,6 +121,13 @@ services:
       context: .
       args:
         MODULE: payment-service
+    environment:
+      MIZAN_DB_URL: jdbc:postgresql://postgres:5432/payment
+      MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
+      MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8083:8083"
     healthcheck:
@@ -119,6 +142,13 @@ services:
       context: .
       args:
         MODULE: risk-service
+    environment:
+      MIZAN_DB_URL: jdbc:postgresql://postgres:5432/risk
+      MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
+      MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8084:8084"
     healthcheck:
@@ -133,6 +163,13 @@ services:
       context: .
       args:
         MODULE: notification-service
+    environment:
+      MIZAN_DB_URL: jdbc:postgresql://postgres:5432/notification
+      MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
+      MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8085:8085"
     healthcheck:

@@ -4,6 +4,18 @@ server:
 spring:
   application:
     name: identity-service
+  datasource:
+    url: ${MIZAN_DB_URL:jdbc:postgresql://localhost:5432/identity}
+    username: ${MIZAN_DB_USERNAME:mizan}
+    password: ${MIZAN_DB_PASSWORD:mizan}
+  jpa:
+    hibernate:
+      # Migrations own the schema. Anything Hibernate would generate is drift, and drift
+      # should fail the service on startup rather than quietly reshape a live database.
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    locations: classpath:db/migration
 
 management:
   endpoints:
