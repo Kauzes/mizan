@@ -1,6 +1,7 @@
 package dev.kauzes.mizan.test;
 
 import org.junit.jupiter.api.Tag;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -13,8 +14,12 @@ import org.springframework.test.context.DynamicPropertySource;
  * <p>The datasource is wired by an initializer rather than by a supplier here, because it
  * has to know which database the service owns and that is a property of the service, not
  * of this class.
+ *
+ * <p>MockMvc is configured here rather than on the tests that call it, so every test of a
+ * service shares one application context instead of starting a second one to get it.
  */
 @Tag("integration")
+@AutoConfigureMockMvc
 @ContextConfiguration(initializers = ServiceDatabaseInitializer.class)
 public abstract class MizanIntegrationTest {
 

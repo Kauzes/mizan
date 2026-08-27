@@ -1,2 +1,3 @@
 dev.kauzes.mizan.common.web.MizanWebAutoConfiguration$Servlet
 dev.kauzes.mizan.common.web.MizanWebAutoConfiguration$Reactive
+dev.kauzes.mizan.common.web.MizanWebAutoConfiguration$OpenApi

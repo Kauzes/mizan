@@ -29,36 +29,55 @@ spring:
               uri: http://notification-service:8085
               predicates:
                 - Path=/api/v1/notifications/**
-            - id: identity-service-health
+            - id: identity-service-internal
               uri: http://identity-service:8081
               predicates:
                 - Path=/internal/identity-service/**
               filters:
                 - StripPrefix=2
-            - id: ledger-service-health
+            - id: ledger-service-internal
               uri: http://ledger-service:8082
               predicates:
                 - Path=/internal/ledger-service/**
               filters:
                 - StripPrefix=2
-            - id: payment-service-health
+            - id: payment-service-internal
               uri: http://payment-service:8083
               predicates:
                 - Path=/internal/payment-service/**
               filters:
                 - StripPrefix=2
-            - id: risk-service-health
+            - id: risk-service-internal
               uri: http://risk-service:8084
               predicates:
                 - Path=/internal/risk-service/**
               filters:
                 - StripPrefix=2
-            - id: notification-service-health
+            - id: notification-service-internal
               uri: http://notification-service:8085
               predicates:
                 - Path=/internal/notification-service/**
               filters:
                 - StripPrefix=2
+
+springdoc:
+  # The gateway is where the platform's specs are browsed, through the same internal routes
+  # the smoke check uses. Its own spec stays enabled because disabling it would take Swagger
+  # UI with it, and it is empty anyway: the gateway routes and documents nothing of its own.
+  # bank-simulator is missing on purpose. It stands in for a system outside the platform and
+  # is not routed here.
+  swagger-ui:
+    urls:
+      - name: identity-service
+        url: /internal/identity-service/v3/api-docs
+      - name: ledger-service
+        url: /internal/ledger-service/v3/api-docs
+      - name: payment-service
+        url: /internal/payment-service/v3/api-docs
+      - name: risk-service
+        url: /internal/risk-service/v3/api-docs
+      - name: notification-service
+        url: /internal/notification-service/v3/api-docs
 
 management:
   endpoints:

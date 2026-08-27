@@ -41,11 +41,11 @@ class GatewayRouteDefinitionTests {
     }
 
     @Test
-    void healthRoutesStripTheirPrefix() {
+    void internalRoutesStripTheirPrefix() {
         Map<String, RouteDefinition> byId = definitions();
 
-        assertThat(byId).containsKey("payment-service-health");
-        assertThat(byId.get("payment-service-health").getFilters())
+        assertThat(byId).containsKey("payment-service-internal");
+        assertThat(byId.get("payment-service-internal").getFilters())
                 .singleElement()
                 .satisfies(filter -> {
                     assertThat(filter.getName()).isEqualTo("StripPrefix");

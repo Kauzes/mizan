@@ -5,6 +5,11 @@ spring:
   application:
     name: bank-simulator
 
+springdoc:
+  # Keys in a stable order, so a regenerated spec differs only where the API differs and the
+  # committed file stays reviewable.
+  writer-with-order-by-keys: true
+
 management:
   endpoints:
     web:

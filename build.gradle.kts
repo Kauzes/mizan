@@ -73,4 +73,23 @@ subprojects {
             events("passed", "skipped", "failed")
         }
     }
+
+    val testSources = extensions.getByType<SourceSetContainer>()["test"]
+
+    // Rewrites the committed OpenAPI specs from the ones the services generate. The same
+    // tests that compare the two do the writing, so the export cannot drift from the check.
+    tasks.register<Test>("exportOpenApi") {
+        group = "documentation"
+        description = "Rewrites docs/api from the spec each service generates"
+
+        testClassesDirs = testSources.output.classesDirs
+        classpath = testSources.runtimeClasspath
+
+        systemProperty("mizan.openapi.write", "true")
+        filter {
+            includeTestsMatching("*OpenApiSpecTest")
+            isFailOnNoMatchingTests = false
+        }
+        outputs.upToDateWhen { false }
+    }
 }

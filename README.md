@@ -46,9 +46,10 @@ Only the gateway is meant to be public. Every service port is published locally 
 debugging, and `bank-simulator` is deliberately unreachable through the gateway because
 it stands in for a system outside the platform.
 
-Each service is reachable through the gateway under `/api/v1/...`, and its health is
-reachable at `/internal/<service>/actuator/health`. Those internal routes are scaffolding
-for the smoke check and get locked down when authentication lands.
+Each service is reachable through the gateway under `/api/v1/...`, and its health and API
+documentation are reachable at `/internal/<service>/actuator/health` and
+`/internal/<service>/v3/api-docs`. Those internal routes are scaffolding for the smoke check
+and the documentation browser, and get locked down when authentication lands.
 
 ## Design rules
 
@@ -89,20 +90,23 @@ per JVM and are shared across test classes.
 the same values into the test JVM, so the containers a test starts and the containers
 Compose starts cannot drift apart. A test asserts that wiring rather than trusting it.
 
-Runtime budget, measured on a developer machine with the images already pulled:
+Runtime budget, measured on a developer machine with the images already pulled and the
+compose stack running. A full build serialises every test task, so its wall clock is roughly
+the sum of them and moves with whatever else the machine is doing; the stable number
+underneath is about 150 seconds of in JVM test time.
 
 | Command | Time |
 |---|---|
-| `./gradlew build` | about 145 seconds |
-| `./gradlew build -PfastTests` | about 45 seconds |
+| `./gradlew build` | three to four minutes |
+| `./gradlew build -PfastTests` | about 70 seconds |
 | `./gradlew :common-test:test` | about 20 seconds |
 
 Every service owns a database, so proving that a service starts means starting Postgres, and
 those tests are tagged integration. `-PfastTests` no longer covers a service starting up.
-Test tasks that start containers take turns rather than racing each other for the Docker
-daemon, which is most of why the full build costs what it does.
+Test tasks take turns rather than racing each other for the Docker daemon, which is most of
+why the full build costs what it does.
 
-If the full build passes three minutes, something has regressed and is worth looking at.
+If the full build passes five minutes, something has regressed and is worth looking at.
 
 ## Migrations
 
@@ -116,6 +120,27 @@ Editing a migration that has already run locally will fail the next startup on a
 mismatch. The fix is to throw the local data away rather than repair it:
 
     docker compose down -v
+
+## API documentation
+
+Every service generates its own OpenAPI specification from the code, and the generated files
+are committed under [docs/api](docs/api). A test in each service compares the committed file
+against the one the running service produces, so a spec cannot go stale: change an endpoint
+without exporting and the build fails. After changing an API, run
+
+    ./gradlew exportOpenApi
+
+and commit what changes. The file is never edited by hand.
+
+The whole platform is browsable in one place. With the stack up, <http://localhost:8080/swagger-ui.html>
+lists every service, and a service's own UI is on its own port, `http://localhost:808N/swagger-ui.html`.
+`bank-simulator` is absent from the gateway's list on purpose; it stands in for a system
+outside the platform and is not routed there.
+
+Errors are part of the contract rather than an afterthought: the problem detail schema and a
+response for every `ErrorCode` are contributed to each spec by `common-web`, so an operation
+documents a failure by naming the code it can return. Authentication schemes are described
+in the spec, and are marked as not enforced until the identity work in MIZ-2 lands.
 
 ## Running
 
@@ -131,7 +156,8 @@ health and route, but carry no domain logic yet.
 ## Documentation
 
 Architecture decisions live in [docs/adr](docs/adr). The feature by feature plan is in
-[docs/ROADMAP.md](docs/ROADMAP.md).
+[docs/ROADMAP.md](docs/ROADMAP.md). The generated API specifications are in
+[docs/api](docs/api).
 
 ## License
 

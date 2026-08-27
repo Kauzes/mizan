@@ -10,9 +10,11 @@ dependencies {
     compileOnly("org.springframework:spring-webflux")
     compileOnly("jakarta.servlet:jakarta.servlet-api")
     compileOnly("jakarta.validation:jakarta.validation-api")
+    compileOnly(libs.springdoc.common)
 
     testImplementation("org.springframework.boot:spring-boot-starter-web")
     testImplementation("org.springframework.boot:spring-boot-webmvc-test")
     testImplementation("org.springframework.boot:spring-boot-starter-validation")
     testImplementation("org.springframework.boot:spring-boot-starter-webflux")
+    testImplementation(libs.springdoc.webmvc.ui)
 }
