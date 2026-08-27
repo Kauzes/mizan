@@ -9,6 +9,20 @@ val platformImages: Map<String, String> = file("$rootDir/.env").readLines()
     .filter { it.isNotEmpty() && !it.startsWith("#") && it.contains("=") }
     .associate { it.substringBefore("=").trim() to it.substringAfter("=").trim() }
 
+/**
+ * Every service that owns a database starts containers in its own test JVM. Several of them
+ * reaching for the Docker daemon at the same moment is how a build fails on a machine where
+ * Docker is perfectly healthy, so container backed test tasks take turns. Nothing serialises
+ * a run with -PfastTests, which touches no containers at all.
+ */
+abstract class DockerAccess : BuildService<BuildServiceParameters.None>
+
+val fastTests = providers.gradleProperty("fastTests").isPresent
+
+val dockerAccess = gradle.sharedServices.registerIfAbsent("dockerAccess", DockerAccess::class) {
+    maxParallelUsages.set(1)
+}
+
 val springBootBom = libs.spring.boot.bom
 val springCloudBom = libs.spring.cloud.bom
 val testcontainersBom = libs.testcontainers.bom
@@ -47,9 +61,12 @@ subprojects {
 
     tasks.withType<Test>().configureEach {
         useJUnitPlatform {
-            if (providers.gradleProperty("fastTests").isPresent) {
+            if (fastTests) {
                 excludeTags("integration")
             }
+        }
+        if (!fastTests) {
+            usesService(dockerAccess)
         }
         platformImages.forEach { (key, value) -> systemProperty("mizan.env.$key", value) }
         testLogging {

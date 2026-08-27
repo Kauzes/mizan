@@ -1,0 +1,5 @@
+-- Baseline for the identity database, owned by identity-service.
+--
+-- Deliberately empty. A table arrives in the migration that introduces the feature needing
+-- it, so the history of this schema starts at a known point rather than with a table that
+-- nothing reads yet.
