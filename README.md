@@ -67,6 +67,12 @@ and the documentation browser, and get locked down when authentication lands.
   reaches a log line. No response type has a field for one to land in.
 - Uniqueness is enforced by the database. A caller finds out an email is taken by the insert
   failing, not by a check that answered a moment earlier.
+- An access token is verified by signature, issuer and expiry alone. No service asks
+  identity who a caller is, so identity is not on the path of every payment.
+- Identity signs with a private key and publishes the public half. Whoever verifies a token
+  should not be able to mint one, least of all the component facing the internet.
+- Refresh tokens are single use. Presenting a spent one revokes every token descended from
+  that sign in, because a replay and a theft cannot be told apart.
 - Every state change that produces an event writes both in one local transaction, through
   a transactional outbox.
 - Every write endpoint accepts an idempotency key and a replay returns the original result.
@@ -148,10 +154,20 @@ response for every `ErrorCode` are contributed to each spec by `common-web`, so 
 documents a failure by naming the code it can return. Authentication schemes are described
 in the spec, and are marked as not enforced until the identity work in MIZ-2 lands.
 
-`identity-service` publishes the first of them: `POST /api/v1/merchants` opens an account,
-creating the merchant and its owner in one transaction. Nothing checks who is calling it yet,
-so until the gateway starts verifying tokens in MIZ-30 the endpoint is open to anyone who can
-reach it.
+`identity-service` publishes the first of them. `POST /api/v1/merchants` opens an account,
+creating the merchant and its owner in one transaction. `POST /api/v1/tokens` exchanges that
+owner's email and password for an access token and a refresh token, and `POST
+/api/v1/tokens/refresh` rotates the pair. The public key access tokens are signed with is at
+`/.well-known/jwks.json`.
+
+Nothing enforces any of it yet. The gateway starts verifying tokens in MIZ-30, so until then
+every endpoint is open to anyone who can reach it, and an access token is something a caller
+can obtain rather than something they are asked for.
+
+Locally the service generates its signing key at startup and warns that it did. That means
+tokens stop working when it restarts, which is the point: a default key is either obviously
+local or it quietly becomes the key a deployment runs on. Set `MIZAN_JWT_PRIVATE_KEY` to a
+PKCS#8 PEM anywhere that matters.
 
 ## Running
 

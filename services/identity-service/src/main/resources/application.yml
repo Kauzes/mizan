@@ -17,6 +17,24 @@ spring:
   flyway:
     locations: classpath:db/migration
 
+mizan:
+  security:
+    jwt:
+      # Who the token says issued it. A verifier checks this, so it changes with the
+      # deployment rather than staying whatever was convenient locally.
+      issuer: ${MIZAN_JWT_ISSUER:https://mizan.local/identity}
+      # Minutes, because nothing can withdraw an access token before it expires: this is the
+      # window in which a role change has not taken effect yet.
+      access-token-ttl: ${MIZAN_ACCESS_TOKEN_TTL:15m}
+      # Days, because this is how long a client can stay signed in without a password. It is
+      # revocable, which is what makes the longer life acceptable.
+      refresh-token-ttl: ${MIZAN_REFRESH_TOKEN_TTL:30d}
+      # A PKCS#8 PEM private key, and never one committed here. Empty means the service
+      # generates a key for its own process and says so loudly: tokens do not survive a
+      # restart and no second instance can verify them, which is exactly what a local
+      # default should feel like.
+      private-key: ${MIZAN_JWT_PRIVATE_KEY:}
+
 springdoc:
   # Keys in a stable order, so a regenerated spec differs only where the API differs and the
   # committed file stays reviewable.

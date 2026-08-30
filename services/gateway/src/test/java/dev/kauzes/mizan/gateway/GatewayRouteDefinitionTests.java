@@ -41,13 +41,17 @@ class GatewayRouteDefinitionTests {
     }
 
     @Test
-    void merchantsAreServedByIdentityWithoutSayingSoInTheUrl() {
+    void identityResourcesAreRoutedWithoutSayingSoInTheUrl() {
         Map<String, RouteDefinition> byId = definitions();
 
         assertThat(byId.get("identity-service").getPredicates())
                 .singleElement()
                 .satisfies(predicate -> assertThat(predicate.getArgs().values())
-                        .containsExactly("/api/v1/merchants", "/api/v1/merchants/**"));
+                        .containsExactly(
+                                "/api/v1/merchants",
+                                "/api/v1/merchants/**",
+                                "/api/v1/tokens",
+                                "/api/v1/tokens/**"));
 
         assertThat(byId.values())
                 .as("a caller should never have to name a service to reach a resource")

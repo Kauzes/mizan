@@ -12,9 +12,28 @@ servers:
 - description: The local gateway. Services are not addressed directly.
   url: http://localhost:8080
 tags:
+- description: "Signing in, and staying signed in"
+  name: Tokens
+- description: The public key access tokens are signed with
+  name: Keys
 - description: Opening an account and reading who acts for it
   name: Merchants
 paths:
+  /.well-known/jwks.json:
+    get:
+      description: A JWKS. Verifiers fetch this rather than being handed a secret.
+      operationId: jwks
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: OK
+      summary: "The signing keys, public halves only"
+      tags:
+      - Keys
   /api/v1/merchants:
     post:
       description: Creates the merchant and the owner account together. Either both
@@ -87,6 +106,56 @@ paths:
       summary: List the users of a merchant
       tags:
       - Merchants
+  /api/v1/tokens:
+    post:
+      description: Exchanges an email and a password for an access and refresh token.
+      operationId: signIn
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignInRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+          description: A new token pair
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+      summary: Sign in
+      tags:
+      - Tokens
+  /api/v1/tokens/refresh:
+    post:
+      description: "Spends the refresh token presented and issues a new pair. Presenting\
+        \ one that was already spent revokes every token descended from that sign\
+        \ in, so the session has to be started again."
+      operationId: refresh
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+          description: A new token pair
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+      summary: Refresh a token pair
+      tags:
+      - Tokens
 components:
   headers:
     X-Correlation-Id:
@@ -308,6 +377,15 @@ components:
       - timestamp
       - title
       - type
+    RefreshRequest:
+      type: object
+      description: A refresh token being exchanged for a new pair
+      properties:
+        refreshToken:
+          type: string
+          minLength: 1
+      required:
+      - refreshToken
     RegisterMerchantRequest:
       type: object
       description: A new merchant and the owner account created with it
@@ -350,6 +428,42 @@ components:
           $ref: "#/components/schemas/MerchantResponse"
         owner:
           $ref: "#/components/schemas/UserResponse"
+    SignInRequest:
+      type: object
+      description: Credentials exchanged for a token pair
+      properties:
+        email:
+          type: string
+          example: owner@kauzes.dev
+          minLength: 1
+        password:
+          type: string
+          format: password
+          minLength: 1
+      required:
+      - email
+      - password
+    TokenPair:
+      type: object
+      description: An access token and the refresh token that renews it
+      properties:
+        accessToken:
+          type: string
+          description: "Send as: Authorization: Bearer <token>"
+        expiresIn:
+          type: integer
+          format: int64
+          description: Seconds until the access token expires
+        refreshExpiresIn:
+          type: integer
+          format: int64
+          description: Seconds until the refresh token expires
+        refreshToken:
+          type: string
+          description: "Presented once, to the refresh endpoint. Rotates on use."
+        tokenType:
+          type: string
+          example: Bearer
     UserResponse:
       type: object
       description: A person acting for a merchant

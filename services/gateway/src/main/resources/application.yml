@@ -17,7 +17,7 @@ spring:
             - id: identity-service
               uri: http://identity-service:8081
               predicates:
-                - Path=/api/v1/merchants,/api/v1/merchants/**
+                - Path=/api/v1/merchants,/api/v1/merchants/**,/api/v1/tokens,/api/v1/tokens/**
             - id: ledger-service
               uri: http://ledger-service:8082
               predicates:
