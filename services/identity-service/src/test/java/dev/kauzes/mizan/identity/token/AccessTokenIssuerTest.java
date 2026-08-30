@@ -8,7 +8,7 @@ import dev.kauzes.mizan.common.error.ErrorCode;
 import dev.kauzes.mizan.common.error.MizanException;
 import dev.kauzes.mizan.common.error.UnauthorizedException;
 import dev.kauzes.mizan.identity.merchant.Merchant;
-import dev.kauzes.mizan.identity.user.Role;
+import dev.kauzes.mizan.common.identity.Role;
 import dev.kauzes.mizan.identity.user.UserAccount;
 import java.lang.reflect.Field;
 import java.security.KeyPairGenerator;

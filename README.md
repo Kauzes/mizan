@@ -74,6 +74,14 @@ other protected route.
   caller sent under the same names.
 - What is public is a list, not a pattern. Forgetting to add a route to it produces a 401,
   which is the failure that gets noticed rather than the one that does not.
+- An endpoint declares the permission it needs, and a service refuses to start if one under
+  `/api/` declares nothing. Forgetting is invisible otherwise: the endpoint works, which is
+  what it also looks like when it is correct.
+- Where a path names a merchant, the caller must be acting for that merchant. Checked before
+  the handler runs, so an endpoint is guarded by its path rather than by somebody
+  remembering.
+- A refusal says nothing about whether the thing refused exists. Another merchant's data and
+  data that was never created are answered identically.
 - An access token is verified by signature, issuer and expiry alone. No service asks
   identity who a caller is, so identity is not on the path of every payment.
 - Identity signs with a private key and publishes the public half. Whoever verifies a token
@@ -173,10 +181,24 @@ established caller downstream on `X-Mizan-User`, `X-Mizan-Merchant` and `X-Mizan
 having first removed whatever arrived under those names. A service reads them and does not
 check anything itself.
 
-Being signed in is not yet being authorised. Nothing compares the merchant in the token with
-the merchant in the URL, so any signed in user can still read another merchant's account.
-MIZ-31 is where a service starts acting on the identity the gateway hands it, and where that
-closes.
+A service acts on that identity rather than trusting the caller. Every endpoint under
+`/api/` declares the permission it needs, and where the path names a merchant, a caller acting
+for a different one is refused before anything is looked up — identically whether that
+merchant exists or not.
+
+| Role | May |
+|---|---|
+| `OWNER` | Everything, within their own merchant. Adding and removing people, and changing what they may do |
+| `ADMIN` | Read the merchant and see who acts for it |
+| `ANALYST` | Read the merchant. The review queue in MIZ-6 is what this role is for |
+| `VIEWER` | Read the merchant |
+
+`ADMIN` and `ANALYST` are thin because the endpoints that make them worth holding do not exist
+yet. An epic that adds endpoints adds the permissions they need and grants them in `Role`,
+which is the one place to look when asking what somebody can do.
+
+A merchant always has an owner: the last one cannot be removed or demoted. An account nobody
+can administer is recoverable only by hand in the database.
 
 Locally the service generates its signing key at startup and warns that it did. That means
 tokens stop working when it restarts, which is the point: a default key is either obviously

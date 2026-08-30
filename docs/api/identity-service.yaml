@@ -18,6 +18,8 @@ tags:
   name: Keys
 - description: Opening an account and reading who acts for it
   name: Merchants
+- description: "Who acts for a merchant, and what they may do"
+  name: Users
 paths:
   /.well-known/jwks.json:
     get:
@@ -61,6 +63,8 @@ paths:
       - Merchants
   /api/v1/merchants/{merchantId}:
     get:
+      description: "Requires the MERCHANT_READ permission, held by: OWNER, ADMIN,\
+        \ ANALYST, VIEWER. The caller must be acting for the merchant in the path."
       operationId: find
       parameters:
       - in: path
@@ -78,6 +82,8 @@ paths:
           description: The merchant
         "401":
           $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
         "404":
           $ref: "#/components/responses/NOT_FOUND"
       security:
@@ -87,8 +93,11 @@ paths:
       - Merchants
   /api/v1/merchants/{merchantId}/users:
     get:
-      description: Oldest first. No password or hash appears in this response.
-      operationId: users
+      description: |-
+        Oldest first. No password or hash appears in this response.
+
+        Requires the USER_READ permission, held by: OWNER, ADMIN. The caller must be acting for the merchant in the path.
+      operationId: list
       parameters:
       - in: path
         name: merchantId
@@ -107,13 +116,132 @@ paths:
           description: The merchant's users
         "401":
           $ref: "#/components/responses/UNAUTHORIZED"
-        "404":
-          $ref: "#/components/responses/NOT_FOUND"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
       security:
       - merchantJwt: []
       summary: List the users of a merchant
       tags:
-      - Merchants
+      - Users
+    post:
+      description: "Requires the USER_MANAGE permission, held by: OWNER. The caller\
+        \ must be acting for the merchant in the path."
+      operationId: add
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddUserRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+          description: The user that was added
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "409":
+          $ref: "#/components/responses/CONFLICT"
+      security:
+      - merchantJwt: []
+      summary: Add a user to a merchant
+      tags:
+      - Users
+  /api/v1/merchants/{merchantId}/users/{userId}:
+    delete:
+      description: "Requires the USER_MANAGE permission, held by: OWNER. The caller\
+        \ must be acting for the merchant in the path."
+      operationId: remove
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: The user is gone
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
+      security:
+      - merchantJwt: []
+      summary: Remove a user from a merchant
+      tags:
+      - Users
+  /api/v1/merchants/{merchantId}/users/{userId}/roles:
+    put:
+      description: |-
+        The set sent is the set the user holds afterwards.
+
+        Requires the ROLE_MANAGE permission, held by: OWNER. The caller must be acting for the merchant in the path.
+      operationId: setRoles
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetRolesRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+          description: "The user, with their new roles"
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
+      security:
+      - merchantJwt: []
+      summary: Replace a user's roles
+      tags:
+      - Users
   /api/v1/tokens:
     post:
       description: Exchanges an email and a password for an access and refresh token.
@@ -290,6 +418,43 @@ components:
         X-Correlation-Id:
           $ref: "#/components/headers/X-Correlation-Id"
   schemas:
+    AddUserRequest:
+      type: object
+      description: A person to add to a merchant
+      properties:
+        email:
+          type: string
+          format: email
+          example: analyst@kauzes.dev
+          maxLength: 320
+          minLength: 0
+        fullName:
+          type: string
+          example: Alex Kauzes
+          maxLength: 200
+          minLength: 0
+        password:
+          type: string
+          format: password
+          maxLength: 200
+          minLength: 12
+        roles:
+          type: array
+          description: At least one. A user with no role could sign in and do nothing.
+          items:
+            type: string
+            enum:
+            - OWNER
+            - ADMIN
+            - ANALYST
+            - VIEWER
+          minItems: 1
+          uniqueItems: true
+      required:
+      - email
+      - fullName
+      - password
+      - roles
     FieldViolation:
       description: "One rejected field, in the shape a form can render beside the\
         \ input."
@@ -436,6 +601,23 @@ components:
           $ref: "#/components/schemas/MerchantResponse"
         owner:
           $ref: "#/components/schemas/UserResponse"
+    SetRolesRequest:
+      type: object
+      description: The complete set of roles a user should hold
+      properties:
+        roles:
+          type: array
+          items:
+            type: string
+            enum:
+            - OWNER
+            - ADMIN
+            - ANALYST
+            - VIEWER
+          minItems: 1
+          uniqueItems: true
+      required:
+      - roles
     SignInRequest:
       type: object
       description: Credentials exchanged for a token pair

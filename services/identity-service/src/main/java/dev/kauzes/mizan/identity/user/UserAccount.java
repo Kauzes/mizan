@@ -1,5 +1,6 @@
 package dev.kauzes.mizan.identity.user;
 
+import dev.kauzes.mizan.common.identity.Role;
 import dev.kauzes.mizan.identity.merchant.Merchant;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -112,6 +113,15 @@ public class UserAccount {
 
     public Instant createdAt() {
         return createdAt;
+    }
+
+    /** Replaces every role at once, which is what a caller sending a complete set means. */
+    public void holdOnly(Set<Role> replacement) {
+        this.roles = EnumSet.copyOf(replacement);
+    }
+
+    public boolean holds(Role role) {
+        return roles.contains(role);
     }
 
     /** Deliberately says nothing about the password, whatever logs this. */

@@ -9,7 +9,7 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import dev.kauzes.mizan.common.error.UnauthorizedException;
-import dev.kauzes.mizan.identity.user.Role;
+import dev.kauzes.mizan.common.identity.Role;
 import dev.kauzes.mizan.identity.user.UserAccount;
 import java.time.Clock;
 import java.time.Instant;

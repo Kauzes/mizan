@@ -1,5 +1,6 @@
 package dev.kauzes.mizan.identity.user;
 
+import dev.kauzes.mizan.common.identity.Role;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.Set;

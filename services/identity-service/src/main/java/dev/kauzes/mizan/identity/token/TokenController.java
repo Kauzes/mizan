@@ -1,5 +1,6 @@
 package dev.kauzes.mizan.identity.token;
 
+import dev.kauzes.mizan.common.web.PublicEndpoint;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,6 +23,7 @@ public class TokenController {
     }
 
     @PostMapping
+    @PublicEndpoint(because = "nobody has a token before they sign in")
     @Operation(
             summary = "Sign in",
             description = "Exchanges an email and a password for an access and refresh token.")
@@ -38,6 +40,7 @@ public class TokenController {
     }
 
     @PostMapping("/refresh")
+    @PublicEndpoint(because = "the refresh token is the credential; no access token is held")
     @Operation(
             summary = "Refresh a token pair",
             description =

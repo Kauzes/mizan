@@ -10,7 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import dev.kauzes.mizan.identity.user.Role;
+import dev.kauzes.mizan.common.identity.Role;
+import dev.kauzes.mizan.identity.Callers;
 import dev.kauzes.mizan.test.MizanIntegrationTest;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -62,14 +63,12 @@ class MerchantRegistrationTest extends MizanIntegrationTest {
 
     @Test
     void pointsAtTheMerchantItJustCreated() throws Exception {
-        String location =
-                register("Kauzes Books", freshEmail(), PASSWORD)
-                        .andReturn()
-                        .getResponse()
-                        .getHeader("Location");
+        String email = freshEmail();
+        ResultActions registration = register("Kauzes Books", email, PASSWORD);
+        String location = registration.andReturn().getResponse().getHeader("Location");
 
         assertThat(location).as("a created resource says where it is").isNotNull();
-        mockMvc.perform(get(location))
+        mockMvc.perform(get(location).with(ownerOf(email)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Kauzes Books"));
     }
@@ -81,7 +80,8 @@ class MerchantRegistrationTest extends MizanIntegrationTest {
 
         assertThat(registration).doesNotContain(PASSWORD).doesNotContain("passwordHash");
 
-        String users = bodyOf(mockMvc.perform(get(usersOfMerchantWith(email))));
+        String users = bodyOf(
+                mockMvc.perform(get(usersOfMerchantWith(email)).with(ownerOf(email))));
         assertThat(users).doesNotContain(PASSWORD).doesNotContain("passwordHash");
         assertThat(users).as("the owner should be listed").contains(email);
     }
@@ -192,10 +192,24 @@ class MerchantRegistrationTest extends MizanIntegrationTest {
     }
 
     @Test
-    void returnsNotFoundForAMerchantThatDoesNotExist() throws Exception {
-        mockMvc.perform(get("/api/v1/merchants/" + UUID.randomUUID()))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    void refusesAMerchantThatIsNotTheCallersWithoutSayingWhetherItExists() throws Exception {
+        String email = freshEmail();
+        register("Kauzes Private", email, PASSWORD).andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/merchants/" + UUID.randomUUID()).with(ownerOf(email)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+                .andExpect(jsonPath("$.detail").value("You may not do that."));
+    }
+
+    @Test
+    void refusesARequestThatDidNotComeThroughTheGateway() throws Exception {
+        String email = freshEmail();
+        register("Kauzes Direct", email, PASSWORD).andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/merchants/" + merchantIdOf(email)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
     }
 
     private ResultActions register(String merchantName, String email, String password)
@@ -217,10 +231,21 @@ class MerchantRegistrationTest extends MizanIntegrationTest {
     }
 
     private String usersOfMerchantWith(String email) {
-        UUID merchantId =
-                jdbc.queryForObject(
-                        "select merchant_id from app_user where email = ?", UUID.class, email);
-        return "/api/v1/merchants/" + merchantId + "/users";
+        return "/api/v1/merchants/" + merchantIdOf(email) + "/users";
+    }
+
+    private UUID merchantIdOf(String email) {
+        return jdbc.queryForObject(
+                "select merchant_id from app_user where email = ?", UUID.class, email);
+    }
+
+    /** The owner this registration created, as the gateway would have established them. */
+    private org.springframework.test.web.servlet.request.RequestPostProcessor ownerOf(
+            String email) {
+
+        UUID userId = jdbc.queryForObject(
+                "select id from app_user where email = ?", UUID.class, email);
+        return Callers.owner(userId, merchantIdOf(email));
     }
 
     private String hashOf(String email) {

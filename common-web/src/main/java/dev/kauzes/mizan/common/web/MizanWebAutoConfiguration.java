@@ -1,11 +1,17 @@
 package dev.kauzes.mizan.common.web;
 
+import java.util.List;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 /**
  * Wires the shared web behaviour into any service that depends on this module. The servlet
@@ -35,6 +41,48 @@ public class MizanWebAutoConfiguration {
         public CorrelationPropagationInterceptor correlationPropagationInterceptor() {
             return new CorrelationPropagationInterceptor();
         }
+
+        @Bean
+        @ConditionalOnMissingBean
+        public AuthorizationInterceptor authorizationInterceptor() {
+            return new AuthorizationInterceptor();
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        public AuthorizationDeclarations authorizationDeclarations(
+                ObjectProvider<RequestMappingHandlerMapping> mappings) {
+            return new AuthorizationDeclarations(mappings);
+        }
+
+        /**
+         * Puts the authorization check in front of every handler, and lets one ask for the
+         * caller as an argument. Registered here rather than left to each service, so an
+         * endpoint is guarded by existing rather than by somebody remembering.
+         */
+        @Bean
+        @ConditionalOnMissingBean(name = "mizanAuthorizationConfigurer")
+        public WebMvcConfigurer mizanAuthorizationConfigurer(
+                AuthorizationInterceptor authorization) {
+
+            return new WebMvcConfigurer() {
+
+                @Override
+                public void addInterceptors(InterceptorRegistry registry) {
+                    // Only this platform's own API. Actuator, the generated spec and the
+                    // published signing keys are not endpoints anybody annotates, and
+                    // refusing them for saying nothing would be refusing them for not being
+                    // controllers of ours.
+                    registry.addInterceptor(authorization).addPathPatterns("/api/**");
+                }
+
+                @Override
+                public void addArgumentResolvers(
+                        List<HandlerMethodArgumentResolver> resolvers) {
+                    resolvers.add(new CallerArgumentResolver());
+                }
+            };
+        }
     }
 
     @AutoConfiguration
@@ -63,6 +111,12 @@ public class MizanWebAutoConfiguration {
                 @Value("${spring.application.name:mizan}") String applicationName,
                 @Value("${mizan.openapi.version:0.1.0}") String version) {
             return new MizanOpenApiCustomizer(applicationName, version);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        public RequiredPermissionCustomizer requiredPermissionCustomizer() {
+            return new RequiredPermissionCustomizer();
         }
     }
 }
