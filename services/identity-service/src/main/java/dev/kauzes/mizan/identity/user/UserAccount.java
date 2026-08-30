@@ -19,6 +19,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
  * A person acting for a merchant.
@@ -77,6 +78,16 @@ public class UserAccount {
     /** The form the database will accept, and the only form a lookup should ever search for. */
     public static String normalise(String email) {
         return Objects.requireNonNull(email, "email").trim().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Whether a candidate password is this user's.
+     *
+     * <p>The check comes to the hash rather than the hash going to the check, which is what
+     * keeps the stored value from having an accessor at all.
+     */
+    public boolean passwordMatches(CharSequence candidate, PasswordEncoder encoder) {
+        return encoder.matches(candidate, passwordHash);
     }
 
     public UUID id() {

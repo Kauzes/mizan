@@ -42,6 +42,21 @@ class IdentityOpenApiSpecTest extends OpenApiSpecTest {
                 .isTrue();
     }
 
+    @Test
+    void documentsSigningInAndRefreshing() throws Exception {
+        JsonNode paths = specification().path("paths");
+
+        assertThat(paths.path("/api/v1/tokens").path("post").path("responses").path("401")
+                        .path("$ref").asText())
+                .isEqualTo("#/components/responses/UNAUTHORIZED");
+        assertThat(paths.path("/api/v1/tokens/refresh").path("post").isMissingNode())
+                .as("a client cannot stay signed in against an undocumented endpoint")
+                .isFalse();
+        assertThat(paths.path("/.well-known/jwks.json").path("get").isMissingNode())
+                .as("a verifier has to be able to find the key")
+                .isFalse();
+    }
+
     private JsonNode specification() throws Exception {
         String json =
                 mockMvc.perform(get("/v3/api-docs"))
