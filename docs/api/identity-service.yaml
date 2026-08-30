@@ -11,7 +11,82 @@ info:
 servers:
 - description: The local gateway. Services are not addressed directly.
   url: http://localhost:8080
-paths: {}
+tags:
+- description: Opening an account and reading who acts for it
+  name: Merchants
+paths:
+  /api/v1/merchants:
+    post:
+      description: Creates the merchant and the owner account together. Either both
+        exist afterwards or neither does.
+      operationId: register
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterMerchantRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistrationResponse"
+          description: The merchant and its owner
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+        "409":
+          $ref: "#/components/responses/CONFLICT"
+      summary: Register a merchant
+      tags:
+      - Merchants
+  /api/v1/merchants/{merchantId}:
+    get:
+      operationId: find
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MerchantResponse"
+          description: The merchant
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+      summary: Read a merchant
+      tags:
+      - Merchants
+  /api/v1/merchants/{merchantId}/users:
+    get:
+      description: Oldest first. No password or hash appears in this response.
+      operationId: users
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserResponse"
+          description: The merchant's users
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+      summary: List the users of a merchant
+      tags:
+      - Merchants
 components:
   headers:
     X-Correlation-Id:
@@ -151,6 +226,18 @@ components:
       required:
       - field
       - message
+    MerchantResponse:
+      type: object
+      description: The account money belongs to
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
     Problem:
       description: An RFC 9457 problem detail. The body of every failing request.
       example:
@@ -221,6 +308,75 @@ components:
       - timestamp
       - title
       - type
+    RegisterMerchantRequest:
+      type: object
+      description: A new merchant and the owner account created with it
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email the owner signs in with
+          example: owner@kauzes.dev
+          maxLength: 320
+          minLength: 0
+        fullName:
+          type: string
+          description: Owner's name
+          example: Sam Kauzes
+          maxLength: 200
+          minLength: 0
+        merchantName:
+          type: string
+          description: Trading name of the merchant
+          example: Kauzes Coffee
+          maxLength: 200
+          minLength: 0
+        password:
+          type: string
+          format: password
+          description: Owner's password. Stored as a salted hash and never returned.
+          maxLength: 200
+          minLength: 12
+      required:
+      - email
+      - fullName
+      - merchantName
+      - password
+    RegistrationResponse:
+      type: object
+      description: A newly registered merchant and its owner
+      properties:
+        merchant:
+          $ref: "#/components/schemas/MerchantResponse"
+        owner:
+          $ref: "#/components/schemas/UserResponse"
+    UserResponse:
+      type: object
+      description: A person acting for a merchant
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        email:
+          type: string
+        fullName:
+          type: string
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        roles:
+          type: array
+          items:
+            type: string
+            enum:
+            - OWNER
+            - ADMIN
+            - ANALYST
+            - VIEWER
+          uniqueItems: true
   securitySchemes:
     merchantApiKey:
       description: "The merchant's API key, identifying which merchant a server to\

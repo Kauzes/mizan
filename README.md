@@ -61,6 +61,12 @@ and the documentation browser, and get locked down when authentication lands.
 - A service owns its schema through forward only migrations applied when it starts. No
   entity generates schema; Hibernate only validates that the migrations built what the code
   expects, so drift fails the service on startup instead of reshaping a live database.
+- A merchant is the tenant boundary. Every table that holds money, a payment or a decision
+  carries a merchant id, and a user belongs to exactly one merchant.
+- A password is stored as a salted bcrypt hash, is never returned by any endpoint and never
+  reaches a log line. No response type has a field for one to land in.
+- Uniqueness is enforced by the database. A caller finds out an email is taken by the insert
+  failing, not by a check that answered a moment earlier.
 - Every state change that produces an event writes both in one local transaction, through
   a transactional outbox.
 - Every write endpoint accepts an idempotency key and a replay returns the original result.
@@ -141,6 +147,11 @@ Errors are part of the contract rather than an afterthought: the problem detail 
 response for every `ErrorCode` are contributed to each spec by `common-web`, so an operation
 documents a failure by naming the code it can return. Authentication schemes are described
 in the spec, and are marked as not enforced until the identity work in MIZ-2 lands.
+
+`identity-service` publishes the first of them: `POST /api/v1/merchants` opens an account,
+creating the merchant and its owner in one transaction. Nothing checks who is calling it yet,
+so until the gateway starts verifying tokens in MIZ-30 the endpoint is open to anyone who can
+reach it.
 
 ## Running
 
