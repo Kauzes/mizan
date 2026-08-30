@@ -9,10 +9,15 @@ spring:
       server:
         webflux:
           routes:
+            # A public path names a resource, not the service that happens to serve it:
+            # a merchant integrating against Mizan should not have to know identity-service
+            # exists, and moving a resource later should not change its URL. The remaining
+            # routes below are still named after their service, and get the same treatment
+            # as each one grows real endpoints.
             - id: identity-service
               uri: http://identity-service:8081
               predicates:
-                - Path=/api/v1/identity/**
+                - Path=/api/v1/merchants,/api/v1/merchants/**
             - id: ledger-service
               uri: http://ledger-service:8082
               predicates:
