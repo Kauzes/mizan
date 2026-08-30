@@ -2,11 +2,10 @@ package dev.kauzes.mizan.identity.merchant;
 
 import dev.kauzes.mizan.common.error.ConflictException;
 import dev.kauzes.mizan.common.error.NotFoundException;
-import dev.kauzes.mizan.identity.user.Role;
+import dev.kauzes.mizan.common.identity.Role;
 import dev.kauzes.mizan.identity.user.UserAccount;
 import dev.kauzes.mizan.identity.user.UserAccountRepository;
 import dev.kauzes.mizan.identity.user.UserResponse;
-import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,15 +71,5 @@ public class MerchantRegistrationService {
                 .findById(merchantId)
                 .map(MerchantResponse::of)
                 .orElseThrow(() -> new NotFoundException("No merchant with that id."));
-    }
-
-    @Transactional(readOnly = true)
-    public List<UserResponse> usersOf(UUID merchantId) {
-        if (!merchants.existsById(merchantId)) {
-            throw new NotFoundException("No merchant with that id.");
-        }
-        return users.findByMerchantIdOrderByCreatedAtAsc(merchantId).stream()
-                .map(UserResponse::of)
-                .toList();
     }
 }

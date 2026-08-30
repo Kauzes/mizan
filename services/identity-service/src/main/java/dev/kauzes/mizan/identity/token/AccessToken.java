@@ -1,6 +1,6 @@
 package dev.kauzes.mizan.identity.token;
 
-import dev.kauzes.mizan.identity.user.Role;
+import dev.kauzes.mizan.common.identity.Role;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;

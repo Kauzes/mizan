@@ -1,13 +1,13 @@
 package dev.kauzes.mizan.identity.merchant;
 
-import dev.kauzes.mizan.identity.user.UserResponse;
+import dev.kauzes.mizan.common.identity.Permission;
+import dev.kauzes.mizan.common.web.PublicEndpoint;
+import dev.kauzes.mizan.common.web.RequiresPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
-import java.util.List;
 import java.util.UUID;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -30,6 +30,7 @@ public class MerchantController {
     }
 
     @PostMapping
+    @PublicEndpoint(because = "opening the first account cannot require an account")
     @Operation(
             summary = "Register a merchant",
             description =
@@ -54,30 +55,14 @@ public class MerchantController {
     }
 
     @GetMapping("/{merchantId}")
+    @RequiresPermission(Permission.MERCHANT_READ)
     @Operation(summary = "Read a merchant")
-    @SecurityRequirement(name = "merchantJwt")
     @ApiResponse(responseCode = "200", description = "The merchant")
-    @ApiResponse(responseCode = "401", ref = "#/components/responses/UNAUTHORIZED")
     @ApiResponse(
             responseCode = "404",
             ref = "#/components/responses/NOT_FOUND",
             description = "No merchant with that id")
     public MerchantResponse find(@PathVariable UUID merchantId) {
         return registration.find(merchantId);
-    }
-
-    @GetMapping("/{merchantId}/users")
-    @SecurityRequirement(name = "merchantJwt")
-    @Operation(
-            summary = "List the users of a merchant",
-            description = "Oldest first. No password or hash appears in this response.")
-    @ApiResponse(responseCode = "200", description = "The merchant's users")
-    @ApiResponse(responseCode = "401", ref = "#/components/responses/UNAUTHORIZED")
-    @ApiResponse(
-            responseCode = "404",
-            ref = "#/components/responses/NOT_FOUND",
-            description = "No merchant with that id")
-    public List<UserResponse> users(@PathVariable UUID merchantId) {
-        return registration.usersOf(merchantId);
     }
 }
