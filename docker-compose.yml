@@ -63,6 +63,8 @@ services:
       context: .
       args:
         MODULE: gateway
+    environment:
+      MIZAN_JWK_SET_URI: http://identity-service:8081/.well-known/jwks.json
     ports:
       - "8080:8080"
     healthcheck:

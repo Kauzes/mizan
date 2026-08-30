@@ -76,8 +76,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/MerchantResponse"
           description: The merchant
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
         "404":
           $ref: "#/components/responses/NOT_FOUND"
+      security:
+      - merchantJwt: []
       summary: Read a merchant
       tags:
       - Merchants
@@ -101,8 +105,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/UserResponse"
           description: The merchant's users
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
         "404":
           $ref: "#/components/responses/NOT_FOUND"
+      security:
+      - merchantJwt: []
       summary: List the users of a merchant
       tags:
       - Merchants
@@ -495,21 +503,22 @@ components:
     merchantApiKey:
       description: "The merchant's API key, identifying which merchant a server to\
         \ server call belongs to. Paired with merchantSignature; a key on its own\
-        \ is not enough. Not enforced until MIZ-2."
+        \ is not enough. Not enforced until MIZ-32."
       in: header
       name: X-Mizan-Key
       type: apiKey
     merchantJwt:
       bearerFormat: JWT
       description: "A short lived access token issued by identity-service, sent as\
-        \ an Authorization bearer header. Used by a person signed in to the merchant\
-        \ console. Not enforced until MIZ-2."
+        \ an Authorization bearer header. Obtained from POST /api/v1/tokens and renewed\
+        \ at /api/v1/tokens/refresh. The gateway verifies it and passes the established\
+        \ identity on; a service never sees the token itself."
       scheme: bearer
       type: http
     merchantSignature:
       description: "An HMAC signature over the request, proving the caller holds the\
-        \ secret behind the API key. What exactly is signed is settled by MIZ-2. Not\
-        \ enforced until then."
+        \ secret behind the API key. What exactly is signed is settled by MIZ-32.\
+        \ Not enforced until then."
       in: header
       name: X-Mizan-Signature
       type: apiKey

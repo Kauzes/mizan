@@ -48,8 +48,10 @@ it stands in for a system outside the platform.
 
 Each service is reachable through the gateway under `/api/v1/...`, and its health and API
 documentation are reachable at `/internal/<service>/actuator/health` and
-`/internal/<service>/v3/api-docs`. Those internal routes are scaffolding for the smoke check
-and the documentation browser, and get locked down when authentication lands.
+`/internal/<service>/v3/api-docs`. Those two are all that the internal routes still expose
+without a token: a published contract is documentation and a liveness probe holds no
+credentials, while anything else under `/internal/**` now needs an access token like any
+other protected route.
 
 ## Design rules
 
@@ -67,6 +69,11 @@ and the documentation browser, and get locked down when authentication lands.
   reaches a log line. No response type has a field for one to land in.
 - Uniqueness is enforced by the database. A caller finds out an email is taken by the insert
   failing, not by a check that answered a moment earlier.
+- Authentication happens once, at the gateway. A service behind it receives a caller who
+  has already been established, on headers the gateway sets after stripping whatever the
+  caller sent under the same names.
+- What is public is a list, not a pattern. Forgetting to add a route to it produces a 401,
+  which is the failure that gets noticed rather than the one that does not.
 - An access token is verified by signature, issuer and expiry alone. No service asks
   identity who a caller is, so identity is not on the path of every payment.
 - Identity signs with a private key and publishes the public half. Whoever verifies a token
@@ -152,7 +159,8 @@ outside the platform and is not routed there.
 Errors are part of the contract rather than an afterthought: the problem detail schema and a
 response for every `ErrorCode` are contributed to each spec by `common-web`, so an operation
 documents a failure by naming the code it can return. Authentication schemes are described
-in the spec, and are marked as not enforced until the identity work in MIZ-2 lands.
+in the spec. The bearer token is enforced by the gateway, and an operation that needs one
+says so; the API key pair is still description, and says so, until MIZ-32.
 
 `identity-service` publishes the first of them. `POST /api/v1/merchants` opens an account,
 creating the merchant and its owner in one transaction. `POST /api/v1/tokens` exchanges that
@@ -160,9 +168,15 @@ owner's email and password for an access token and a refresh token, and `POST
 /api/v1/tokens/refresh` rotates the pair. The public key access tokens are signed with is at
 `/.well-known/jwks.json`.
 
-Nothing enforces any of it yet. The gateway starts verifying tokens in MIZ-30, so until then
-every endpoint is open to anyone who can reach it, and an access token is something a caller
-can obtain rather than something they are asked for.
+The gateway verifies that token on every route that is not on its public list, and passes the
+established caller downstream on `X-Mizan-User`, `X-Mizan-Merchant` and `X-Mizan-Roles`,
+having first removed whatever arrived under those names. A service reads them and does not
+check anything itself.
+
+Being signed in is not yet being authorised. Nothing compares the merchant in the token with
+the merchant in the URL, so any signed in user can still read another merchant's account.
+MIZ-31 is where a service starts acting on the identity the gateway hands it, and where that
+closes.
 
 Locally the service generates its signing key at startup and warns that it did. That means
 tokens stop working when it restarts, which is the point: a default key is either obviously

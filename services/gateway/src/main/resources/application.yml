@@ -65,6 +65,16 @@ spring:
               filters:
                 - StripPrefix=2
 
+mizan:
+  security:
+    jwt:
+      # The only issuer this gateway accepts.
+      issuer: ${MIZAN_JWT_ISSUER:https://mizan.local/identity}
+      # Fetched, not configured as a secret: the gateway verifies tokens and holds nothing
+      # that could sign one. Compose points this at the service; the default is for a
+      # gateway run straight off a laptop.
+      jwk-set-uri: ${MIZAN_JWK_SET_URI:http://localhost:8081/.well-known/jwks.json}
+
 springdoc:
   # The gateway is where the platform's specs are browsed, through the same internal routes
   # the smoke check uses. Its own spec stays enabled because disabling it would take Swagger

@@ -189,9 +189,14 @@ public class MizanOpenApiCustomizer implements OpenApiCustomizer {
     }
 
     /**
-     * The schemes are declared before anything enforces them. Identity lands in MIZ-2, and
-     * until it does no operation references a scheme and no request is rejected for missing
-     * one. What is described here is the intent, and it says so.
+     * How a caller proves who they are.
+     *
+     * <p>The bearer token is real: the gateway verifies it on every route that is not on its
+     * public list, and an operation that needs one says so by referencing the scheme.
+     *
+     * <p>The API key pair is still description rather than enforcement. MIZ-32 makes it real
+     * and may change what exactly is signed, so it says so here rather than letting a reader
+     * assume otherwise.
      */
     private static void authentication(Components components) {
         components.addSecuritySchemes(
@@ -201,8 +206,10 @@ public class MizanOpenApiCustomizer implements OpenApiCustomizer {
                         .scheme("bearer")
                         .bearerFormat("JWT")
                         .description("A short lived access token issued by identity-service, sent "
-                                + "as an Authorization bearer header. Used by a person signed in "
-                                + "to the merchant console. Not enforced until MIZ-2."));
+                                + "as an Authorization bearer header. Obtained from POST "
+                                + "/api/v1/tokens and renewed at /api/v1/tokens/refresh. The "
+                                + "gateway verifies it and passes the established identity on; a "
+                                + "service never sees the token itself."));
 
         components.addSecuritySchemes(
                 "merchantApiKey",
@@ -212,7 +219,7 @@ public class MizanOpenApiCustomizer implements OpenApiCustomizer {
                         .name("X-Mizan-Key")
                         .description("The merchant's API key, identifying which merchant a server "
                                 + "to server call belongs to. Paired with merchantSignature; a key "
-                                + "on its own is not enough. Not enforced until MIZ-2."));
+                                + "on its own is not enough. Not enforced until MIZ-32."));
 
         components.addSecuritySchemes(
                 "merchantSignature",
@@ -222,6 +229,6 @@ public class MizanOpenApiCustomizer implements OpenApiCustomizer {
                         .name("X-Mizan-Signature")
                         .description("An HMAC signature over the request, proving the caller holds "
                                 + "the secret behind the API key. What exactly is signed is "
-                                + "settled by MIZ-2. Not enforced until then."));
+                                + "settled by MIZ-32. Not enforced until then."));
     }
 }

@@ -98,6 +98,10 @@ public abstract class OpenApiSpecTest extends MizanIntegrationTest {
         assertThat(schemes.has("merchantJwt")).isTrue();
         assertThat(schemes.has("merchantApiKey")).isTrue();
         assertThat(schemes.path("merchantApiKey").path("in").asText()).isEqualTo("header");
+
+        // A scheme the gateway actually checks should not still be described as an intention.
+        assertThat(schemes.path("merchantJwt").path("description").asText())
+                .doesNotContain("Not enforced");
     }
 
     @Test
