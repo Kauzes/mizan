@@ -4,8 +4,6 @@ import dev.kauzes.mizan.common.correlation.CorrelationContext;
 import dev.kauzes.mizan.common.error.ErrorCode;
 import dev.kauzes.mizan.common.error.FieldViolation;
 import dev.kauzes.mizan.common.error.MizanException;
-import java.net.URI;
-import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -108,16 +106,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         };
     }
 
+    /** The fields themselves live in {@link Problems}, so the gateway cannot drift from this. */
     private static void decorate(
             ProblemDetail body, ErrorCode code, List<FieldViolation> violations) {
 
-        body.setType(URI.create(code.type()));
-        body.setTitle(code.slug());
-        body.setProperty("code", code.name());
-        body.setProperty("correlationId", CorrelationContext.currentOrEmpty());
-        body.setProperty("timestamp", Instant.now().toString());
-        if (!violations.isEmpty()) {
-            body.setProperty("errors", violations);
-        }
+        Problems.decorate(body, code, CorrelationContext.currentOrEmpty(), violations);
     }
 }

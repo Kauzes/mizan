@@ -3,6 +3,7 @@ package dev.kauzes.mizan.identity.merchant;
 import dev.kauzes.mizan.identity.user.UserResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -54,7 +55,9 @@ public class MerchantController {
 
     @GetMapping("/{merchantId}")
     @Operation(summary = "Read a merchant")
+    @SecurityRequirement(name = "merchantJwt")
     @ApiResponse(responseCode = "200", description = "The merchant")
+    @ApiResponse(responseCode = "401", ref = "#/components/responses/UNAUTHORIZED")
     @ApiResponse(
             responseCode = "404",
             ref = "#/components/responses/NOT_FOUND",
@@ -64,10 +67,12 @@ public class MerchantController {
     }
 
     @GetMapping("/{merchantId}/users")
+    @SecurityRequirement(name = "merchantJwt")
     @Operation(
             summary = "List the users of a merchant",
             description = "Oldest first. No password or hash appears in this response.")
     @ApiResponse(responseCode = "200", description = "The merchant's users")
+    @ApiResponse(responseCode = "401", ref = "#/components/responses/UNAUTHORIZED")
     @ApiResponse(
             responseCode = "404",
             ref = "#/components/responses/NOT_FOUND",
