@@ -30,6 +30,17 @@ final class JournalRequests {
 
     @Schema(description = "A movement of money, as postings that sum to zero")
     record PostEntryRequest(
+            @Schema(
+                            description =
+                                    "What the caller calls this movement. Sending it twice "
+                                            + "yields one entry, and the second call is answered "
+                                            + "with the first one's result, so a retry after a "
+                                            + "dropped response is safe. Unique within the "
+                                            + "merchant.",
+                            example = "payment:8f21c0d4-capture")
+                    @NotBlank
+                    @Size(max = 200)
+                    String externalReference,
             @Schema(example = "Card payment captured") @NotBlank @Size(max = 500)
                     String description,
             @Schema(description = "When the money moved, which need not be now")
@@ -67,6 +78,7 @@ final class JournalRequests {
     record EntryResponse(
             UUID id,
             UUID merchantId,
+            String externalReference,
             String description,
             Instant occurredAt,
             @Schema(description = "When this was written, which is not when the money moved")
@@ -78,6 +90,7 @@ final class JournalRequests {
             return new EntryResponse(
                     entry.id(),
                     entry.merchantId(),
+                    entry.externalReference(),
                     entry.description(),
                     entry.occurredAt(),
                     entry.recordedAt(),

@@ -53,12 +53,25 @@ public class JournalController {
     @Operation(
             summary = "Post an entry",
             description =
-                    "The postings must sum to zero within each currency they touch. A positive "
-                            + "amount is a debit; whether that increases the account is decided "
-                            + "by the account's type. Nothing posted here can be changed "
-                            + "afterwards.")
-    @ApiResponse(responseCode = "201", description = "The entry as written")
+                    """
+                    The postings must sum to zero within each currency they touch. A positive \
+                    amount is a debit; whether that increases the account is decided by the \
+                    account's type. Nothing posted here can be changed afterwards.
+
+                    The call is idempotent on externalReference: sending the same reference \
+                    again returns the entry the first call wrote, with the same id and the \
+                    same status, so a retry after a dropped response is safe. The same \
+                    reference sent with different postings is refused.""")
+    @ApiResponse(
+            responseCode = "201",
+            description =
+                    "The entry as written, or the one an earlier call with this reference "
+                            + "wrote")
     @ApiResponse(responseCode = "400", ref = "#/components/responses/VALIDATION_FAILED")
+    @ApiResponse(
+            responseCode = "409",
+            ref = "#/components/responses/CONFLICT",
+            description = "That reference was already used for a different entry")
     @ApiResponse(
             responseCode = "422",
             ref = "#/components/responses/UNPROCESSABLE",

@@ -162,6 +162,8 @@ paths:
       description: |-
         The postings must sum to zero within each currency they touch. A positive amount is a debit; whether that increases the account is decided by the account's type. Nothing posted here can be changed afterwards.
 
+        The call is idempotent on externalReference: sending the same reference again returns the entry the first call wrote, with the same id and the same status, so a retry after a dropped response is safe. The same reference sent with different postings is refused.
+
         Requires the ENTRY_POST permission, held by: OWNER, ADMIN. The caller must be acting for the merchant in the path.
       operationId: post
       parameters:
@@ -183,13 +185,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EntryResponse"
-          description: The entry as written
+          description: "The entry as written, or the one an earlier call with this\
+            \ reference wrote"
         "400":
           $ref: "#/components/responses/VALIDATION_FAILED"
         "401":
           $ref: "#/components/responses/UNAUTHORIZED"
         "403":
           $ref: "#/components/responses/FORBIDDEN"
+        "409":
+          $ref: "#/components/responses/CONFLICT"
         "422":
           $ref: "#/components/responses/UNPROCESSABLE"
       security:
@@ -399,6 +404,8 @@ components:
           format: uuid
         description:
           type: string
+        externalReference:
+          type: string
         id:
           type: string
           format: uuid
@@ -480,6 +487,14 @@ components:
           example: Card payment captured
           maxLength: 500
           minLength: 0
+        externalReference:
+          type: string
+          description: "What the caller calls this movement. Sending it twice yields\
+            \ one entry, and the second call is answered with the first one's result,\
+            \ so a retry after a dropped response is safe. Unique within the merchant."
+          example: payment:8f21c0d4-capture
+          maxLength: 200
+          minLength: 0
         occurredAt:
           type: string
           format: date-time
@@ -493,6 +508,7 @@ components:
           minItems: 2
       required:
       - description
+      - externalReference
       - occurredAt
       - postings
     PostingRequest:

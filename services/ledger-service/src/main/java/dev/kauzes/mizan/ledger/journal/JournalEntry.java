@@ -1,5 +1,7 @@
 package dev.kauzes.mizan.ledger.journal;
 
+import static java.time.temporal.ChronoUnit.MICROS;
+
 import dev.kauzes.mizan.common.error.UnprocessableException;
 import dev.kauzes.mizan.ledger.account.Account;
 import jakarta.persistence.CascadeType;
@@ -13,6 +15,8 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import static java.time.temporal.ChronoUnit.MICROS;
+
 import java.util.ArrayList;
 import java.util.Currency;
 import java.util.HashMap;
@@ -49,6 +53,14 @@ public class JournalEntry {
     @Column(name = "recorded_at", nullable = false, updatable = false)
     private Instant recordedAt;
 
+    /** What the caller calls this movement. Unique within the merchant. */
+    @Column(name = "external_reference", nullable = false, updatable = false)
+    private String externalReference;
+
+    /** A digest of the request, so the same reference with a different body is refused. */
+    @Column(name = "request_fingerprint", nullable = false, updatable = false)
+    private String requestFingerprint;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "corrects", updatable = false)
     private JournalEntry corrects;
@@ -61,12 +73,22 @@ public class JournalEntry {
     }
 
     public JournalEntry(
-            UUID merchantId, String description, Instant occurredAt, JournalEntry corrects) {
+            UUID merchantId,
+            String externalReference,
+            String requestFingerprint,
+            String description,
+            Instant occurredAt,
+            JournalEntry corrects) {
 
         this.merchantId = Objects.requireNonNull(merchantId, "merchantId");
+        this.externalReference = Objects.requireNonNull(externalReference, "externalReference");
+        this.requestFingerprint = Objects.requireNonNull(requestFingerprint, "requestFingerprint");
         this.description = Objects.requireNonNull(description, "description");
-        this.occurredAt = Objects.requireNonNull(occurredAt, "occurredAt");
-        this.recordedAt = Instant.now();
+        // Truncated to what the database stores. Postgres keeps microseconds, so an instant
+        // with nanoseconds in it would be reported one way by the call that wrote it and
+        // another by every call that reads it back, including a replay of the same request.
+        this.occurredAt = Objects.requireNonNull(occurredAt, "occurredAt").truncatedTo(MICROS);
+        this.recordedAt = Instant.now().truncatedTo(MICROS);
         this.corrects = corrects;
     }
 
@@ -127,6 +149,15 @@ public class JournalEntry {
 
     public Instant recordedAt() {
         return recordedAt;
+    }
+
+    public String externalReference() {
+        return externalReference;
+    }
+
+    /** Whether this entry was written from the same request that is being asked for again. */
+    public boolean wasWrittenFrom(String fingerprint) {
+        return requestFingerprint.equals(fingerprint);
     }
 
     public UUID correctsId() {

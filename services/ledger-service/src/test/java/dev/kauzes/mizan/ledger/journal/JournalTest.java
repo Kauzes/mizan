@@ -53,7 +53,7 @@ class JournalTest extends MizanIntegrationTest {
         Books books = books();
 
         String location = postEntry(books, """
-                {"description":"Card payment captured","occurredAt":"%s","postings":[
+                {"externalReference":"ref-card-payment-captured","description":"Card payment captured","occurredAt":"%s","postings":[
                   {"accountId":"%s","amount":125000},
                   {"accountId":"%s","amount":-125000}]}
                 """.formatted(WHEN, books.cash, books.owed))
@@ -77,7 +77,7 @@ class JournalTest extends MizanIntegrationTest {
         Books books = books();
 
         postEntry(books, """
-                {"description":"Money from nowhere","occurredAt":"%s","postings":[
+                {"externalReference":"ref-money-from-nowhere","description":"Money from nowhere","occurredAt":"%s","postings":[
                   {"accountId":"%s","amount":125000},
                   {"accountId":"%s","amount":-100000}]}
                 """.formatted(WHEN, books.cash, books.owed))
@@ -92,7 +92,7 @@ class JournalTest extends MizanIntegrationTest {
         Books books = books();
 
         postEntry(books, """
-                {"description":"Half a movement","occurredAt":"%s","postings":[
+                {"externalReference":"ref-half-a-movement","description":"Half a movement","occurredAt":"%s","postings":[
                   {"accountId":"%s","amount":125000}]}
                 """.formatted(WHEN, books.cash))
                 .andExpect(status().isBadRequest())
@@ -104,7 +104,7 @@ class JournalTest extends MizanIntegrationTest {
         Books books = books();
 
         postEntry(books, """
-                {"description":"Nothing at all","occurredAt":"%s","postings":[
+                {"externalReference":"ref-nothing-at-all","description":"Nothing at all","occurredAt":"%s","postings":[
                   {"accountId":"%s","amount":0},
                   {"accountId":"%s","amount":0}]}
                 """.formatted(WHEN, books.cash, books.owed))
@@ -118,7 +118,7 @@ class JournalTest extends MizanIntegrationTest {
         Books theirs = books();
 
         postEntry(mine, """
-                {"description":"Reaching across","occurredAt":"%s","postings":[
+                {"externalReference":"ref-reaching-across","description":"Reaching across","occurredAt":"%s","postings":[
                   {"accountId":"%s","amount":125000},
                   {"accountId":"%s","amount":-125000}]}
                 """.formatted(WHEN, mine.cash, theirs.owed))
@@ -136,7 +136,7 @@ class JournalTest extends MizanIntegrationTest {
         // The platform's accounts are real and are posted to, but not by a merchant reaching
         // through their own path. MIZ-4 posts both sides from inside the platform.
         postEntry(books, """
-                {"description":"Helping myself","occurredAt":"%s","postings":[
+                {"externalReference":"ref-helping-myself","description":"Helping myself","occurredAt":"%s","postings":[
                   {"accountId":"%s","amount":125000},
                   {"accountId":"%s","amount":-125000}]}
                 """.formatted(WHEN, platform, books.owed))
@@ -152,7 +152,7 @@ class JournalTest extends MizanIntegrationTest {
         // Two currencies in one entry, each side balancing within its own currency. A single
         // sum across both would be meaningless and would happen to be zero here.
         postEntry(books, """
-                {"description":"Two currencies at once","occurredAt":"%s","postings":[
+                {"externalReference":"ref-two-currencies-at-once","description":"Two currencies at once","occurredAt":"%s","postings":[
                   {"accountId":"%s","amount":125000},
                   {"accountId":"%s","amount":-125000},
                   {"accountId":"%s","amount":4000},
@@ -167,7 +167,7 @@ class JournalTest extends MizanIntegrationTest {
         UUID dollars = account(books, "cash.usd", "Cash, USD", "ASSET", "USD");
 
         postEntry(books, """
-                {"description":"Lira for dollars, as though they were the same","occurredAt":"%s",
+                {"externalReference":"ref-lira-for-dollars-as-though-they-were-the","description":"Lira for dollars, as though they were the same","occurredAt":"%s",
                  "postings":[
                   {"accountId":"%s","amount":125000},
                   {"accountId":"%s","amount":-125000}]}
@@ -181,13 +181,13 @@ class JournalTest extends MizanIntegrationTest {
     void correctsAnEarlierEntryRatherThanChangingIt() throws Exception {
         Books books = books();
         UUID original = idOf(postEntry(books, """
-                {"description":"Captured twice by mistake","occurredAt":"%s","postings":[
+                {"externalReference":"ref-captured-twice-by-mistake","description":"Captured twice by mistake","occurredAt":"%s","postings":[
                   {"accountId":"%s","amount":125000},
                   {"accountId":"%s","amount":-125000}]}
                 """.formatted(WHEN, books.cash, books.owed)));
 
         postEntry(books, """
-                {"description":"Reversing the duplicate","occurredAt":"%s","corrects":"%s",
+                {"externalReference":"ref-reversing-the-duplicate","description":"Reversing the duplicate","occurredAt":"%s","corrects":"%s",
                  "postings":[
                   {"accountId":"%s","amount":-125000},
                   {"accountId":"%s","amount":125000}]}
@@ -204,12 +204,12 @@ class JournalTest extends MizanIntegrationTest {
         Books mine = books();
         Books theirs = books();
         UUID theirEntry = idOf(postEntry(theirs, """
-                {"description":"Theirs","occurredAt":"%s","postings":[
+                {"externalReference":"ref-theirs","description":"Theirs","occurredAt":"%s","postings":[
                   {"accountId":"%s","amount":1000},{"accountId":"%s","amount":-1000}]}
                 """.formatted(WHEN, theirs.cash, theirs.owed)));
 
         postEntry(mine, """
-                {"description":"Correcting somebody else's books","occurredAt":"%s","corrects":"%s",
+                {"externalReference":"ref-correcting-somebody-else's-books","description":"Correcting somebody else's books","occurredAt":"%s","corrects":"%s",
                  "postings":[
                   {"accountId":"%s","amount":1000},{"accountId":"%s","amount":-1000}]}
                 """.formatted(WHEN, theirEntry, mine.cash, mine.owed))
@@ -221,7 +221,7 @@ class JournalTest extends MizanIntegrationTest {
         Books mine = books();
         Books theirs = books();
         UUID theirEntry = idOf(postEntry(theirs, """
-                {"description":"Theirs","occurredAt":"%s","postings":[
+                {"externalReference":"ref-theirs","description":"Theirs","occurredAt":"%s","postings":[
                   {"accountId":"%s","amount":1000},{"accountId":"%s","amount":-1000}]}
                 """.formatted(WHEN, theirs.cash, theirs.owed)));
 
@@ -240,7 +240,7 @@ class JournalTest extends MizanIntegrationTest {
                         .with(books.as(Role.VIEWER))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"description":"Not mine to write","occurredAt":"%s","postings":[
+                                {"externalReference":"ref-not-mine-to-write","description":"Not mine to write","occurredAt":"%s","postings":[
                                   {"accountId":"%s","amount":1000},
                                   {"accountId":"%s","amount":-1000}]}
                                 """.formatted(WHEN, books.cash, books.owed)))
@@ -290,7 +290,7 @@ class JournalTest extends MizanIntegrationTest {
     void theDatabaseRefusesAnUpdateOrADelete() throws Exception {
         Books books = books();
         UUID entry = idOf(postEntry(books, """
-                {"description":"Written once","occurredAt":"%s","postings":[
+                {"externalReference":"ref-written-once","description":"Written once","occurredAt":"%s","postings":[
                   {"accountId":"%s","amount":1000},{"accountId":"%s","amount":-1000}]}
                 """.formatted(WHEN, books.cash, books.owed)));
 
@@ -334,10 +334,12 @@ class JournalTest extends MizanIntegrationTest {
     private UUID writeEntry(Books books, String description) {
         UUID id = UUID.randomUUID();
         jdbc.update(
-                "insert into journal_entry (id, merchant_id, description, occurred_at, recorded_at)"
-                        + " values (?, ?, ?, now(), now())",
+                "insert into journal_entry (id, merchant_id, external_reference, "
+                        + "request_fingerprint, description, occurred_at, recorded_at)"
+                        + " values (?, ?, ?, 'written-in-sql', ?, now(), now())",
                 id,
                 books.merchantId,
+                "sql:" + id,
                 description);
         return id;
     }
