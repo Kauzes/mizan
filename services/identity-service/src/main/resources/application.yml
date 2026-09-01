@@ -34,6 +34,15 @@ mizan:
       # restart and no second instance can verify them, which is exactly what a local
       # default should feel like.
       private-key: ${MIZAN_JWT_PRIVATE_KEY:}
+    api-keys:
+      # Opens the stored API key secrets. HMAC is symmetric, so the side checking a
+      # signature has to hold the secret that made it; what keeps a copy of the database
+      # from being a set of working credentials is that this key is not in it. Empty means
+      # one is generated for the process, and keys issued then stop verifying on restart.
+      encryption-key: ${MIZAN_API_KEY_ENCRYPTION_KEY:}
+      # How far a request's timestamp may be from ours. Small enough that a captured
+      # request is not worth keeping, wide enough to survive an unsynchronised clock.
+      clock-skew: ${MIZAN_API_KEY_CLOCK_SKEW:5m}
 
 springdoc:
   # Keys in a stable order, so a regenerated spec differs only where the API differs and the

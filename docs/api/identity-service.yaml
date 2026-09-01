@@ -12,6 +12,8 @@ servers:
 - description: The local gateway. Services are not addressed directly.
   url: http://localhost:8080
 tags:
+- description: Credentials a merchant's server signs requests with
+  name: API keys
 - description: "Signing in, and staying signed in"
   name: Tokens
 - description: The public key access tokens are signed with
@@ -91,6 +93,153 @@ paths:
       summary: Read a merchant
       tags:
       - Merchants
+  /api/v1/merchants/{merchantId}/api-keys:
+    get:
+      description: |-
+        Secrets are not included, and cannot be retrieved after issue.
+
+        Requires the API_KEY_MANAGE permission, held by: OWNER. The caller must be acting for the merchant in the path.
+      operationId: list_1
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApiKeyResponse"
+          description: "The merchant's keys, oldest first"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+      security:
+      - merchantJwt: []
+      summary: List a merchant's API keys
+      tags:
+      - API keys
+    post:
+      description: |-
+        The response carries the secret. It is the only time it is returned: the stored copy is encrypted and no endpoint gives it back.
+
+        Requires the API_KEY_MANAGE permission, held by: OWNER. The caller must be acting for the merchant in the path.
+      operationId: issue
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueKeyRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuedKeyResponse"
+          description: "The key, and its secret, once"
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+      security:
+      - merchantJwt: []
+      summary: Issue an API key
+      tags:
+      - API keys
+  /api/v1/merchants/{merchantId}/api-keys/{keyId}:
+    delete:
+      description: |-
+        Takes effect on the next request, not on the next cache expiry.
+
+        Requires the API_KEY_MANAGE permission, held by: OWNER. The caller must be acting for the merchant in the path.
+      operationId: revoke
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: keyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyResponse"
+          description: "The key, now revoked"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+      security:
+      - merchantJwt: []
+      summary: Revoke an API key
+      tags:
+      - API keys
+  /api/v1/merchants/{merchantId}/api-keys/{keyId}/rotate:
+    post:
+      description: |-
+        Issues a replacement carrying the same name and role, and revokes this one. The old key stops working at once, so deploy the new secret before rotating.
+
+        Requires the API_KEY_MANAGE permission, held by: OWNER. The caller must be acting for the merchant in the path.
+      operationId: rotate
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: keyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuedKeyResponse"
+          description: "The replacement key, and its secret, once"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
+      security:
+      - merchantJwt: []
+      summary: Rotate an API key
+      tags:
+      - API keys
   /api/v1/merchants/{merchantId}/users:
     get:
       description: |-
@@ -455,6 +604,40 @@ components:
       - fullName
       - password
       - roles
+    ApiKeyResponse:
+      type: object
+      description: An API key. The secret is not here and cannot be retrieved.
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        keyId:
+          type: string
+          description: Sent as X-Mizan-Key
+          example: mzk_7Qv3nR2xKp0LmA9d
+        lastUsedAt:
+          type: string
+          format: date-time
+          description: "When a request last used it, or null if never"
+        name:
+          type: string
+        revokedAt:
+          type: string
+          format: date-time
+        role:
+          type: string
+          enum:
+          - OWNER
+          - ADMIN
+          - ANALYST
+          - VIEWER
+        rotatedFrom:
+          type: string
+          format: uuid
+          description: "The key this one replaced, if it was issued by a rotation"
     FieldViolation:
       description: "One rejected field, in the shape a form can render beside the\
         \ input."
@@ -468,6 +651,40 @@ components:
       required:
       - field
       - message
+    IssueKeyRequest:
+      type: object
+      description: A key to issue
+      properties:
+        name:
+          type: string
+          description: What this key is for
+          example: nightly reconciliation
+          maxLength: 200
+          minLength: 0
+        role:
+          type: string
+          description: "What the key may do. One role: a server integration does one\
+            \ job."
+          enum:
+          - OWNER
+          - ADMIN
+          - ANALYST
+          - VIEWER
+      required:
+      - name
+      - role
+    IssuedKeyResponse:
+      type: object
+      description: "A newly issued key, with its secret. This is the only time the\
+        \ secret is returned: it is stored encrypted and no endpoint gives it back.\
+        \ Lose it and rotate the key."
+      properties:
+        key:
+          $ref: "#/components/schemas/ApiKeyResponse"
+        secret:
+          type: string
+          description: The signing secret
+          example: mzs_...
     MerchantResponse:
       type: object
       description: The account money belongs to
@@ -683,9 +900,10 @@ components:
           uniqueItems: true
   securitySchemes:
     merchantApiKey:
-      description: "The merchant's API key, identifying which merchant a server to\
-        \ server call belongs to. Paired with merchantSignature; a key on its own\
-        \ is not enough. Not enforced until MIZ-32."
+      description: "The merchant's API key, naming which key signed the request. Public,\
+        \ and not a secret. Issued at POST /api/v1/merchants/{merchantId}/api-keys,\
+        \ which returns the signing secret once. Paired with merchantSignature and\
+        \ merchantTimestamp; a key on its own is not enough."
       in: header
       name: X-Mizan-Key
       type: apiKey
@@ -698,9 +916,24 @@ components:
       scheme: bearer
       type: http
     merchantSignature:
-      description: "An HMAC signature over the request, proving the caller holds the\
-        \ secret behind the API key. What exactly is signed is settled by MIZ-32.\
-        \ Not enforced until then."
+      description: |-
+        HMAC-SHA256 of the canonical request under the key's secret, in lowercase hex.
+
+        The canonical request is four lines joined with a newline: the uppercase method, the path, the value of X-Mizan-Timestamp, and the SHA-256 of the body in lowercase hex, which for a request with no body is the digest of the empty string.
+
+            POST
+            /api/v1/payments
+            1788100000
+            e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+        Method and path are covered so a captured signature cannot be aimed at another endpoint, the body so it cannot be replayed with different numbers in it, and the timestamp so it cannot be replayed at all.
       in: header
       name: X-Mizan-Signature
+      type: apiKey
+    merchantTimestamp:
+      description: "Unix seconds at which the request was signed. A request whose\
+        \ timestamp is further from the platform's clock than the accepted window,\
+        \ five minutes by default, is refused whatever its signature says."
+      in: header
+      name: X-Mizan-Timestamp
       type: apiKey

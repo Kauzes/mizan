@@ -20,5 +20,8 @@ public enum Permission {
     USER_MANAGE,
 
     /** Change which roles a user holds. */
-    ROLE_MANAGE
+    ROLE_MANAGE,
+
+    /** Issue, rotate and revoke the keys a merchant's own servers authenticate with. */
+    API_KEY_MANAGE
 }

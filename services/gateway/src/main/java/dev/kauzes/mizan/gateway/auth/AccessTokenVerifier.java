@@ -91,7 +91,7 @@ public class AccessTokenVerifier {
                 return Mono.error(new UnauthorizedException(REFUSED));
             }
 
-            return Mono.just(new VerifiedCaller(claims.getSubject(), merchant, roles));
+            return Mono.just(VerifiedCaller.user(claims.getSubject(), merchant, roles));
         } catch (Exception unusable) {
             return Mono.error(new UnauthorizedException(REFUSED));
         }

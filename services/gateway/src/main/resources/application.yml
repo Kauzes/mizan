@@ -74,6 +74,14 @@ mizan:
       # that could sign one. Compose points this at the service; the default is for a
       # gateway run straight off a laptop.
       jwk-set-uri: ${MIZAN_JWK_SET_URI:http://localhost:8081/.well-known/jwks.json}
+    api-keys:
+      # Signed requests are verified by identity rather than here: the gateway holds no
+      # signing secret, and a revoked key stops working at once rather than when a cache
+      # would have expired.
+      verification-uri: ${MIZAN_API_KEY_VERIFICATION_URI:http://localhost:8081/internal/api-keys/verify}
+      # A signed request has to be read whole to hash it, so there is a limit on how much
+      # the edge will hold.
+      maximum-signed-body: ${MIZAN_MAX_SIGNED_BODY:1048576}
 
 springdoc:
   # The gateway is where the platform's specs are browsed, through the same internal routes

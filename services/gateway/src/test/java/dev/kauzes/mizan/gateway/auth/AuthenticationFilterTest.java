@@ -38,7 +38,7 @@ import tools.jackson.databind.json.JsonMapper;
  * What the edge has to get right. None of this needs a running platform: a token, a key, and
  * the decision the filter makes about them.
  */
-class AccessTokenAuthenticationFilterTest {
+class AuthenticationFilterTest {
 
     private static final String ISSUER = "https://mizan.local/identity";
     private static final String MERCHANT = "0f5a3b2c-1d4e-4f6a-8b9c-0d1e2f3a4b5c";
@@ -54,14 +54,18 @@ class AccessTokenAuthenticationFilterTest {
             .addMixIn(ProblemDetail.class, ProblemDetailJacksonMixin.class)
             .build();
 
+    private static final int MAXIMUM_BODY = 1024 * 1024;
+
     private final RSAKey key = freshKey();
     private final AuthenticationProperties properties =
             new AuthenticationProperties(ISSUER, "http://identity/jwks", null, null);
 
-    private final AccessTokenAuthenticationFilter filter = new AccessTokenAuthenticationFilter(
+    private final AuthenticationFilter filter = new AuthenticationFilter(
             new PublicRoutes(),
             new AccessTokenVerifier(keysHolding(key), properties),
-            JSON);
+            signaturesRefusing(),
+            JSON,
+            MAXIMUM_BODY);
 
     @Test
     void refusesARequestCarryingNoToken() throws Exception {
@@ -175,10 +179,12 @@ class AccessTokenAuthenticationFilterTest {
 
     @Test
     void saysTheProblemIsOursWhenTheKeysCannotBeFetched() throws Exception {
-        AccessTokenAuthenticationFilter unreachable = new AccessTokenAuthenticationFilter(
+        AuthenticationFilter unreachable = new AuthenticationFilter(
                 new PublicRoutes(),
                 new AccessTokenVerifier(keysThatCannotBeReached(), properties),
-                JSON);
+                signaturesRefusing(),
+                JSON,
+                MAXIMUM_BODY);
 
         MockServerWebExchange exchange = request(MockServerHttpRequest.get(PROTECTED)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token(builder -> builder)));
@@ -268,6 +274,19 @@ class AccessTokenAuthenticationFilterTest {
                 return Mono.just(
                         held.getKeyID().equals(keyId) ? Optional.of(held.toPublicJWK())
                                 : Optional.empty());
+            }
+        };
+    }
+
+    /** No test here signs a request; the signed path has a test class of its own. */
+    private SignedRequestVerifier signaturesRefusing() {
+        return new SignedRequestVerifier(
+                (org.springframework.web.reactive.function.client.WebClient) null,
+                "http://identity/verify") {
+            @Override
+            public Mono<VerifiedCaller> verify(Verification presented) {
+                return Mono.error(new dev.kauzes.mizan.common.error.UnauthorizedException(
+                        "The credentials are not valid."));
             }
         };
     }

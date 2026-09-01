@@ -26,9 +26,16 @@ public final class CallerIdentity {
     /** The user's roles, comma separated. */
     public static final String ROLES_HEADER = "X-Mizan-Roles";
 
+    /**
+     * What kind of caller this is: {@code USER} for a person signed in to the console,
+     * {@code API_KEY} for a merchant's own server. A service that must not be automated, or
+     * must only be automated, reads this rather than guessing from the roles.
+     */
+    public static final String PRINCIPAL_HEADER = "X-Mizan-Principal";
+
     /** Everything the gateway sets, and therefore everything it has to strip first. */
     public static final List<String> HEADERS =
-            List.of(USER_HEADER, MERCHANT_HEADER, ROLES_HEADER);
+            List.of(USER_HEADER, MERCHANT_HEADER, ROLES_HEADER, PRINCIPAL_HEADER);
 
     /** The claim naming the merchant, in an access token. */
     public static final String MERCHANT_CLAIM = "merchant";

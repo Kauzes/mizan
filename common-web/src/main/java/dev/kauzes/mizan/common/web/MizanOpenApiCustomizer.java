@@ -189,14 +189,35 @@ public class MizanOpenApiCustomizer implements OpenApiCustomizer {
     }
 
     /**
+     * The signing scheme, written out so that a merchant can implement it from the spec and
+     * nothing else. A worked example rather than prose, because the thing that goes wrong is
+     * always the exact bytes.
+     */
+    private static final String SIGNATURE_DESCRIPTION =
+            """
+            HMAC-SHA256 of the canonical request under the key's secret, in lowercase hex.
+
+            The canonical request is four lines joined with a newline: the uppercase method, \
+            the path, the value of X-Mizan-Timestamp, and the SHA-256 of the body in lowercase \
+            hex, which for a request with no body is the digest of the empty string.
+
+                POST
+                /api/v1/payments
+                1788100000
+                e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+            Method and path are covered so a captured signature cannot be aimed at another \
+            endpoint, the body so it cannot be replayed with different numbers in it, and the \
+            timestamp so it cannot be replayed at all.""";
+
+    /**
      * How a caller proves who they are.
      *
      * <p>The bearer token is real: the gateway verifies it on every route that is not on its
      * public list, and an operation that needs one says so by referencing the scheme.
      *
-     * <p>The API key pair is still description rather than enforcement. MIZ-32 makes it real
-     * and may change what exactly is signed, so it says so here rather than letting a reader
-     * assume otherwise.
+     * <p>The API key pair is enforced too, and is described here precisely enough to write a
+     * client from: the exact string that is signed, in the order its lines appear.
      */
     private static void authentication(Components components) {
         components.addSecuritySchemes(
@@ -217,9 +238,11 @@ public class MizanOpenApiCustomizer implements OpenApiCustomizer {
                         .type(SecurityScheme.Type.APIKEY)
                         .in(SecurityScheme.In.HEADER)
                         .name("X-Mizan-Key")
-                        .description("The merchant's API key, identifying which merchant a server "
-                                + "to server call belongs to. Paired with merchantSignature; a key "
-                                + "on its own is not enough. Not enforced until MIZ-32."));
+                        .description("The merchant's API key, naming which key signed the "
+                                + "request. Public, and not a secret. Issued at "
+                                + "POST /api/v1/merchants/{merchantId}/api-keys, which returns "
+                                + "the signing secret once. Paired with merchantSignature and "
+                                + "merchantTimestamp; a key on its own is not enough."));
 
         components.addSecuritySchemes(
                 "merchantSignature",
@@ -227,8 +250,17 @@ public class MizanOpenApiCustomizer implements OpenApiCustomizer {
                         .type(SecurityScheme.Type.APIKEY)
                         .in(SecurityScheme.In.HEADER)
                         .name("X-Mizan-Signature")
-                        .description("An HMAC signature over the request, proving the caller holds "
-                                + "the secret behind the API key. What exactly is signed is "
-                                + "settled by MIZ-32. Not enforced until then."));
+                        .description(SIGNATURE_DESCRIPTION));
+
+        components.addSecuritySchemes(
+                "merchantTimestamp",
+                new SecurityScheme()
+                        .type(SecurityScheme.Type.APIKEY)
+                        .in(SecurityScheme.In.HEADER)
+                        .name("X-Mizan-Timestamp")
+                        .description("Unix seconds at which the request was signed. A request "
+                                + "whose timestamp is further from the platform's clock than "
+                                + "the accepted window, five minutes by default, is refused "
+                                + "whatever its signature says."));
     }
 }
