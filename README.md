@@ -103,6 +103,10 @@ other protected route.
 - Every state change that produces an event writes both in one local transaction, through
   a transactional outbox.
 - Every write endpoint accepts an idempotency key and a replay returns the original result.
+  In the ledger that key is the entry's external reference: required, unique per merchant,
+  and answered on a retry with the first call's entry and the first call's status, so a
+  client that timed out cannot tell its retry from the original. The same reference sent
+  with different postings is refused rather than quietly answered.
 - Every error is an RFC 9457 problem detail with a stable `code` from a closed enum, and
   the HTTP status is derived from that code so the two cannot disagree.
 - Only deliberate errors carry detail. Anything else is an internal error with a fixed
