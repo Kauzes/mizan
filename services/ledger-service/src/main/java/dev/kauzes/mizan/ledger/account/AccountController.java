@@ -3,6 +3,7 @@ package dev.kauzes.mizan.ledger.account;
 import dev.kauzes.mizan.common.identity.Permission;
 import dev.kauzes.mizan.common.web.RequiresPermission;
 import dev.kauzes.mizan.ledger.account.AccountRequests.AccountResponse;
+import dev.kauzes.mizan.ledger.account.AccountRequests.BalanceResponse;
 import dev.kauzes.mizan.ledger.account.AccountRequests.OpenAccountRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -74,6 +75,24 @@ public class AccountController {
         return ResponseEntity.created(
                         URI.create("/api/v1/merchants/" + merchantId + "/accounts/" + opened.id()))
                 .body(opened);
+    }
+
+    @GetMapping("/{accountId}/balance")
+    @RequiresPermission(Permission.ACCOUNT_READ)
+    @Operation(
+            summary = "Read an account's balance",
+            description =
+                    "Read from the account rather than summed from its history, so it costs the "
+                            + "same whatever the account has been through. The number is the "
+                            + "signed sum of the account's postings, debit positive, and is true "
+                            + "as at the moment given.")
+    @ApiResponse(responseCode = "200", description = "What the account holds")
+    @ApiResponse(
+            responseCode = "404",
+            ref = "#/components/responses/NOT_FOUND",
+            description = "This merchant has no account with that id")
+    public BalanceResponse balance(@PathVariable UUID merchantId, @PathVariable UUID accountId) {
+        return accounts.balanceOf(merchantId, accountId);
     }
 
     @GetMapping("/{accountId}")

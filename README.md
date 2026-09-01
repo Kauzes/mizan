@@ -60,6 +60,9 @@ other protected route.
 - Journal entries are immutable, and the database says so: an update or a delete against the
   journal raises. A correction is a new entry naming the one it corrects, so both stay
   visible.
+- A balance is kept on the account and written in the same transaction as the postings that
+  move it, so reading one is a single row however long the history is. A version column
+  refuses a lost update, and the write is retried rather than handed back.
 - An entry's postings sum to zero within each currency they touch, checked in the domain and
   again by a deferred constraint trigger. The second one is what holds against anything that
   writes to the table without going through the service.

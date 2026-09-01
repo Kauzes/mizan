@@ -458,6 +458,15 @@ components:
       headers:
         X-Correlation-Id:
           $ref: "#/components/headers/X-Correlation-Id"
+    CONTENDED:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: 409 contended. The body carries code CONTENDED.
+      headers:
+        X-Correlation-Id:
+          $ref: "#/components/headers/X-Correlation-Id"
     FORBIDDEN:
       content:
         application/problem+json:
@@ -724,6 +733,7 @@ components:
           - METHOD_NOT_ALLOWED
           - CONFLICT
           - IDEMPOTENCY_KEY_REUSED
+          - CONTENDED
           - UNPROCESSABLE
           - RATE_LIMITED
           - INTERNAL_ERROR
