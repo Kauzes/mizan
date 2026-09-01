@@ -11,7 +11,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import dev.kauzes.mizan.common.identity.Role;
-import dev.kauzes.mizan.identity.Callers;
+import dev.kauzes.mizan.test.Callers;
 import dev.kauzes.mizan.test.MizanIntegrationTest;
 import java.nio.charset.StandardCharsets;
 import java.util.List;

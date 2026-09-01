@@ -59,6 +59,11 @@ other protected route.
   no `BigDecimal` crossing a service boundary.
 - Journal entries are immutable. A correction is a new compensating entry, never an update
   or a delete.
+- An account carries one currency and one type, both fixed for its life. The type is what
+  decides whether a debit makes the balance larger, so a caller never says which way an
+  account moves and cannot say it wrongly.
+- A merchant's balance is a liability of the platform. The money is the merchant's, held by
+  Mizan, so paying it out reduces what is owed.
 - No service reads another service's tables. Only its API or its events.
 - A service owns its schema through forward only migrations applied when it starts. No
   entity generates schema; Hibernate only validates that the migrations built what the code
@@ -191,14 +196,14 @@ merchant exists or not.
 
 | Role | May |
 |---|---|
-| `OWNER` | Everything, within their own merchant. Adding and removing people, and changing what they may do |
-| `ADMIN` | Read the merchant and see who acts for it |
-| `ANALYST` | Read the merchant. The review queue in MIZ-6 is what this role is for |
-| `VIEWER` | Read the merchant |
+| `OWNER` | Everything, within their own merchant. Adding and removing people, changing what they may do, and issuing API keys |
+| `ADMIN` | Read the merchant, see who acts for it, and open accounts |
+| `ANALYST` | Read the merchant and its books. The review queue in MIZ-6 is what this role is for |
+| `VIEWER` | Read the merchant and its books |
 
-`ADMIN` and `ANALYST` are thin because the endpoints that make them worth holding do not exist
-yet. An epic that adds endpoints adds the permissions they need and grants them in `Role`,
-which is the one place to look when asking what somebody can do.
+An epic that adds endpoints adds the permissions they need and grants them in `Role`, which is
+the one place to look when asking what somebody can do. `ANALYST` is still thinner than it will
+be; the review queue in MIZ-6 is what that role is for.
 
 A merchant always has an owner: the last one cannot be removed or demoted. An account nobody
 can administer is recoverable only by hand in the database.

@@ -1,4 +1,4 @@
-package dev.kauzes.mizan.identity;
+package dev.kauzes.mizan.test;
 
 import dev.kauzes.mizan.common.identity.CallerIdentity;
 import dev.kauzes.mizan.common.identity.Role;
@@ -13,6 +13,10 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
  * <p>Deliberately allows sending any merchant and any role, including combinations no token
  * would carry. A service must hold the tenant boundary against whatever reaches it, and a
  * test that could only send well behaved headers could not show that.
+ *
+ * <p>Shared rather than owned by one service, because every service behind the gateway reads
+ * the same headers and every one of them needs to be tested against a caller who is not who
+ * they claim.
  */
 public final class Callers {
 
