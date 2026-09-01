@@ -137,8 +137,19 @@ public class ApiKeyService {
             throw new UnauthorizedException(REFUSED);
         }
 
+        String secret;
+        try {
+            secret = cipher.decrypt(key.secretEncrypted(), key.keyId());
+        } catch (SecretCipher.SecretUnavailableException unopenable) {
+            // The stored value does not belong to this key, or cannot be read at all. That
+            // is ours to investigate and not the caller's to be told about, so it is logged
+            // here and refused like any other bad credential.
+            log.error("the stored secret for key {} could not be opened", key.keyId(), unopenable);
+            throw new UnauthorizedException(REFUSED);
+        }
+
         String expected = RequestSigning.sign(
-                cipher.decrypt(key.secretEncrypted()),
+                secret,
                 RequestSigning.canonicalRequest(
                         presented.method(),
                         presented.path(),
@@ -161,8 +172,9 @@ public class ApiKeyService {
             ApiKey previous) {
 
         String secret = SECRET_PREFIX + random(SECRET_BYTES);
+        String keyId = KEY_PREFIX + random(KEY_ID_BYTES);
         ApiKey key = new ApiKey(
-                merchant, KEY_PREFIX + random(KEY_ID_BYTES), name, cipher.encrypt(secret), role);
+                merchant, keyId, name, cipher.encrypt(secret, keyId), role);
         if (previous != null) {
             keys.saveAndFlush(key);
             key.replaced(previous);

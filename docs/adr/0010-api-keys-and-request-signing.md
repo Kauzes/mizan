@@ -3,6 +3,7 @@
 - Status: accepted
 - Date: 2026-08-30
 - Jira: MIZ-32
+- Revisited: 2026-09-01, after review. HMAC confirmed; ciphertext bound to its key row.
 
 ## Context
 
@@ -29,6 +30,13 @@ because how far clocks drift is a property of the deployment.
 **Signatures are compared with a constant time comparison.** A comparison that stops at the
 first wrong character leaks the signature one character at a time to somebody patient enough
 to measure.
+
+**Each stored value is bound to the key it belongs to.** The key id is authenticated alongside
+the ciphertext, so a value copied onto another key's row fails to open. Without that, every
+ciphertext under the same encryption key is interchangeable: somebody able to write to this
+table could move the encrypted secret from a key they legitimately hold onto another merchant's
+row and sign that merchant's requests with a secret they already know. The binding costs
+nothing and removes a database write from being enough on its own.
 
 **The secret is stored encrypted, not hashed.** This is a deliberate departure from the story,
 which asked for a hash, and from the advice that would be right for a password. HMAC is
@@ -94,11 +102,28 @@ harder: signed requests are refused in one place.
 ## Alternatives considered
 
 **Asymmetric request signing**, where the merchant holds a private key and the platform stores
-only the public half. Cryptographically better in exactly the way the story wanted: the stored
-value could not sign anything, so hash-like storage would be honest. It also makes every
-merchant implement Ed25519 or ECDSA signing rather than an HMAC, which every language does in
-four lines, and it settles `X-Mizan-Signature` as something other than what MIZ-25 published.
-The right thing to revisit if these secrets ever need to be held somewhere less trusted.
+only the public half. This was reconsidered in full after the scheme was built, because it is
+the option that would satisfy the story's wording exactly, and it was rejected on the merits.
+
+What it offers: the stored value cannot sign anything, so a database dump is worthless and
+there is no encryption key to lose. And non-repudiation — only the merchant could have produced
+that signature, which is worth real money in a disputed instruction.
+
+Why it was not taken: **the non-repudiation argument does not survive contact with the rest of
+this platform.** Mizan holds the JWT signing key and every password hash, so it can already mint
+an access token for any user and act as that merchant through the console. Asymmetric API keys
+would close one door and leave that one open, buying a property the system as a whole does not
+provide. Getting the property for real would mean merchants generating their own keypairs and
+uploading only public halves — a private key we hand over is one we held — which makes
+onboarding materially harder for something the platform cannot honour anyway.
+
+Against that: HMAC-SHA256 is a few lines in every language with no key formats to misparse,
+which is why Stripe, Shopify, Twilio and AWS all sign this way; and it is what MIZ-25 already
+published as `X-Mizan-Signature`.
+
+The conclusion holds only as long as the premise does. If Mizan ever stops being able to act as
+a merchant — hardware-held signing keys, or an identity provider it does not control — the
+non-repudiation argument becomes real and this decision should be reopened.
 
 **A bearer API key, compared against a stored hash.** What Stripe does for its secret keys, and
 it would have allowed hash-only storage. It also means the credential itself crosses the wire on
