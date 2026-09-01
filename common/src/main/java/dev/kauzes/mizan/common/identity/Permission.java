@@ -29,5 +29,11 @@ public enum Permission {
     ACCOUNT_READ,
 
     /** Open an account. Not the same as moving money into one. */
-    ACCOUNT_MANAGE
+    ACCOUNT_MANAGE,
+
+    /** Read what has been posted to the books. */
+    ENTRY_READ,
+
+    /** Write to the books. The one permission that moves money. */
+    ENTRY_POST
 }

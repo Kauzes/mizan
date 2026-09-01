@@ -57,8 +57,12 @@ other protected route.
 
 - Money is a `long` of minor units plus an ISO 4217 currency code. No floating point, and
   no `BigDecimal` crossing a service boundary.
-- Journal entries are immutable. A correction is a new compensating entry, never an update
-  or a delete.
+- Journal entries are immutable, and the database says so: an update or a delete against the
+  journal raises. A correction is a new entry naming the one it corrects, so both stay
+  visible.
+- An entry's postings sum to zero within each currency they touch, checked in the domain and
+  again by a deferred constraint trigger. The second one is what holds against anything that
+  writes to the table without going through the service.
 - An account carries one currency and one type, both fixed for its life. The type is what
   decides whether a debit makes the balance larger, so a caller never says which way an
   account moves and cannot say it wrongly.
