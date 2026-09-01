@@ -53,6 +53,13 @@ final class AccountRequests {
                             example = "DEBIT")
                     String normalSide,
             String currency,
+            @Schema(
+                            description =
+                                    "The signed sum of this account's postings, debit positive, "
+                                            + "in minor units. Not flipped to read naturally for "
+                                            + "a liability: the type says which way to read it.",
+                            example = "125000")
+                    long balance,
             Instant createdAt) {
 
         static AccountResponse of(Account account) {
@@ -64,7 +71,39 @@ final class AccountRequests {
                     account.type(),
                     account.type().normalSide(),
                     account.currency().getCurrencyCode(),
+                    account.balance(),
                     account.createdAt());
+        }
+    }
+
+    @Schema(description = "What an account holds, as at the moment it was read")
+    record BalanceResponse(
+            UUID accountId,
+            String code,
+            AccountType type,
+            @Schema(example = "DEBIT") String normalSide,
+            String currency,
+            @Schema(
+                            description =
+                                    "The signed sum of the account's postings, debit positive, "
+                                            + "in minor units",
+                            example = "125000")
+                    long balance,
+            @Schema(
+                            description =
+                                    "When this was read. A balance is only ever true as at a "
+                                            + "moment.")
+                    Instant readAt) {
+
+        static BalanceResponse of(Account account) {
+            return new BalanceResponse(
+                    account.id(),
+                    account.code(),
+                    account.type(),
+                    account.type().normalSide(),
+                    account.currency().getCurrencyCode(),
+                    account.balance(),
+                    Instant.now());
         }
     }
 }

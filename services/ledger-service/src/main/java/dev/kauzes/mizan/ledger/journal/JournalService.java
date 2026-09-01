@@ -1,6 +1,8 @@
 package dev.kauzes.mizan.ledger.journal;
 
 import dev.kauzes.mizan.common.error.ConflictException;
+import dev.kauzes.mizan.common.error.ErrorCode;
+import dev.kauzes.mizan.common.error.MizanException;
 import dev.kauzes.mizan.common.error.NotFoundException;
 import dev.kauzes.mizan.common.error.UnprocessableException;
 import dev.kauzes.mizan.ledger.account.Account;
@@ -10,9 +12,11 @@ import dev.kauzes.mizan.ledger.journal.JournalRequests.PostEntryRequest;
 import dev.kauzes.mizan.ledger.journal.JournalRequests.PostingRequest;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +27,29 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class JournalService {
 
     private static final Logger log = LoggerFactory.getLogger(JournalService.class);
+
+    /**
+     * How many times a post will start over because somebody else moved a balance first.
+     *
+     * <p>Bounded, because an unbounded retry under real contention turns a queue into a spin.
+     * Ten is enough for a burst of a dozen writers at one account, which was measured rather
+     * than guessed: five without any backoff was not, and the failures were the retries
+     * colliding with each other rather than with real work.
+     */
+    private static final int ATTEMPTS = 10;
+
+    /**
+     * How long a losing writer waits before trying again, before jitter.
+     *
+     * <p>Retrying immediately is what makes contention worse: the writers that just collided
+     * are the ones most likely to collide again, in the same order, at the same moment. A
+     * short random wait spreads them out, and is still far below what a caller would notice.
+     */
+    private static final long BACKOFF_MILLIS = 10;
+
+    // ThreadLocalRandom rather than RandomGenerator.getDefault(), which asks for an
+    // algorithm the jdk.random module provides and the runtime image does not carry. This is
+    // jitter, so any source will do, and this one is available everywhere and per thread.
 
     private final JournalEntryRepository entries;
     private final AccountRepository accounts;
@@ -51,17 +78,52 @@ public class JournalService {
     public EntryResponse post(UUID merchantId, PostEntryRequest request) {
         String fingerprint = RequestFingerprint.of(request);
 
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return transaction.execute(status -> write(merchantId, request, fingerprint));
+            } catch (DataIntegrityViolationException alreadyPosted) {
+                // Discovered by inserting rather than by asking first: a check would answer
+                // for the moment before the insert, and two retries racing would both be told
+                // the reference was free.
+                // In a transaction of its own, and started here rather than by an annotation:
+                // a @Transactional method called from inside the same bean is called
+                // directly, not through the proxy, so it would run with no session at all.
+                return transaction.execute(
+                        status -> replay(merchantId, request.externalReference(), fingerprint));
+            } catch (OptimisticLockingFailureException contended) {
+                // Somebody moved one of these balances between this transaction reading it
+                // and writing it back. Nothing is wrong with the request, so it is tried
+                // again rather than handed back.
+                if (attempt >= ATTEMPTS) {
+                    log.warn(
+                            "gave up posting {} for merchant {} after {} attempts",
+                            request.externalReference(),
+                            merchantId,
+                            attempt);
+                    throw new MizanException(
+                            ErrorCode.CONTENDED,
+                            "Another movement reached these accounts first. Send this request "
+                                    + "again; it is safe to, because it carries a reference.",
+                            contended);
+                }
+                log.debug(
+                        "retrying {} after contention, attempt {}",
+                        request.externalReference(),
+                        attempt);
+                pauseBriefly(attempt);
+            }
+        }
+    }
+
+    /** Longer each time, and never exactly as long as whoever else is waiting. */
+    private static void pauseBriefly(int attempt) {
         try {
-            return transaction.execute(status -> write(merchantId, request, fingerprint));
-        } catch (DataIntegrityViolationException alreadyPosted) {
-            // Discovered by inserting rather than by asking first: a check would answer for
-            // the moment before the insert, and two retries racing would both be told the
-            // reference was free.
-            // In a transaction of its own, and started here rather than by an annotation:
-            // a @Transactional method called from inside the same bean is called directly,
-            // not through the proxy, so it would run with no session at all.
-            return transaction.execute(
-                    status -> replay(merchantId, request.externalReference(), fingerprint));
+            Thread.sleep(ThreadLocalRandom.current()
+                    .nextLong(1, BACKOFF_MILLIS * attempt + 1));
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new MizanException(
+                    ErrorCode.CONTENDED, "The request was interrupted before it could be posted.");
         }
     }
 
@@ -75,7 +137,12 @@ public class JournalService {
                 correctedEntry(merchantId, request.corrects()));
 
         for (PostingRequest posting : request.postings()) {
-            entry.post(accountOf(merchantId, posting.accountId()), posting.amount());
+            Account account = accountOf(merchantId, posting.accountId());
+            entry.post(account, posting.amount());
+            // In the same transaction as the posting that caused it, so a balance and the
+            // history behind it are never written apart. The version column is what makes
+            // that safe when two entries reach the same account at once.
+            account.apply(posting.amount());
         }
 
         // Checked here so the caller is told which currency is out and by how much. The

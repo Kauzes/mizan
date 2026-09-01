@@ -14,6 +14,7 @@ public enum ErrorCode {
     METHOD_NOT_ALLOWED("method-not-allowed", 405),
     CONFLICT("conflict", 409),
     IDEMPOTENCY_KEY_REUSED("idempotency-key-reused", 409),
+    CONTENDED("contended", 409),
     UNPROCESSABLE("unprocessable", 422),
     RATE_LIMITED("rate-limited", 429),
     INTERNAL_ERROR("internal-error", 500),

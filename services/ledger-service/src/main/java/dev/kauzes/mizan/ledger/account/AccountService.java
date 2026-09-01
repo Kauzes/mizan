@@ -4,6 +4,7 @@ import dev.kauzes.mizan.common.error.ConflictException;
 import dev.kauzes.mizan.common.error.NotFoundException;
 import dev.kauzes.mizan.common.error.UnprocessableException;
 import dev.kauzes.mizan.ledger.account.AccountRequests.AccountResponse;
+import dev.kauzes.mizan.ledger.account.AccountRequests.BalanceResponse;
 import dev.kauzes.mizan.ledger.account.AccountRequests.OpenAccountRequest;
 import java.util.Currency;
 import java.util.List;
@@ -62,6 +63,20 @@ public class AccountService {
         return accounts
                 .findByIdAndMerchantId(accountId, merchantId)
                 .map(AccountResponse::of)
+                .orElseThrow(() -> new NotFoundException("No account with that id."));
+    }
+
+    /**
+     * What an account holds, read from the account rather than summed from its history.
+     *
+     * <p>One row, whatever the account has been through. The number is only true as at the
+     * moment it is read, which the answer says.
+     */
+    @Transactional(readOnly = true)
+    public BalanceResponse balanceOf(UUID merchantId, UUID accountId) {
+        return accounts
+                .findByIdAndMerchantId(accountId, merchantId)
+                .map(BalanceResponse::of)
                 .orElseThrow(() -> new NotFoundException("No account with that id."));
     }
 

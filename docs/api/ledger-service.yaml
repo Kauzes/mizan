@@ -126,6 +126,44 @@ paths:
       summary: Read an account
       tags:
       - Accounts
+  /api/v1/merchants/{merchantId}/accounts/{accountId}/balance:
+    get:
+      description: |-
+        Read from the account rather than summed from its history, so it costs the same whatever the account has been through. The number is the signed sum of the account's postings, debit positive, and is true as at the moment given.
+
+        Requires the ACCOUNT_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
+      operationId: balance
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: accountId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceResponse"
+          description: What the account holds
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+      security:
+      - merchantJwt: []
+      summary: Read an account's balance
+      tags:
+      - Accounts
   /api/v1/merchants/{merchantId}/entries:
     get:
       description: |-
@@ -255,6 +293,15 @@ components:
       headers:
         X-Correlation-Id:
           $ref: "#/components/headers/X-Correlation-Id"
+    CONTENDED:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: 409 contended. The body carries code CONTENDED.
+      headers:
+        X-Correlation-Id:
+          $ref: "#/components/headers/X-Correlation-Id"
     FORBIDDEN:
       content:
         application/problem+json:
@@ -368,6 +415,13 @@ components:
       type: object
       description: An account in the books
       properties:
+        balance:
+          type: integer
+          format: int64
+          description: "The signed sum of this account's postings, debit positive,\
+            \ in minor units. Not flipped to read naturally for a liability: the type\
+            \ says which way to read it."
+          example: 125000
         code:
           type: string
         createdAt:
@@ -387,6 +441,38 @@ components:
           type: string
           description: "Which side increases this account, from its type"
           example: DEBIT
+        type:
+          type: string
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - REVENUE
+          - EXPENSE
+    BalanceResponse:
+      type: object
+      description: "What an account holds, as at the moment it was read"
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        balance:
+          type: integer
+          format: int64
+          description: "The signed sum of the account's postings, debit positive,\
+            \ in minor units"
+          example: 125000
+        code:
+          type: string
+        currency:
+          type: string
+        normalSide:
+          type: string
+          example: DEBIT
+        readAt:
+          type: string
+          format: date-time
+          description: When this was read. A balance is only ever true as at a moment.
         type:
           type: string
           enum:
@@ -575,6 +661,7 @@ components:
           - METHOD_NOT_ALLOWED
           - CONFLICT
           - IDEMPOTENCY_KEY_REUSED
+          - CONTENDED
           - UNPROCESSABLE
           - RATE_LIMITED
           - INTERNAL_ERROR

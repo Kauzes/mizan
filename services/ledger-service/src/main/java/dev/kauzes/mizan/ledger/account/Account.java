@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.Currency;
 import java.util.Objects;
@@ -47,6 +48,25 @@ public class Account {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /**
+     * The signed sum of this account's postings, debit positive, kept here so that reading a
+     * balance is one row rather than a walk through every movement the account ever had.
+     *
+     * <p>Not flipped to read naturally for a liability. One number with one meaning; the
+     * type says which way to read it.
+     */
+    @Column(nullable = false)
+    private long balance;
+
+    /**
+     * What stops a lost update. Two writers that both read this balance and both write it
+     * back would otherwise leave one of the two movements out of it; the second write is
+     * refused instead, and the caller's transaction is retried.
+     */
+    @Version
+    @Column(nullable = false)
+    private long version;
+
     protected Account() {
         // for JPA
     }
@@ -86,6 +106,19 @@ public class Account {
 
     public Instant createdAt() {
         return createdAt;
+    }
+
+    public long balance() {
+        return balance;
+    }
+
+    public long version() {
+        return version;
+    }
+
+    /** Moves the balance by one posting, in the same transaction as the posting itself. */
+    public void apply(long amount) {
+        this.balance = Math.addExact(this.balance, amount);
     }
 
     /** The platform's own accounts belong to nobody and are not reachable under a merchant. */
