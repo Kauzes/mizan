@@ -69,7 +69,9 @@ class GatewayRouteDefinitionTests {
                 .satisfies(predicate -> assertThat(predicate.getArgs().values())
                         .containsExactly(
                                 "/api/v1/merchants/*/accounts",
-                                "/api/v1/merchants/*/accounts/**"));
+                                "/api/v1/merchants/*/accounts/**",
+                                "/api/v1/merchants/*/entries",
+                                "/api/v1/merchants/*/entries/**"));
 
         // Both routes match a path like /api/v1/merchants/{id}/accounts, so the one that
         // should win says so with an order rather than by being read first.

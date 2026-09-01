@@ -12,6 +12,8 @@ servers:
 - description: The local gateway. Services are not addressed directly.
   url: http://localhost:8080
 tags:
+- description: "Movements of money, as entries that sum to zero"
+  name: Journal
 - description: The chart of accounts a merchant's money moves through
   name: Accounts
 paths:
@@ -21,7 +23,7 @@ paths:
         Ordered by code.
 
         Requires the ACCOUNT_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
-      operationId: list
+      operationId: list_1
       parameters:
       - in: path
         name: merchantId
@@ -92,7 +94,7 @@ paths:
     get:
       description: "Requires the ACCOUNT_READ permission, held by: OWNER, ADMIN, ANALYST,\
         \ VIEWER. The caller must be acting for the merchant in the path."
-      operationId: find
+      operationId: find_1
       parameters:
       - in: path
         name: merchantId
@@ -124,6 +126,113 @@ paths:
       summary: Read an account
       tags:
       - Accounts
+  /api/v1/merchants/{merchantId}/entries:
+    get:
+      description: |-
+        Most recent movement first.
+
+        Requires the ENTRY_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
+      operationId: list
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EntryResponse"
+          description: The merchant's entries
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+      security:
+      - merchantJwt: []
+      summary: List a merchant's entries
+      tags:
+      - Journal
+    post:
+      description: |-
+        The postings must sum to zero within each currency they touch. A positive amount is a debit; whether that increases the account is decided by the account's type. Nothing posted here can be changed afterwards.
+
+        Requires the ENTRY_POST permission, held by: OWNER, ADMIN. The caller must be acting for the merchant in the path.
+      operationId: post
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostEntryRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntryResponse"
+          description: The entry as written
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
+      security:
+      - merchantJwt: []
+      summary: Post an entry
+      tags:
+      - Journal
+  /api/v1/merchants/{merchantId}/entries/{entryId}:
+    get:
+      description: "Requires the ENTRY_READ permission, held by: OWNER, ADMIN, ANALYST,\
+        \ VIEWER. The caller must be acting for the merchant in the path."
+      operationId: find
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: entryId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntryResponse"
+          description: The entry
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+      security:
+      - merchantJwt: []
+      summary: Read an entry and its postings
+      tags:
+      - Journal
 components:
   headers:
     X-Correlation-Id:
@@ -281,6 +390,32 @@ components:
           - EQUITY
           - REVENUE
           - EXPENSE
+    EntryResponse:
+      type: object
+      description: "A movement of money, as written"
+      properties:
+        corrects:
+          type: string
+          format: uuid
+        description:
+          type: string
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        occurredAt:
+          type: string
+          format: date-time
+        postings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PostingResponse"
+        recordedAt:
+          type: string
+          format: date-time
+          description: "When this was written, which is not when the money moved"
     FieldViolation:
       description: "One rejected field, in the shape a form can render beside the\
         \ input."
@@ -332,6 +467,71 @@ components:
       - currency
       - name
       - type
+    PostEntryRequest:
+      type: object
+      description: "A movement of money, as postings that sum to zero"
+      properties:
+        corrects:
+          type: string
+          format: uuid
+          description: "The entry this one corrects, if it is a correction"
+        description:
+          type: string
+          example: Card payment captured
+          maxLength: 500
+          minLength: 0
+        occurredAt:
+          type: string
+          format: date-time
+          description: "When the money moved, which need not be now"
+        postings:
+          type: array
+          description: "At least two, summing to zero within each currency"
+          items:
+            $ref: "#/components/schemas/PostingRequest"
+          maxItems: 2147483647
+          minItems: 2
+      required:
+      - description
+      - occurredAt
+      - postings
+    PostingRequest:
+      type: object
+      description: One side of a movement
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          description: The account this side moves
+        amount:
+          type: integer
+          format: int64
+          description: "Signed minor units, in the account's currency. Positive is\
+            \ a debit, negative is a credit, and zero says nothing. Whether a debit\
+            \ increases this account is decided by its type."
+          example: 125000
+      required:
+      - accountId
+    PostingResponse:
+      type: object
+      description: "One side of a movement, as written"
+      properties:
+        accountCode:
+          type: string
+        accountId:
+          type: string
+          format: uuid
+        amount:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        direction:
+          type: string
+          example: DEBIT
+        id:
+          type: string
+          format: uuid
     Problem:
       description: An RFC 9457 problem detail. The body of every failing request.
       example:

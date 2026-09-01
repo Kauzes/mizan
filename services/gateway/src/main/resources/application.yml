@@ -22,7 +22,7 @@ spring:
               uri: http://ledger-service:8082
               order: -100
               predicates:
-                - Path=/api/v1/merchants/*/accounts,/api/v1/merchants/*/accounts/**
+                - Path=/api/v1/merchants/*/accounts,/api/v1/merchants/*/accounts/**,/api/v1/merchants/*/entries,/api/v1/merchants/*/entries/**
             - id: identity-service
               uri: http://identity-service:8081
               order: 0
