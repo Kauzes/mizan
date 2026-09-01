@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
@@ -99,9 +100,23 @@ public abstract class OpenApiSpecTest extends MizanIntegrationTest {
         assertThat(schemes.has("merchantApiKey")).isTrue();
         assertThat(schemes.path("merchantApiKey").path("in").asText()).isEqualTo("header");
 
-        // A scheme the gateway actually checks should not still be described as an intention.
-        assertThat(schemes.path("merchantJwt").path("description").asText())
-                .doesNotContain("Not enforced");
+        // Every scheme here is enforced now, so none of them should still read as an
+        // intention. This is the assertion that keeps MIZ-25's placeholder wording from
+        // creeping back in with a later scheme.
+        for (String scheme : List.of("merchantJwt", "merchantApiKey", "merchantTimestamp",
+                "merchantSignature")) {
+            assertThat(schemes.path(scheme).path("description").asText())
+                    .as("%s should describe what happens, not what is planned", scheme)
+                    .isNotEmpty()
+                    .doesNotContain("Not enforced")
+                    .doesNotContain("MIZ-");
+        }
+
+        // Enough to write a client from: the exact string that gets signed.
+        assertThat(schemes.path("merchantSignature").path("description").asText())
+                .contains("HMAC-SHA256")
+                .contains("canonical request")
+                .contains("lowercase hex");
     }
 
     @Test

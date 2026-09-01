@@ -65,6 +65,7 @@ services:
         MODULE: gateway
     environment:
       MIZAN_JWK_SET_URI: http://identity-service:8081/.well-known/jwks.json
+      MIZAN_API_KEY_VERIFICATION_URI: http://identity-service:8081/internal/api-keys/verify
     ports:
       - "8080:8080"
     healthcheck:
@@ -81,6 +82,10 @@ services:
         MODULE: identity-service
     environment:
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/identity
+      # Base64 of "mizan-local-development-only-key", which is what it is. A deployment sets
+      # this from wherever it keeps secrets; the local stack pins it so that keys issued
+      # before a restart still verify after one.
+      MIZAN_API_KEY_ENCRYPTION_KEY: bWl6YW4tbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1rZXk=
       MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
       MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
     depends_on:

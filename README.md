@@ -69,6 +69,9 @@ other protected route.
   reaches a log line. No response type has a field for one to land in.
 - Uniqueness is enforced by the database. A caller finds out an email is taken by the insert
   failing, not by a check that answered a moment earlier.
+- A merchant's server authenticates with a key and a signature, not a bearer token. The
+  signature covers the method, the path, the body and a timestamp, so a captured request
+  cannot be replayed, altered, or aimed somewhere else.
 - Authentication happens once, at the gateway. A service behind it receives a caller who
   has already been established, on headers the gateway sets after stripping whatever the
   caller sent under the same names.
@@ -199,6 +202,23 @@ which is the one place to look when asking what somebody can do.
 
 A merchant always has an owner: the last one cannot be removed or demoted. An account nobody
 can administer is recoverable only by hand in the database.
+
+### Server to server
+
+A merchant's own servers use an API key instead of signing in. An owner issues one at
+`POST /api/v1/merchants/{merchantId}/api-keys`, which returns the signing secret once and never
+again; the stored copy is encrypted, and the key that opens it is configuration rather than a
+row in the database. Each key carries one role, and rotating a key issues its replacement and
+revokes it in the same step.
+
+A signed request carries three headers. `X-Mizan-Key` names the key, `X-Mizan-Timestamp` is the
+unix second it was signed, and `X-Mizan-Signature` is HMAC-SHA256, in lowercase hex, of four
+lines joined by newlines: the uppercase method, the path, that timestamp, and the SHA-256 of the
+body. The spec carries the same definition with a worked example, which is the copy to write a
+client from.
+
+Every signed request is verified by identity rather than at the edge, so revoking a key takes
+effect on the next request rather than when a cache expires.
 
 Locally the service generates its signing key at startup and warns that it did. That means
 tokens stop working when it restarts, which is the point: a default key is either obviously
