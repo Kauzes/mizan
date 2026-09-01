@@ -3,6 +3,7 @@
 - Status: accepted
 - Date: 2026-09-01
 - Jira: MIZ-37
+- Superseded in part: 2026-09-01 by MIZ-39, which replaced the optimistic retry with a row lock. The measurement that forced it is below.
 
 ## Context
 
@@ -20,17 +21,26 @@ number disagree.
 would otherwise leave one of the movements out of it. The second write is refused instead, and
 the caller's transaction starts over.
 
-**Retries are bounded and back off.** Ten attempts, with a short randomised wait that grows.
-The bound matters because an unbounded retry under real contention turns a queue into a spin.
-The backoff matters more than it looks: the first version retried immediately, and twelve
-writers at one account exhausted five attempts — the failures were the retries colliding with
-each other, in the same order, at the same moment, rather than with real work. That was
-measured, not guessed.
+**Writers at one account queue on a row lock, taken in a consistent order.** The accounts an
+entry touches are locked by id before anything is written, so two entries naming the same pair
+the other way round cannot each hold what the other needs.
+
+This replaced an optimistic retry, and the reason is worth keeping. Retrying was bounded at ten
+attempts with a randomised backoff, and twelve concurrent writers still exhausted it once the
+machine was under the load of a full build. The arithmetic says why, and it is not bad luck:
+under read committed a writer updating a contended row blocks until the holder commits and
+*then* fails its version check, so with n writers at one account the last one needs n - 1
+retries. The retry budget was therefore a limit on how many callers an account could have, which
+is not a property anybody chose and not one a caller could know. Raising it would have moved the
+threshold rather than removed it.
+
+**The version column stays, and so does the retry**, as a safety net for anything that moves an
+account outside the posting path rather than as the way contention is handled.
 
 **Exhausting the retries is its own error.** `CONTENDED`, distinct from the conflict a reused
 reference produces, and the message says to send the request again — which is safe, because
-every entry carries a reference and a resend is a replay rather than a second posting. The two
-stories fit together: idempotency is what makes "try again" honest advice.
+every entry carries a reference and a resend is a replay rather than a second posting. Ordinary
+posting should never reach it now that writers queue.
 
 **The stored number is the signed sum of the account's postings, debit positive.** It is not
 flipped so that a liability reads naturally. A ledger should return one number with one
@@ -43,15 +53,16 @@ moment, and saying so in the response is cheaper than explaining it later.
 
 ## Consequences
 
-Every posting now writes to the account row as well as the posting table, so two entries
-touching the same account serialise where they previously did not. For the expected shape of
-traffic — many merchants, few writers per account — that is invisible. For a genuinely hot
-account it is the limit of this design, and the answer then is a row lock taken in a
-consistent order rather than more retries. That trade is written down here rather than left to
-be discovered.
+Every posting now writes to the account row as well as the posting table and holds it for the
+length of the transaction, so two entries touching one account serialise where they previously
+did not. That is the cost, and it is paid deliberately: serialising is what makes the burst
+finish. Transactions here are short — an entry, its postings, and two account rows.
 
-The retry is inside the service, so a caller sees a 409 only when ten attempts failed. Under
-the twelve-writer burst the tests drive, none do.
+Locking in a consistent order is now a rule any future feature touching two accounts has to
+follow. It is enforced by there being one place that locks accounts, and that place sorting.
+
+The twenty-four writer burst the tests drive is more than the old retry budget ever allowed,
+which is the point of the number.
 
 The `CONTENDED` code is new in the shared `ErrorCode`, so every service's specification now
 documents it whether or not that service can return it. That is the cost of one closed set of
@@ -68,11 +79,11 @@ no second thing to keep in step. It also gets slower with every movement, and a 
 most read thing in a ledger. The integrity check in MIZ-38 does exactly this sum, which is
 what makes keeping the fast copy safe.
 
-**Pessimistic locking, `select ... for update` on the accounts in a consistent order.** No
-retries, no contention errors, and it converges under any load rather than degrading. It also
-holds locks for the length of the transaction and makes deadlock a thing to be careful about
-in every future feature that touches two accounts. Worth revisiting the day an account is hot
-enough to notice.
+**Optimistic locking with a bounded retry.** What this decision originally chose, on the
+reasoning that contention on one account would be low and a retry is cheap. Both halves were
+true and the conclusion still did not hold: when contention is not low, the retry count becomes
+a cap on concurrent callers. Kept as a safety net, no longer the mechanism. The evidence is
+above and the change is MIZ-39.
 
 **A separate balances table, or a materialised view refreshed on a schedule.** Reads stay fast
 and the journal stays untouched, at the cost of a balance that is right as of the last refresh.
