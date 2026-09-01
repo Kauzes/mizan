@@ -11,7 +11,123 @@ info:
 servers:
 - description: The local gateway. Services are not addressed directly.
   url: http://localhost:8080
-paths: {}
+tags:
+- description: "Taking money, from intent to captured"
+  name: Payments
+paths:
+  /api/v1/merchants/{merchantId}/payments:
+    get:
+      description: |-
+        Most recent first.
+
+        Requires the PAYMENT_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
+      operationId: list
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaymentResponse"
+          description: The merchant's payments
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+      security:
+      - merchantJwt: []
+      summary: List a merchant's payments
+      tags:
+      - Payments
+    post:
+      description: |-
+        Records that a payment is about to be attempted. Nobody is contacted and no money moves: this is the thing an authorization is later attached to.
+
+        The reference is the merchant's own name for the payment and is unique within the merchant, so a caller who never received this response can find the payment again rather than creating a second one.
+
+        Requires the PAYMENT_WRITE permission, held by: OWNER, ADMIN. The caller must be acting for the merchant in the path.
+      operationId: create
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResponse"
+          description: "The payment, in its first state"
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "409":
+          $ref: "#/components/responses/CONFLICT"
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
+      security:
+      - merchantJwt: []
+      summary: Create a payment intent
+      tags:
+      - Payments
+  /api/v1/merchants/{merchantId}/payments/{paymentId}:
+    get:
+      description: |-
+        Includes every step it has taken, oldest first, and where it may go next.
+
+        Requires the PAYMENT_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
+      operationId: find
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: paymentId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResponse"
+          description: The payment
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+      security:
+      - merchantJwt: []
+      summary: Read a payment
+      tags:
+      - Payments
 components:
   headers:
     X-Correlation-Id:
@@ -147,6 +263,38 @@ components:
         X-Correlation-Id:
           $ref: "#/components/headers/X-Correlation-Id"
   schemas:
+    CreatePaymentRequest:
+      type: object
+      description: A payment about to be attempted
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: Minor units. 12550 TRY means 125.50.
+          example: 125000
+          minimum: 0
+        currency:
+          type: string
+          description: ISO 4217
+          example: TRY
+          minLength: 1
+          pattern: "[A-Z]{3}"
+        description:
+          type: string
+          description: For a person reading it later
+          example: Two bags of coffee
+          maxLength: 500
+          minLength: 0
+        reference:
+          type: string
+          description: "What the merchant calls this payment. Unique within the merchant,\
+            \ so their own reconciliation has something to join on."
+          example: order-10241
+          maxLength: 200
+          minLength: 0
+      required:
+      - currency
+      - reference
     FieldViolation:
       description: "One rejected field, in the shape a form can render beside the\
         \ input."
@@ -160,6 +308,56 @@ components:
       required:
       - field
       - message
+    PaymentResponse:
+      type: object
+      description: "A payment, and where it has got to"
+      properties:
+        allowedNext:
+          type: array
+          description: Where this payment may go next. Empty when it is finished.
+          items:
+            type: string
+            enum:
+            - CREATED
+            - AUTHORIZED
+            - DECLINED
+            - CAPTURED
+            - VOIDED
+          uniqueItems: true
+        amount:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        currency:
+          type: string
+        description:
+          type: string
+        history:
+          type: array
+          description: Oldest first
+          items:
+            $ref: "#/components/schemas/TransitionResponse"
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        reference:
+          type: string
+        status:
+          type: string
+          enum:
+          - CREATED
+          - AUTHORIZED
+          - DECLINED
+          - CAPTURED
+          - VOIDED
+        updatedAt:
+          type: string
+          format: date-time
     Problem:
       description: An RFC 9457 problem detail. The body of every failing request.
       example:
@@ -231,6 +429,32 @@ components:
       - timestamp
       - title
       - type
+    TransitionResponse:
+      type: object
+      description: One step a payment took
+      properties:
+        at:
+          type: string
+          format: date-time
+        from:
+          type: string
+          description: Null for the first step
+          enum:
+          - CREATED
+          - AUTHORIZED
+          - DECLINED
+          - CAPTURED
+          - VOIDED
+        reason:
+          type: string
+        to:
+          type: string
+          enum:
+          - CREATED
+          - AUTHORIZED
+          - DECLINED
+          - CAPTURED
+          - VOIDED
   securitySchemes:
     merchantApiKey:
       description: "The merchant's API key, naming which key signed the request. Public,\
