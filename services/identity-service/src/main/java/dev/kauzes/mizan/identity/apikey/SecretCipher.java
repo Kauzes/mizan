@@ -24,6 +24,12 @@ import org.springframework.stereotype.Component;
  * <p>AES-GCM, with a fresh nonce per value, stored in front of the ciphertext. GCM
  * authenticates as well as encrypts, so a row edited in the database fails to decrypt rather
  * than decrypting to something else.
+ *
+ * <p>Each value is bound to the key it belongs to, by authenticating the key id alongside it.
+ * Without that, every ciphertext is interchangeable: somebody able to write to this table
+ * could copy the encrypted secret from a key they legitimately hold onto another merchant's
+ * row, and then sign that merchant's requests with a secret they already know. Bound, the
+ * same ciphertext under a different key id simply fails to open.
  */
 @Component
 public class SecretCipher {
@@ -44,13 +50,18 @@ public class SecretCipher {
         this.key = configured == null || configured.isBlank() ? generated() : parsed(configured);
     }
 
-    public String encrypt(String plaintext) {
+    /**
+     * @param boundTo what this value belongs to, authenticated but not encrypted. Decryption
+     *     with a different value fails rather than returning something usable.
+     */
+    public String encrypt(String plaintext, String boundTo) {
         try {
             byte[] nonce = new byte[NONCE_BYTES];
             RANDOM.nextBytes(nonce);
 
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, nonce));
+            cipher.updateAAD(boundTo.getBytes(StandardCharsets.UTF_8));
             byte[] ciphertext = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
 
             byte[] stored = new byte[nonce.length + ciphertext.length];
@@ -62,7 +73,7 @@ public class SecretCipher {
         }
     }
 
-    public String decrypt(String stored) {
+    public String decrypt(String stored, String boundTo) {
         try {
             byte[] bytes = DECODER.decode(stored);
             byte[] nonce = java.util.Arrays.copyOfRange(bytes, 0, NONCE_BYTES);
@@ -70,11 +81,21 @@ public class SecretCipher {
 
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, nonce));
+            cipher.updateAAD(boundTo.getBytes(StandardCharsets.UTF_8));
             return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
         } catch (Exception unopenable) {
-            // Either the row was tampered with or the encryption key changed. Both mean this
-            // key cannot be used, and neither is the caller's fault to explain.
-            throw new IllegalStateException("could not decrypt an API key secret", unopenable);
+            // The row was edited, the value belongs to another key, or the encryption key
+            // changed. All of them mean this key cannot be used, and none of them is
+            // something to explain to whoever is holding it.
+            throw new SecretUnavailableException(unopenable);
+        }
+    }
+
+    /** Raised when a stored secret cannot be opened, whatever the reason. */
+    static final class SecretUnavailableException extends RuntimeException {
+
+        private SecretUnavailableException(Throwable cause) {
+            super("could not decrypt an API key secret", cause);
         }
     }
 

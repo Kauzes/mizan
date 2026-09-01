@@ -180,6 +180,28 @@ class ApiKeyLifecycleTest extends MizanIntegrationTest {
     }
 
     @Test
+    void refusesASecretMovedOntoAnotherKeysRow() throws Exception {
+        Account mine = register();
+        Account theirs = register();
+        Key known = issued(mine);
+        Key target = issued(theirs);
+
+        // Somebody able to write to this table copies the encrypted secret from a key they
+        // hold onto another merchant's key. Both values were encrypted under the same key,
+        // so nothing but the binding stops this one from opening.
+        jdbc.update(
+                "update api_key set secret_encrypted = "
+                        + "(select secret_encrypted from api_key where key_id = ?) "
+                        + "where key_id = ?",
+                known.keyId,
+                target.keyId);
+
+        Key forged = new Key(target.id, target.keyId, known.secret);
+        verify(forged, "GET", "/api/v1/payments", "", Instant.now())
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void onlyAnOwnerManagesKeys() throws Exception {
         Account account = register();
 
