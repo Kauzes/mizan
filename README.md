@@ -60,6 +60,10 @@ other protected route.
 - Journal entries are immutable, and the database says so: an update or a delete against the
   journal raises. A correction is a new entry naming the one it corrects, so both stay
   visible.
+- The ledger can be asked to prove it has not drifted: every currency sums to zero and every
+  kept balance agrees with its own postings. Reachable at `/actuator/ledgerintegrity`, which
+  needs a token through the gateway. It reports what disagreed and by how much rather than
+  repairing anything, because a balance that disagrees with its postings is evidence.
 - A balance is kept on the account and written in the same transaction as the postings that
   move it, so reading one is a single row however long the history is. A version column
   refuses a lost update, and the write is retried rather than handed back.
