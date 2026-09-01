@@ -61,6 +61,24 @@ class GatewayRouteDefinitionTests {
     }
 
     @Test
+    void aMerchantsBooksAreRoutedAheadOfTheMerchantItself() {
+        Map<String, RouteDefinition> byId = definitions();
+
+        assertThat(byId.get("ledger-service").getPredicates())
+                .singleElement()
+                .satisfies(predicate -> assertThat(predicate.getArgs().values())
+                        .containsExactly(
+                                "/api/v1/merchants/*/accounts",
+                                "/api/v1/merchants/*/accounts/**"));
+
+        // Both routes match a path like /api/v1/merchants/{id}/accounts, so the one that
+        // should win says so with an order rather than by being read first.
+        assertThat(byId.get("ledger-service").getOrder())
+                .as("the more specific route has to be tried first")
+                .isLessThan(byId.get("identity-service").getOrder());
+    }
+
+    @Test
     void internalRoutesStripTheirPrefix() {
         Map<String, RouteDefinition> byId = definitions();
 

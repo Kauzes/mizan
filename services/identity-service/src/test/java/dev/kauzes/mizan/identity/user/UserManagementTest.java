@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import dev.kauzes.mizan.common.identity.Role;
-import dev.kauzes.mizan.identity.Callers;
+import dev.kauzes.mizan.test.Callers;
 import dev.kauzes.mizan.test.MizanIntegrationTest;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import dev.kauzes.mizan.common.identity.RequestSigning;
 import dev.kauzes.mizan.common.identity.Role;
-import dev.kauzes.mizan.identity.Callers;
+import dev.kauzes.mizan.test.Callers;
 import dev.kauzes.mizan.test.MizanIntegrationTest;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;

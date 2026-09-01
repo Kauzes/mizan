@@ -23,5 +23,11 @@ public enum Permission {
     ROLE_MANAGE,
 
     /** Issue, rotate and revoke the keys a merchant's own servers authenticate with. */
-    API_KEY_MANAGE
+    API_KEY_MANAGE,
+
+    /** Read the merchant's books: its accounts, and what they hold. */
+    ACCOUNT_READ,
+
+    /** Open an account. Not the same as moving money into one. */
+    ACCOUNT_MANAGE
 }

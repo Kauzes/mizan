@@ -11,7 +11,119 @@ info:
 servers:
 - description: The local gateway. Services are not addressed directly.
   url: http://localhost:8080
-paths: {}
+tags:
+- description: The chart of accounts a merchant's money moves through
+  name: Accounts
+paths:
+  /api/v1/merchants/{merchantId}/accounts:
+    get:
+      description: |-
+        Ordered by code.
+
+        Requires the ACCOUNT_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
+      operationId: list
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountResponse"
+          description: The merchant's accounts
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+      security:
+      - merchantJwt: []
+      summary: List a merchant's accounts
+      tags:
+      - Accounts
+    post:
+      description: |-
+        The type decides which way a posting moves this account, and the currency is fixed for its life. Neither can be changed afterwards, because either would reinterpret history already written against it.
+
+        Requires the ACCOUNT_MANAGE permission, held by: OWNER, ADMIN. The caller must be acting for the merchant in the path.
+      operationId: open
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenAccountRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountResponse"
+          description: The account that was opened
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "409":
+          $ref: "#/components/responses/CONFLICT"
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
+      security:
+      - merchantJwt: []
+      summary: Open an account
+      tags:
+      - Accounts
+  /api/v1/merchants/{merchantId}/accounts/{accountId}:
+    get:
+      description: "Requires the ACCOUNT_READ permission, held by: OWNER, ADMIN, ANALYST,\
+        \ VIEWER. The caller must be acting for the merchant in the path."
+      operationId: find
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: accountId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountResponse"
+          description: The account
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+      security:
+      - merchantJwt: []
+      summary: Read an account
+      tags:
+      - Accounts
 components:
   headers:
     X-Correlation-Id:
@@ -138,6 +250,37 @@ components:
         X-Correlation-Id:
           $ref: "#/components/headers/X-Correlation-Id"
   schemas:
+    AccountResponse:
+      type: object
+      description: An account in the books
+      properties:
+        code:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        currency:
+          type: string
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        normalSide:
+          type: string
+          description: "Which side increases this account, from its type"
+          example: DEBIT
+        type:
+          type: string
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - REVENUE
+          - EXPENSE
     FieldViolation:
       description: "One rejected field, in the shape a form can render beside the\
         \ input."
@@ -151,6 +294,44 @@ components:
       required:
       - field
       - message
+    OpenAccountRequest:
+      type: object
+      description: An account to open
+      properties:
+        code:
+          type: string
+          description: "How this account is referred to. Unique within the merchant,\
+            \ and not changeable afterwards."
+          example: settlement.try
+          maxLength: 64
+          minLength: 0
+          pattern: "[a-z][a-z0-9._-]*"
+        currency:
+          type: string
+          description: ISO 4217. Fixed for the life of the account.
+          example: TRY
+          minLength: 1
+          pattern: "[A-Z]{3}"
+        name:
+          type: string
+          description: "What it is, for a person reading a report"
+          example: "Settlement account, TRY"
+          maxLength: 200
+          minLength: 0
+        type:
+          type: string
+          description: Decides which way a posting moves this account
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - REVENUE
+          - EXPENSE
+      required:
+      - code
+      - currency
+      - name
+      - type
     Problem:
       description: An RFC 9457 problem detail. The body of every failing request.
       example:

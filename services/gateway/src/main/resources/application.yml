@@ -14,14 +14,20 @@ spring:
             # exists, and moving a resource later should not change its URL. The remaining
             # routes below are still named after their service, and get the same treatment
             # as each one grows real endpoints.
-            - id: identity-service
-              uri: http://identity-service:8081
-              predicates:
-                - Path=/api/v1/merchants,/api/v1/merchants/**,/api/v1/tokens,/api/v1/tokens/**
+            # Resources under a merchant are owned by different services, so the more
+            # specific route is declared first and given an order that says so out loud
+            # rather than relying on the order these happen to be read in. A merchant's
+            # books live in the ledger; the merchant itself lives in identity.
             - id: ledger-service
               uri: http://ledger-service:8082
+              order: -100
               predicates:
-                - Path=/api/v1/ledger/**
+                - Path=/api/v1/merchants/*/accounts,/api/v1/merchants/*/accounts/**
+            - id: identity-service
+              uri: http://identity-service:8081
+              order: 0
+              predicates:
+                - Path=/api/v1/merchants,/api/v1/merchants/**,/api/v1/tokens,/api/v1/tokens/**
             - id: payment-service
               uri: http://payment-service:8083
               predicates:
