@@ -99,12 +99,13 @@ class BalanceTest extends MizanIntegrationTest {
     @Test
     void manyWritersAtOneAccountLoseNothing() throws Exception {
         Books books = books();
-        int writers = 12;
+        // More writers than the retry budget ever allowed, which is the point: how many
+        // callers may touch an account at once is not something a retry count should decide.
+        int writers = 24;
         long each = 1000L;
 
-        // Every one of these reads the same balance and writes it back. Without the version
-        // column most of them would be lost, and the total would be short by however many
-        // races happened to overlap.
+        // Every one of these reads the same balance and writes it back. They queue on the
+        // account rather than racing for it, so none is refused and none is lost.
         CyclicBarrier together = new CyclicBarrier(writers);
         ExecutorService threads = Executors.newFixedThreadPool(writers);
 

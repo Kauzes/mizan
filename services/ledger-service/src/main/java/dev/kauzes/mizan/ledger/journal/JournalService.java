@@ -10,7 +10,10 @@ import dev.kauzes.mizan.ledger.account.AccountRepository;
 import dev.kauzes.mizan.ledger.journal.JournalRequests.EntryResponse;
 import dev.kauzes.mizan.ledger.journal.JournalRequests.PostEntryRequest;
 import dev.kauzes.mizan.ledger.journal.JournalRequests.PostingRequest;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
@@ -31,10 +34,10 @@ public class JournalService {
     /**
      * How many times a post will start over because somebody else moved a balance first.
      *
-     * <p>Bounded, because an unbounded retry under real contention turns a queue into a spin.
-     * Ten is enough for a burst of a dozen writers at one account, which was measured rather
-     * than guessed: five without any backoff was not, and the failures were the retries
-     * colliding with each other rather than with real work.
+     * <p>Kept as a safety net rather than as the way contention is handled. Writers at one
+     * account now queue on a row lock instead of racing, so this should not be reached by
+     * ordinary posting; it still covers anything that moves an account outside this path.
+     * MIZ-39 has the measurements that moved it from the front line to here.
      */
     private static final int ATTEMPTS = 10;
 
@@ -136,12 +139,20 @@ public class JournalService {
                 request.occurredAt(),
                 correctedEntry(merchantId, request.corrects()));
 
+        // Locked in id order, before anything is written. Two entries naming the same pair
+        // of accounts the other way round would otherwise each hold what the other needs.
+        Map<UUID, Account> locked = new LinkedHashMap<>();
+        request.postings().stream()
+                .map(PostingRequest::accountId)
+                .distinct()
+                .sorted(Comparator.comparing(UUID::toString))
+                .forEach(accountId -> locked.put(accountId, lockedAccount(merchantId, accountId)));
+
         for (PostingRequest posting : request.postings()) {
-            Account account = accountOf(merchantId, posting.accountId());
+            Account account = locked.get(posting.accountId());
             entry.post(account, posting.amount());
             // In the same transaction as the posting that caused it, so a balance and the
-            // history behind it are never written apart. The version column is what makes
-            // that safe when two entries reach the same account at once.
+            // history behind it are never written apart.
             account.apply(posting.amount());
         }
 
@@ -201,10 +212,13 @@ public class JournalService {
      * An account this merchant does not own is not an account this entry may name. Looked up
      * scoped rather than looked up and then checked, so a platform account is refused here
      * the same way another merchant's is: it is simply not one of this merchant's.
+     *
+     * <p>Held for the length of the transaction. Writers at one account queue behind each
+     * other, which is slower than racing and finishes, where racing did not.
      */
-    private Account accountOf(UUID merchantId, UUID accountId) {
+    private Account lockedAccount(UUID merchantId, UUID accountId) {
         return accounts
-                .findByIdAndMerchantId(accountId, merchantId)
+                .findForUpdateByIdAndMerchantId(accountId, merchantId)
                 .orElseThrow(() -> new UnprocessableException(
                         "No account " + accountId + " in this merchant's books."));
     }
