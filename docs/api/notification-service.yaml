@@ -11,7 +11,42 @@ info:
 servers:
 - description: The local gateway. Services are not addressed directly.
   url: http://localhost:8080
-paths: {}
+tags:
+- description: "What a merchant is to be told, and about what"
+  name: Notifications
+paths:
+  /api/v1/merchants/{merchantId}/notifications:
+    get:
+      description: |-
+        Most recent first. Scoped to the merchant in the path.
+
+        Requires the NOTIFICATION_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
+      operationId: list
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationResponse"
+          description: The merchant's notifications
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+      security:
+      - merchantJwt: []
+      summary: List a merchant's notifications
+      tags:
+      - Notifications
 components:
   headers:
     X-Correlation-Id:
@@ -160,6 +195,25 @@ components:
       required:
       - field
       - message
+    NotificationResponse:
+      type: object
+      description: Something the merchant should be told
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          example: PAYMENT_CAPTURED
+        message:
+          type: string
+          example: You have been paid 1250.00 TRY for order-77.
+        paymentId:
+          type: string
+          format: uuid
     Problem:
       description: An RFC 9457 problem detail. The body of every failing request.
       example:

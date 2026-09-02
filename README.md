@@ -31,7 +31,7 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 | `ledger-service` | 8082 | Double entry accounts, journal entries, postings, reconciliation |
 | `payment-service` | 8083 | Payment lifecycle and saga orchestration, idempotency |
 | `risk-service` | 8084 | Real time scoring, analyst review queue, threshold feedback |
-| `notification-service` | 8085 | Signed merchant webhooks with retry and dead letter handling |
+| `notification-service` | 8085 | Turns payment events into what a merchant is told; webhooks next |
 | `bank-simulator` | 8086 | Fake acquirer that approves, declines, times out and duplicates |
 | `common` | n/a | Shared money type, error codes, correlation context. No Spring |
 | `common-web` | n/a | Auto configured problem details and correlation id propagation |
@@ -132,6 +132,12 @@ other protected route.
 - An event that will not publish blocks its own payment's later events, necessarily, and no
   other payment's. Retries double to a cap with jitter, and the row keeps the attempt count
   and the last error so a stuck stream can be explained without a log.
+- A consumer records that it has handled an event in the same transaction as the handling,
+  so the work and the record of it cannot come apart. It resembles the API's idempotency
+  records and cannot share an implementation with them: that one commits before the handler
+  runs so a concurrent request can wait for its answer, and this one commits with it.
+- "Already handled" is a question about a handler, not about a service, so two handlers in
+  one service each see the same event.
 - One topic per aggregate type, named in one place, declared rather than auto-created. The
   payload's version is on the envelope rather than in the topic name, so a consumer can say it
   does not understand a version instead of silently receiving nothing.

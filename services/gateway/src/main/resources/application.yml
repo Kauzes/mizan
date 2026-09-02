@@ -39,8 +39,9 @@ spring:
                 - Path=/api/v1/risk/**
             - id: notification-service
               uri: http://notification-service:8085
+              order: -100
               predicates:
-                - Path=/api/v1/notifications/**
+                - Path=/api/v1/merchants/*/notifications,/api/v1/merchants/*/notifications/**,/api/v1/notifications/**
             # These exist for two things: a published API contract and a health probe. They
             # used to be /internal/<service>/**, which meant every internal endpoint any
             # service would ever add was reachable from the edge by anyone holding a token.

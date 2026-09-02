@@ -14,6 +14,25 @@ spring:
       # should fail the service on startup rather than quietly reshape a live database.
       ddl-auto: validate
     open-in-view: false
+  kafka:
+    bootstrap-servers: ${MIZAN_KAFKA:localhost:29092}
+    consumer:
+      # The group is the service, so every instance of it shares the work and none of them
+      # sees the same event twice in the ordinary case. A second consumer wanting the same
+      # events uses a group of its own and gets its own copy.
+      group-id: ${MIZAN_KAFKA_GROUP:notification-service}
+      # Earliest, not latest. A consumer joining a topic that already has events on it should
+      # see them: the alternative is that whatever happened before this service first started
+      # is silently invisible to it forever.
+      auto-offset-reset: earliest
+      # Offsets are committed by the container after a message is handled, not on a timer
+      # while it is still being handled. A timer would mean a crash mid-handling losing the
+      # event, which is the one thing an at-least-once consumer must not do.
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: record
   flyway:
     # Namespaced by service rather than the plain db/migration every service used to share.
     # One classpath is enough to make that ambiguous: a test that runs two services in one

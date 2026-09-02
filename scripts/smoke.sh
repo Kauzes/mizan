@@ -196,7 +196,36 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------
-step "10. The books balance"
+step "10. Another service heard it, and decided what to tell the merchant"
+
+# The consuming end. Events are delivered at least once by design, so what is checked is not
+# only that something arrived but that exactly one thing did.
+told=""
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    told=$(authed 200 GET "$GATEWAY/api/v1/merchants/$MERCHANT/notifications")
+    if [ "$(printf '%s' "$told" | count)" != "0" ]; then
+        break
+    fi
+    sleep 1
+done
+
+[ "$(printf '%s' "$told" | count)" != "0" ] || fail "nothing was ever said about these payments"
+printf '%s' "$told" | "$PYTHON" -c '
+import sys, json
+for notification in json.load(sys.stdin):
+    print("  ", notification["kind"], "|", notification["message"])
+'
+
+captured_count=$(printf '%s' "$told" | "$PYTHON" -c '
+import sys, json
+print(sum(1 for n in json.load(sys.stdin) if n["kind"] == "PAYMENT_CAPTURED"))
+')
+[ "$captured_count" = "1" ] \
+    || fail "one capture should produce one notification, and produced $captured_count"
+pass "one capture, one notification, however many times the event was delivered"
+
+# ---------------------------------------------------------------------------------------
+step "11. The books balance"
 
 integrity=$(call 200 GET "$LEDGER/actuator/ledgerintegrity")
 sound=$(printf '%s' "$integrity" | field sound)

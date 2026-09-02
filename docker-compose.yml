@@ -188,10 +188,14 @@ services:
         MODULE: notification-service
     environment:
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/notification
+      # The first service on this platform that listens rather than answers.
+      MIZAN_KAFKA: kafka:9092
       MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
       MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
     depends_on:
       postgres:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     ports:
       - "8085:8085"

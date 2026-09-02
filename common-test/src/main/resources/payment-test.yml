@@ -1,0 +1,42 @@
+# Configuration for the payment service, for any test that starts one in its own JVM.
+#
+# Its own name, for the same reason the acquirer and the ledger have one: several services put
+# an application.yml at the root of the classpath and only one of them can win. Reading its own
+# file also stops this context inheriting the notification service's datasource, which points
+# at a different database.
+#
+# The datasource, the broker and the service credential are passed as arguments, because the
+# first two are containers that do not exist until the test runs.
+#
+# It lives in common-test rather than beside one service's tests because more than one
+# service now starts this one in-process, and a copy per service is a copy that drifts.
+
+server:
+  port: 0
+
+spring:
+  main:
+    banner-mode: off
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    locations: classpath:db/migration/payment
+
+mizan:
+  outbox:
+    # Faster than the deployed second, because this test waits for an event to travel through
+    # two services and a broker, and the relay's tick is the largest part of that.
+    publish-every: 200ms
+  acquirer:
+    # Nothing here uses the slow cards, so a short timeout only makes a real failure quicker.
+    timeout: 5s
+    # The sweep has nothing to resolve in this test and would only add noise.
+    resolve-every: 1h
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

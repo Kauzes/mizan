@@ -123,6 +123,21 @@ public class MizanWebAutoConfiguration {
 
             return new dev.kauzes.mizan.common.web.outbox.Outbox(jdbc, json);
         }
+
+        /**
+         * The consuming side. Separate from the outbox in every way but the module: it writes
+         * to its own table, in the opposite transactional arrangement, for reasons written
+         * out on the class.
+         */
+        @Bean
+        @ConditionalOnMissingBean
+        public dev.kauzes.mizan.common.web.inbox.Inbox inbox(
+                org.springframework.jdbc.core.JdbcTemplate jdbc,
+                tools.jackson.databind.ObjectMapper json,
+                org.springframework.transaction.PlatformTransactionManager transactions) {
+
+            return new dev.kauzes.mizan.common.web.inbox.Inbox(jdbc, json, transactions);
+        }
     }
 
     /**
