@@ -6,6 +6,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import dev.kauzes.mizan.common.error.UnprocessableException;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -23,18 +24,6 @@ import java.util.UUID;
 @Entity
 @Table(name = "refund")
 public class Refund {
-
-    /**
-     * What happened to it.
-     *
-     * <p>One value, because a refund exists only once the money has gone back and the books
-     * say so: a refund that failed left nothing behind to record. In-flight states arrive in
-     * MIZ-52, with the machinery that can resolve them — a state nothing can move a row out of
-     * is a state that strands rows.
-     */
-    public enum Status {
-        SUCCEEDED
-    }
 
     @Id
     @GeneratedValue
@@ -58,7 +47,7 @@ public class Refund {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private Status status;
+    private RefundStatus status;
 
     /** Why it failed, or why the merchant asked for it. Whichever there is to say. */
     @Column
@@ -76,6 +65,18 @@ public class Refund {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** How many times finishing this has been tried and failed. */
+    @Column(nullable = false)
+    private int attempts;
+
+    /** When it may be tried again, so a broken refund is not retried in a loop. */
+    @Column(name = "next_attempt_at")
+    private Instant nextAttemptAt;
+
+    /** Why it did not work last time, kept where a person looking at it can read it. */
+    @Column(name = "last_error")
+    private String lastError;
+
     @jakarta.persistence.Version
     @Column(nullable = false)
     private long version;
@@ -85,31 +86,92 @@ public class Refund {
     }
 
     /**
-     * A refund that has already happened.
+     * A refund that has been asked for and not yet done.
      *
-     * <p>Constructed after the acquirer has given the money back and the ledger has recorded
-     * it, not before. Writing the row first would mean a row claiming to have succeeded while
-     * pointing at neither — which the database refuses, and rightly.
+     * <p>Written before the acquirer is asked, in its own transaction, so that a process which
+     * dies during the call leaves a record of what was attempted rather than nothing at all.
+     * MIZ-51 wrote this row only once everything had worked, which was honest for a story with
+     * no way to resume and is exactly what this one fixes.
      */
-    public Refund(
-            Payment payment,
-            long amount,
-            String reference,
-            String reason,
-            String acquirerReference,
-            UUID ledgerEntryId) {
-
+    public Refund(Payment payment, long amount, String reference, String reason) {
         this.paymentId = payment.id();
         this.merchantId = payment.merchantId();
         this.amount = amount;
         this.currency = payment.money().currency().getCurrencyCode();
         this.reference = Objects.requireNonNull(reference, "reference");
         this.reason = reason;
-        this.acquirerReference = Objects.requireNonNull(acquirerReference, "acquirerReference");
-        this.ledgerEntryId = Objects.requireNonNull(ledgerEntryId, "ledgerEntryId");
-        this.status = Status.SUCCEEDED;
+        this.status = RefundStatus.REQUESTED;
         this.createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
         this.updatedAt = createdAt;
+    }
+
+    /**
+     * Moves the refund, or refuses to.
+     *
+     * <p>Every change of state goes through here, so a refund cannot be moved by setting a
+     * field, and a resumption that races the original call cannot walk it backwards.
+     */
+    private void moveTo(RefundStatus next) {
+        if (status == next) {
+            // A resumption that arrives after the original call finished the same step. Not an
+            // error: at-least-once is the shape of everything that resumes.
+            return;
+        }
+        if (!status.canMoveTo(next)) {
+            throw new UnprocessableException(
+                    "A refund that is " + status + " cannot become " + next + ".");
+        }
+        this.status = next;
+        this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+    }
+
+    /** The acquirer has given the money back. The books do not know yet. */
+    public void returned(String acquirerReference) {
+        this.acquirerReference = Objects.requireNonNull(acquirerReference, "acquirerReference");
+        moveTo(RefundStatus.RETURNED);
+    }
+
+    /** And now they do. */
+    public void recorded(UUID ledgerEntryId) {
+        this.ledgerEntryId = Objects.requireNonNull(ledgerEntryId, "ledgerEntryId");
+        moveTo(RefundStatus.SUCCEEDED);
+    }
+
+    /** The acquirer refused outright. Nothing moved, so the reservation is given back. */
+    public void failed(String why) {
+        this.lastError = trim(why);
+        moveTo(RefundStatus.FAILED);
+    }
+
+    /**
+     * Nobody could finish it, so a person has to look.
+     *
+     * <p>The reservation stays held. The money may have gone back, and releasing the amount
+     * would let it be refunded a second time.
+     */
+    public void abandoned(String why) {
+        this.lastError = trim(why);
+        moveTo(RefundStatus.ABANDONED);
+    }
+
+    /**
+     * Puts this refund out of the running for a while, and says why.
+     *
+     * @return whether it has now been tried too many times to keep trying
+     */
+    public boolean attemptFailed(String why, java.time.Duration waitFor, int limit) {
+        this.attempts += 1;
+        this.lastError = trim(why);
+        this.nextAttemptAt = Instant.now().plus(waitFor);
+        this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        return this.attempts >= limit;
+    }
+
+    private static String trim(String why) {
+        if (why == null) {
+            return null;
+        }
+        return why.length() > 1000 ? why.substring(0, 1000) : why;
     }
 
     public UUID id() {
@@ -136,7 +198,7 @@ public class Refund {
         return reference;
     }
 
-    public Status status() {
+    public RefundStatus status() {
         return status;
     }
 
@@ -158,6 +220,18 @@ public class Refund {
 
     public Instant updatedAt() {
         return updatedAt;
+    }
+
+    public int attempts() {
+        return attempts;
+    }
+
+    public Instant nextAttemptAt() {
+        return nextAttemptAt;
+    }
+
+    public String lastError() {
+        return lastError;
     }
 
     @Override

@@ -54,6 +54,13 @@ mizan:
     # default: a blank one would make the internal endpoints open, and this service refuses
     # to start without it rather than discovering it at the first capture.
     service-token: ${MIZAN_INTERNAL_SERVICE_TOKEN:}
+  refunds:
+    # How often unfinished refunds are looked for. A refund that stopped between the acquirer
+    # and the ledger is money the books do not know about, so this is not a slow sweep.
+    resolve-every: ${MIZAN_REFUND_RESOLVE_EVERY:15s}
+    # How long one is left alone first, so a refund whose original call is still in flight is
+    # not raced for no benefit.
+    resolve-after: ${MIZAN_REFUND_RESOLVE_AFTER:10s}
   outbox:
     # How often the relay looks for events to publish. A second is the delay a consumer sees
     # on an idle platform; under load a pass that fills its batch runs again at once rather

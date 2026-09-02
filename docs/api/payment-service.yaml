@@ -839,7 +839,11 @@ components:
         status:
           type: string
           enum:
+          - REQUESTED
+          - RETURNED
           - SUCCEEDED
+          - FAILED
+          - ABANDONED
     TransitionResponse:
       type: object
       description: One step a payment took

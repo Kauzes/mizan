@@ -237,6 +237,22 @@ public class Payment {
         this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 
+    /**
+     * Gives back an amount a refund had reserved and did not use.
+     *
+     * <p>Only ever when the acquirer refused outright, so nothing moved. A refund that merely
+     * stopped answering keeps its reservation: the money may be gone, and handing the merchant
+     * the headroom back would let them refund it a second time.
+     */
+    public void refundReleased(long amount) {
+        if (amount > refundedAmount) {
+            throw new IllegalStateException(
+                    "cannot release " + amount + " when only " + refundedAmount + " is reserved");
+        }
+        this.refundedAmount -= amount;
+        this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+    }
+
     public String acquirerReference() {
         return acquirerReference;
     }
