@@ -138,6 +138,14 @@ other protected route.
   runs so a concurrent request can wait for its answer, and this one commits with it.
 - "Already handled" is a question about a handler, not about a service, so two handlers in
   one service each see the same event.
+- A handler that fails is retried a bounded number of times and then the event is set aside
+  on a dead letter topic, so that one message nobody can handle blocks nobody. Retrying
+  forever and dropping are the two defaults systems reach by accident, and both are wrong.
+- A handler may say a failure is hopeless, and then it is not retried at all. A message that
+  cannot be parsed will not parse differently in a second.
+- Dead letters are read into a table and reachable at `/actuator/deadletters`, keeping the
+  reason, the attempt count, the correlation id and the original message byte for byte. An
+  operator can send one back, and it goes through the same path as an ordinary delivery.
 - One topic per aggregate type, named in one place, declared rather than auto-created. The
   payload's version is on the envelope rather than in the topic name, so a consumer can say it
   does not understand a version instead of silently receiving nothing.

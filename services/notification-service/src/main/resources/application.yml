@@ -31,6 +31,12 @@ spring:
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      # This service produces two things and neither is a domain event: a message it could not
+      # handle, sent to the dead letter topic, and one an operator has asked to try again.
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
     listener:
       ack-mode: record
   flyway:
@@ -39,6 +45,15 @@ spring:
     # JVM finds two V1s and Flyway refuses, which is how MIZ-45 found this. The files and
     # their checksums are unchanged, so an existing schema history still matches.
     locations: classpath:db/migration/notification
+
+mizan:
+  events:
+    # How many times a message is retried in the listener before it is set aside. Bounded,
+    # because the partition waits during these: retrying forever is how one unhandleable event
+    # stops every well formed one behind it.
+    retries: ${MIZAN_EVENT_RETRIES:3}
+    first-retry: ${MIZAN_EVENT_FIRST_RETRY:500ms}
+    longest-retry: ${MIZAN_EVENT_LONGEST_RETRY:10s}
 
 springdoc:
   # Keys in a stable order, so a regenerated spec differs only where the API differs and the
@@ -49,7 +64,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info
+        # deadletters is how an operator finds out what could not be handled and sends one
+        # back once the bug is fixed. Reachable only through the gateway's internal route,
+        # which needs a token.
+        include: health, info, deadletters
   endpoint:
     health:
       probes:
