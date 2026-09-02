@@ -14,6 +14,21 @@ spring:
       # should fail the service on startup rather than quietly reshape a live database.
       ddl-auto: validate
     open-in-view: false
+  kafka:
+    bootstrap-servers: ${MIZAN_KAFKA:localhost:29092}
+    producer:
+      # Every replica, not just the leader. An event acknowledged by one broker that then
+      # loses the write is an event this platform believes it published and nobody received,
+      # which is the one outcome the outbox exists to make impossible.
+      acks: all
+      # The producer deduplicates its own retries, so a retry inside the client cannot put the
+      # same event on the topic twice. It does nothing about the relay publishing again after
+      # a crash, which is a different window and is why consumers are idempotent.
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
   flyway:
     # Namespaced by service rather than the plain db/migration every service used to share.
     # One classpath is enough to make that ambiguous: a test that runs two services in one
@@ -39,6 +54,16 @@ mizan:
     # default: a blank one would make the internal endpoints open, and this service refuses
     # to start without it rather than discovering it at the first capture.
     service-token: ${MIZAN_INTERNAL_SERVICE_TOKEN:}
+  outbox:
+    # How often the relay looks for events to publish. A second is the delay a consumer sees
+    # on an idle platform; under load a pass that fills its batch runs again at once rather
+    # than waiting for the next tick.
+    publish-every: ${MIZAN_OUTBOX_PUBLISH_EVERY:1s}
+    batch-size: ${MIZAN_OUTBOX_BATCH_SIZE:100}
+    # How long a failed event waits before being tried again, doubling to the cap. A broker
+    # that is down for an hour is retried through that hour rather than every second of it.
+    first-retry: ${MIZAN_OUTBOX_FIRST_RETRY:1s}
+    longest-retry: ${MIZAN_OUTBOX_LONGEST_RETRY:5m}
 
 springdoc:
   # Keys in a stable order, so a regenerated spec differs only where the API differs and the

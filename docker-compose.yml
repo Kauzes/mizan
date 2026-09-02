@@ -138,6 +138,9 @@ services:
       # The books, reached directly rather than through the edge. This is not a merchant's
       # request being forwarded; it is the platform recording what it did.
       MIZAN_LEDGER_URL: http://ledger-service:8082
+      # Where events go once they are written. The relay is what drains the outbox; until
+      # this points somewhere, events are recorded and nobody is told.
+      MIZAN_KAFKA: kafka:9092
       MIZAN_INTERNAL_SERVICE_TOKEN: ${MIZAN_INTERNAL_SERVICE_TOKEN:-a-shared-secret-for-local-runs}
       MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
       MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
@@ -145,6 +148,8 @@ services:
       postgres:
         condition: service_healthy
       ledger-service:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     ports:
       - "8083:8083"

@@ -126,6 +126,61 @@ public class MizanWebAutoConfiguration {
     }
 
     /**
+     * The half that publishes, for a service that has a broker to publish to.
+     *
+     * <p>Separate from the outbox itself so that writing events and sending them stay
+     * independent: a service can record events with no Kafka on its classpath at all, which
+     * is what MIZ-47 did on purpose for a whole story.
+     */
+    @AutoConfiguration(
+            afterName = {
+                "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration",
+                "org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration",
+                "org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration",
+                "org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration"
+            })
+    @ConditionalOnClass(name = "org.springframework.kafka.core.KafkaTemplate")
+    @ConditionalOnBean({
+        org.springframework.jdbc.core.JdbcTemplate.class,
+        org.springframework.kafka.core.KafkaTemplate.class
+    })
+    public static class EventPublishing {
+
+        @Bean
+        @ConditionalOnMissingBean
+        public dev.kauzes.mizan.common.web.outbox.EventPublisher eventPublisher(
+                org.springframework.kafka.core.KafkaTemplate<String, String> kafka,
+                tools.jackson.databind.ObjectMapper json,
+                @Value("${mizan.outbox.publish-timeout:10s}") java.time.Duration timeout) {
+
+            return new dev.kauzes.mizan.common.web.outbox.KafkaEventPublisher(
+                    kafka, json, timeout);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        public dev.kauzes.mizan.common.web.outbox.OutboxRelay outboxRelay(
+                org.springframework.jdbc.core.JdbcTemplate jdbc,
+                dev.kauzes.mizan.common.web.outbox.EventPublisher publisher,
+                org.springframework.transaction.PlatformTransactionManager transactions,
+                @Value("${mizan.outbox.batch-size:100}") int batchSize,
+                @Value("${mizan.outbox.first-retry:1s}") java.time.Duration firstRetry,
+                @Value("${mizan.outbox.longest-retry:5m}") java.time.Duration longestRetry) {
+
+            return new dev.kauzes.mizan.common.web.outbox.OutboxRelay(
+                    jdbc, publisher, transactions, batchSize, firstRetry, longestRetry);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        public dev.kauzes.mizan.common.web.outbox.OutboxRelaySchedule outboxRelaySchedule(
+                dev.kauzes.mizan.common.web.outbox.OutboxRelay relay) {
+
+            return new dev.kauzes.mizan.common.web.outbox.OutboxRelaySchedule(relay);
+        }
+    }
+
+    /**
      * The half of idempotency that needs somewhere to write. A service with no database
      * still gets the annotations and the startup check, and any endpoint it marks
      * idempotent would have nowhere to record a result, which the check cannot know and

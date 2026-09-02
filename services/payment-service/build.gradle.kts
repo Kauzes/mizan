@@ -12,6 +12,13 @@ dependencies {
     // is the only one that calls out to somebody else's system.
     implementation("org.springframework.boot:spring-boot-restclient")
     implementation("org.springframework.boot:spring-boot-flyway")
+    // The first service to publish anything. The relay and the publisher are in common-web;
+    // these are what put a KafkaTemplate in the context for them to find. Boot 4 keeps the
+    // autoconfiguration in a module of its own, as it does for Flyway and the HTTP clients:
+    // spring-kafka alone gives you the library and no beans, and the failure is a missing
+    // bean rather than anything that mentions Kafka.
+    implementation("org.springframework.kafka:spring-kafka")
+    implementation("org.springframework.boot:spring-boot-kafka")
     runtimeOnly("org.flywaydb:flyway-database-postgresql")
     runtimeOnly("org.postgresql:postgresql")
     implementation(project(":common-web"))

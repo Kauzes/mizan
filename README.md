@@ -118,6 +118,23 @@ other protected route.
 - The events a service publishes are a list it owns, so adding one is a decision rather than
   a string appearing at a call site. A payment intent announces nothing: nobody was contacted
   and no money moved.
+- An event is published at least once, and this is said out loud rather than worked around.
+  The relay publishes and then marks the row, so a process that dies in between publishes
+  again; marking first would lose events instead, which is worse. Every consumer is built for
+  repeats.
+- Ordering is per aggregate and nothing more is claimed. Every event about one payment carries
+  that payment as its key, so they land in one partition in the order they were written.
+  Across payments there is no order, because a partitioned log cannot offer one without
+  becoming a single partition.
+- More than one relay may run. Rows are claimed with `for update skip locked`, and before
+  publishing for an aggregate the relay checks that nothing older for it is still unpublished,
+  so a later event cannot overtake one another instance is holding.
+- An event that will not publish blocks its own payment's later events, necessarily, and no
+  other payment's. Retries double to a cap with jitter, and the row keeps the attempt count
+  and the last error so a stuck stream can be explained without a log.
+- One topic per aggregate type, named in one place, declared rather than auto-created. The
+  payload's version is on the envelope rather than in the topic name, so a consumer can say it
+  does not understand a version instead of silently receiving nothing.
 - An authorization posts nothing to the books. It is a promise that the money is there, not
   a movement of it, and the ledger records movements. Capturing is what moves it.
 - A timeout is not a decline. The acquirer failing to answer is recorded as not knowing, and
