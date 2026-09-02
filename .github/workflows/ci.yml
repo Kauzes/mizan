@@ -40,3 +40,38 @@ jobs:
           path: "**/build/reports/tests/test"
           retention-days: 7
           if-no-files-found: ignore
+
+  smoke:
+    name: Smoke check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Deliberately not needing the build job. This checks something the test suite
+    # structurally cannot: services as real processes, in the images they are deployed as,
+    # reached through the gateway. Three defects in this platform's history were visible only
+    # from here, including one where the whole suite stayed green while the service would not
+    # start at all. Making it wait on the suite would only make it slower to say so.
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start the platform
+        # The same command a reader is told to run. If this needs a flag the README does not
+        # mention, the README is wrong and this is where that shows up.
+        run: docker compose up -d --build --wait
+
+      - name: Smoke check
+        run: ./scripts/smoke.sh
+
+      - name: Seed demo data
+        # Not an assertion, but it exercises paths the smoke check does not — a payment left
+        # as an intent, one the acquirer never answers about — and a seed script that has
+        # quietly stopped working is a bad thing to discover while demonstrating.
+        run: ./scripts/seed.sh
+
+      - name: What the services said
+        if: failure()
+        run: docker compose logs --no-color --tail 200
+
+      - name: Stop the platform
+        if: always()
+        run: docker compose down -v
