@@ -15,7 +15,7 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 
 | Milestone | Scope | State |
 |---|---|---|
-| M1 | Foundation, identity, ledger core, payment happy path | in progress |
+| M1 | Foundation, identity, ledger core, payment happy path | complete |
 | M2 | Kafka outbox, risk scoring, refunds and saga compensation | not started |
 | M3 | Merchant webhooks, React merchant console | not started |
 | M4 | Settlement, reconciliation, observability | not started |
@@ -107,8 +107,6 @@ other protected route.
   should not be able to mint one, least of all the component facing the internet.
 - Refresh tokens are single use. Presenting a spent one revokes every token descended from
   that sign in, because a replay and a theft cannot be told apart.
-- Every state change that produces an event writes both in one local transaction, through
-  a transactional outbox.
 - An authorization posts nothing to the books. It is a promise that the money is there, not
   a movement of it, and the ledger records movements. Capturing is what moves it.
 - A timeout is not a decline. The acquirer failing to answer is recorded as not knowing, and
@@ -183,13 +181,23 @@ why the full build costs what it does.
 
 If the full build passes five minutes, something has regressed and is worth looking at.
 
+Above all of it sits [`scripts/smoke.sh`](scripts/smoke.sh), which is not a test task and is
+not run by Gradle. It checks what the suite structurally cannot: the services as real
+processes, in the images they are deployed as, over a real network, reached through the
+gateway. See [Running](#running). Both layers run in CI, and the smoke check does not wait
+for the suite — the whole point of it is the failures that leave the suite green.
+
 ## Migrations
 
-Each service keeps its schema in `src/main/resources/db/migration`, as
+Each service keeps its schema in `src/main/resources/db/migration/<service>`, as
 `V<number>__<description>.sql`, numbered from one and applied in order by Flyway when the
 service starts. A migration that has been applied is never edited; a correction is a new
 migration with the next number. The reasoning is in
 [ADR 0004](docs/adr/0004-database-per-service-and-migrations.md).
+
+The folder is named after the service rather than being the plain `db/migration` every
+service used to share, because one classpath is enough to make that ambiguous: a test that
+runs two services in one JVM finds two `V1`s and Flyway refuses to start either.
 
 Editing a migration that has already run locally will fail the next startup on a checksum
 mismatch. The fix is to throw the local data away rather than repair it:
@@ -278,14 +286,50 @@ PKCS#8 PEM anywhere that matters.
 
 ## Running
 
-    ./gradlew build                    # compile and test
-    docker compose up -d --build --wait
+Two commands, from a clean clone, with nothing else installed but Docker:
 
-That starts Postgres, Kafka, Redis and all seven services, and returns once every one of
-them reports healthy. A service that migrates its database waits for a healthy Postgres
-first, and reports its datasource in its own health, so a service that cannot reach its
-database never reports itself up. The services are skeletons: they start, migrate, report
-health and route, but carry no domain logic yet.
+    docker compose up -d --build --wait     # the whole platform, about three minutes cold
+    ./scripts/smoke.sh                      # prove it works
+
+The first starts Postgres, Kafka, Redis and all seven services, and returns only once every
+one of them reports healthy. A service that migrates its database waits for a healthy
+Postgres first and reports its datasource in its own health, so a service that cannot reach
+its database never reports itself up. There is no step after it: no manual migration, no
+seeding a key, no waiting and hoping.
+
+The second walks the platform the way a merchant would, through the gateway, and exits non
+zero the moment anything is not as it should be. It registers a merchant, signs in, checks
+that the same read is refused without a token, opens the settlement account, creates a
+payment, authorizes it, checks the books are still untouched, captures it, reads back the
+entry and asserts both sides of it, checks that a captured payment can be neither captured
+again nor voided, checks that the internal route which crosses into the platform's books is
+not reachable from the edge, voids a second payment and confirms the books did not move,
+declines a third and confirms the acquirer's reason was kept, and finally asks the ledger to
+prove it still balances. It should end with:
+
+      ✓ every currency sums to zero and every balance agrees with its postings
+
+      The platform works end to end.
+
+This is the check the test suite structurally cannot do — real processes, in the images they
+are deployed as, over a real network, reached through the gateway. Three defects in this
+platform's history were visible only from here: a service whose runtime image lacked a JDK
+module the tests had, so it would not start while the suite stayed green; a route the gateway
+did not forward; and an idempotency mechanism that was quietly inactive. It runs in CI
+against the Compose stack for that reason.
+
+To have something to look at rather than only something that passed:
+
+    ./scripts/seed.sh
+
+That creates two merchants with real books and payments in every state one can be in —
+captured, voided, authorized and waiting, declined, a bare intent, and one the acquirer never
+answered about, which the sweep resolves a few seconds later. It prints the credentials it
+made, so you can sign in as either merchant. The APIs are browsable at
+<http://localhost:8080/swagger-ui.html>.
+
+Both scripts need only `curl` and Python, which is why they are shell rather than another
+Gradle task: the point is that someone who has not built the project can still run them.
 
 ## Documentation
 

@@ -1,6 +1,9 @@
 * text=auto eol=lf
 *.bat text eol=crlf
 gradlew text eol=lf
+# The smoke and seed scripts run on a Linux CI runner from a Windows checkout. A stray
+# carriage return makes the shebang unfindable and the error says only "not found".
+*.sh text eol=lf
 *.jar binary
 *.png binary
 *.zip binary
