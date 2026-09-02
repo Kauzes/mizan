@@ -6,6 +6,7 @@ import dev.kauzes.mizan.common.web.RequiresPermission;
 import dev.kauzes.mizan.payment.PaymentRequests.AuthorizeRequest;
 import dev.kauzes.mizan.payment.PaymentRequests.CreatePaymentRequest;
 import dev.kauzes.mizan.payment.PaymentRequests.PaymentResponse;
+import dev.kauzes.mizan.payment.PaymentRequests.VoidRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,8 +26,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * A merchant's payments.
  *
- * <p>Only creating and reading here. Authorizing, capturing and voiding are the stories after
- * this one, and they will move a payment through the states this one wrote down.
+ * <p>The whole life of one: created, authorized, and then either captured, which moves money
+ * and is written down in the books, or voided, which releases a reservation and is not.
  */
 @RestController
 @RequestMapping(
@@ -115,6 +116,66 @@ public class PaymentController {
             @Valid @RequestBody AuthorizeRequest request) {
 
         return payments.authorize(merchantId, paymentId, request);
+    }
+
+    @PostMapping("/{paymentId}/capture")
+    @RequiresPermission(Permission.PAYMENT_WRITE)
+    @Idempotent
+    @Operation(
+            summary = "Capture an authorized payment",
+            description =
+                    """
+                    Takes the money the acquirer is holding and records the movement in the                     books: the platform's clearing account is debited and the merchant's                     settlement account is credited, by the same amount. The payment is marked                     captured last, so its state never runs ahead of what the ledger says.
+
+                    The merchant must have opened a settlement account in the payment's                     currency. If they have not, this is refused and says which account is                     missing, because the ledger does not open accounts on anybody's behalf.
+
+                    Safe to send again. The acquirer answers a repeated capture with the one                     it already made, and the entry carries the payment's own reference, so a                     capture whose answer was lost is finished by repeating it rather than by                     taking the money twice.""")
+    @ApiResponse(responseCode = "200", description = "The payment, captured, with its entry")
+    @ApiResponse(
+            responseCode = "404",
+            ref = "#/components/responses/NOT_FOUND",
+            description = "This merchant has no payment with that id")
+    @ApiResponse(
+            responseCode = "422",
+            ref = "#/components/responses/UNPROCESSABLE",
+            description =
+                    "This payment is not in a state that can be captured, or the books would "
+                            + "not accept the movement")
+    @ApiResponse(
+            responseCode = "504",
+            ref = "#/components/responses/UPSTREAM_TIMEOUT",
+            description = "The acquirer or the ledger did not answer in time")
+    public PaymentResponse capture(
+            @PathVariable UUID merchantId, @PathVariable UUID paymentId) {
+
+        return payments.capture(merchantId, paymentId);
+    }
+
+    @PostMapping("/{paymentId}/void")
+    @RequiresPermission(Permission.PAYMENT_WRITE)
+    @Idempotent
+    @Operation(
+            summary = "Void an authorized payment",
+            description =
+                    """
+                    Releases the money the acquirer is holding. Nothing is posted to the                     books: no money moved, and an entry recording a movement that did not                     happen is worse than no entry at all.""")
+    @ApiResponse(responseCode = "200", description = "The payment, voided")
+    @ApiResponse(responseCode = "400", ref = "#/components/responses/VALIDATION_FAILED")
+    @ApiResponse(
+            responseCode = "404",
+            ref = "#/components/responses/NOT_FOUND",
+            description = "This merchant has no payment with that id")
+    @ApiResponse(
+            responseCode = "422",
+            ref = "#/components/responses/UNPROCESSABLE",
+            description = "This payment is not in a state that can be voided")
+    public PaymentResponse voidPayment(
+            @PathVariable UUID merchantId,
+            @PathVariable UUID paymentId,
+            @Valid @RequestBody(required = false) VoidRequest request) {
+
+        return payments.release(
+                merchantId, paymentId, request == null ? null : request.reason());
     }
 
     @GetMapping("/{paymentId}")

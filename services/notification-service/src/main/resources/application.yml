@@ -15,7 +15,11 @@ spring:
       ddl-auto: validate
     open-in-view: false
   flyway:
-    locations: classpath:db/migration
+    # Namespaced by service rather than the plain db/migration every service used to share.
+    # One classpath is enough to make that ambiguous: a test that runs two services in one
+    # JVM finds two V1s and Flyway refuses, which is how MIZ-45 found this. The files and
+    # their checksums are unchanged, so an existing schema history still matches.
+    locations: classpath:db/migration/notification
 
 springdoc:
   # Keys in a stable order, so a regenerated spec differs only where the API differs and the

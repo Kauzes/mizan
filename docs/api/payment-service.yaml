@@ -207,6 +207,127 @@ paths:
       summary: Authorize a payment
       tags:
       - Payments
+  /api/v1/merchants/{merchantId}/payments/{paymentId}/capture:
+    post:
+      description: |-
+        Takes the money the acquirer is holding and records the movement in the                     books: the platform's clearing account is debited and the merchant's                     settlement account is credited, by the same amount. The payment is marked                     captured last, so its state never runs ahead of what the ledger says.
+
+        The merchant must have opened a settlement account in the payment's                     currency. If they have not, this is refused and says which account is                     missing, because the ledger does not open accounts on anybody's behalf.
+
+        Safe to send again. The acquirer answers a repeated capture with the one                     it already made, and the entry carries the payment's own reference, so a                     capture whose answer was lost is finished by repeating it rather than by                     taking the money twice.
+
+        Requires the PAYMENT_WRITE permission, held by: OWNER, ADMIN. The caller must be acting for the merchant in the path.
+      operationId: capture
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: paymentId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Names this attempt, so that repeating it cannot repeat its effect.\
+          \ Sending the same key again returns what the first call produced, with\
+          \ the same status, so a retry after a lost response is safe. The same key\
+          \ with a different body is refused. A key belongs to one merchant and one\
+          \ operation."
+        in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          maxLength: 200
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResponse"
+          description: "The payment, captured, with its entry"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+        "409":
+          $ref: "#/components/responses/CONFLICT"
+          description: That key was already used for a different request
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
+        "504":
+          $ref: "#/components/responses/UPSTREAM_TIMEOUT"
+      security:
+      - merchantJwt: []
+      summary: Capture an authorized payment
+      tags:
+      - Payments
+  /api/v1/merchants/{merchantId}/payments/{paymentId}/void:
+    post:
+      description: |-
+        Releases the money the acquirer is holding. Nothing is posted to the                     books: no money moved, and an entry recording a movement that did not                     happen is worse than no entry at all.
+
+        Requires the PAYMENT_WRITE permission, held by: OWNER, ADMIN. The caller must be acting for the merchant in the path.
+      operationId: voidPayment
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: paymentId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Names this attempt, so that repeating it cannot repeat its effect.\
+          \ Sending the same key again returns what the first call produced, with\
+          \ the same status, so a retry after a lost response is safe. The same key\
+          \ with a different body is refused. A key belongs to one merchant and one\
+          \ operation."
+        in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          maxLength: 200
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VoidRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResponse"
+          description: "The payment, voided"
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+        "409":
+          $ref: "#/components/responses/CONFLICT"
+          description: That key was already used for a different request
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
+      security:
+      - merchantJwt: []
+      summary: Void an authorized payment
+      tags:
+      - Payments
 components:
   headers:
     X-Correlation-Id:
@@ -444,6 +565,12 @@ components:
         id:
           type: string
           format: uuid
+        ledgerEntryId:
+          type: string
+          format: uuid
+          description: "The entry in the ledger that records the money moving. Present\
+            \ once the payment is captured, and never on one that was voided, because\
+            \ a released reservation moved nothing."
         merchantId:
           type: string
           format: uuid
@@ -560,6 +687,17 @@ components:
           - DECLINED
           - CAPTURED
           - VOIDED
+    VoidRequest:
+      type: object
+      description: Why the reservation is being released
+      properties:
+        reason:
+          type: string
+          description: "Kept on the step, so somebody reading the history later can\
+            \ see why rather than only that."
+          example: the customer cancelled the order
+          maxLength: 500
+          minLength: 0
   securitySchemes:
     merchantApiKey:
       description: "The merchant's API key, naming which key signed the request. Public,\

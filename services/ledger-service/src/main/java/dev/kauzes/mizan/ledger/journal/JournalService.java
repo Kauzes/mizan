@@ -79,11 +79,31 @@ public class JournalService {
      * first call's entry, identically, so a retry cannot be told from the original.
      */
     public EntryResponse post(UUID merchantId, PostEntryRequest request) {
+        return post(merchantId, request, Books.THE_MERCHANTS);
+    }
+
+    /**
+     * Which accounts an entry is allowed to name.
+     *
+     * <p>A merchant's own call may only touch their own books. That is not a convenience: the
+     * platform's clearing account is where every merchant's money passes through, and an
+     * endpoint that let a merchant name it would let them credit themselves from it.
+     *
+     * <p>A capture has to touch both, because that is what a capture is — money arriving at
+     * the platform on a merchant's behalf. The call that does it is a service call, not a
+     * merchant one, and cannot be reached from the edge.
+     */
+    public enum Books {
+        THE_MERCHANTS,
+        THE_MERCHANTS_AND_THE_PLATFORMS
+    }
+
+    public EntryResponse post(UUID merchantId, PostEntryRequest request, Books books) {
         String fingerprint = RequestFingerprint.of(request);
 
         for (int attempt = 1; ; attempt++) {
             try {
-                return transaction.execute(status -> write(merchantId, request, fingerprint));
+                return transaction.execute(status -> write(merchantId, request, fingerprint, books));
             } catch (DataIntegrityViolationException alreadyPosted) {
                 // Discovered by inserting rather than by asking first: a check would answer
                 // for the moment before the insert, and two retries racing would both be told
@@ -130,7 +150,8 @@ public class JournalService {
         }
     }
 
-    private EntryResponse write(UUID merchantId, PostEntryRequest request, String fingerprint) {
+    private EntryResponse write(
+            UUID merchantId, PostEntryRequest request, String fingerprint, Books books) {
         JournalEntry entry = new JournalEntry(
                 merchantId,
                 request.externalReference().trim(),
@@ -146,7 +167,8 @@ public class JournalService {
                 .map(PostingRequest::accountId)
                 .distinct()
                 .sorted(Comparator.comparing(UUID::toString))
-                .forEach(accountId -> locked.put(accountId, lockedAccount(merchantId, accountId)));
+                .forEach(accountId ->
+                        locked.put(accountId, lockedAccount(merchantId, accountId, books)));
 
         for (PostingRequest posting : request.postings()) {
             Account account = locked.get(posting.accountId());
@@ -216,11 +238,26 @@ public class JournalService {
      * <p>Held for the length of the transaction. Writers at one account queue behind each
      * other, which is slower than racing and finishes, where racing did not.
      */
-    private Account lockedAccount(UUID merchantId, UUID accountId) {
-        return accounts
-                .findForUpdateByIdAndMerchantId(accountId, merchantId)
-                .orElseThrow(() -> new UnprocessableException(
-                        "No account " + accountId + " in this merchant's books."));
+    private Account lockedAccount(UUID merchantId, UUID accountId, Books books) {
+        if (books == Books.THE_MERCHANTS) {
+            return accounts
+                    .findForUpdateByIdAndMerchantId(accountId, merchantId)
+                    .orElseThrow(() -> new UnprocessableException(
+                            "No account " + accountId + " in this merchant's books."));
+        }
+
+        Account account = accounts
+                .findForUpdateById(accountId)
+                .orElseThrow(() -> new UnprocessableException("No account " + accountId + "."));
+
+        // Widening the books admits the platform's accounts and nothing else. Another
+        // merchant's is out of reach on every path there is, and is refused in the same words
+        // as an account that does not exist, because from here it does not.
+        if (account.merchantId() != null && !account.merchantId().equals(merchantId)) {
+            throw new UnprocessableException(
+                    "No account " + accountId + " in this merchant's books.");
+        }
+        return account;
     }
 
     private JournalEntry correctedEntry(UUID merchantId, UUID corrects) {

@@ -21,4 +21,7 @@ dependencies {
     // assumptions about the wire and keep passing if the acquirer changed shape; the
     // simulator is test infrastructure by nature, so depending on it in tests is honest.
     testImplementation(project(":services:bank-simulator"))
+    // And the ledger, for the same reason. A capture is only correct if the entry it writes
+    // is one the ledger will actually accept, and that is a question about two services.
+    testImplementation(project(":services:ledger-service"))
 }

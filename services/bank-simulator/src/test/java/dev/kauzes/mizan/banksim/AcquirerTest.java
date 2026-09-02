@@ -117,15 +117,29 @@ class AcquirerTest {
     }
 
     @Test
-    void refusesToTakeSomethingTwiceOrToTakeWhatWasRefused() throws Exception {
+    void takingSomethingTwiceTakesItOnce() throws Exception {
         String reference = referenceFrom(authorize(request(), GOOD_CARD));
         mockMvc.perform(post("/acquirer/authorizations/" + reference + "/capture"))
                 .andExpect(status().isOk());
 
+        // A caller whose answer was lost has to be able to ask again. Saying "already taken"
+        // is far better than taking it twice.
         mockMvc.perform(post("/acquirer/authorizations/" + reference + "/capture"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("CAPTURED"));
+    }
+
+    @Test
+    void refusesToContradictItself() throws Exception {
+        String voided = referenceFrom(authorize(request(), GOOD_CARD));
+        mockMvc.perform(post("/acquirer/authorizations/" + voided + "/void"))
+                .andExpect(status().isOk());
+
+        // Repeating is one thing; reversing is another.
+        mockMvc.perform(post("/acquirer/authorizations/" + voided + "/capture"))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.detail")
-                        .value("an authorization that is CAPTURED cannot be captured"));
+                        .value("an authorization that is VOIDED cannot be captured"));
 
         String refused = referenceFrom(authorize(request(), NO_FUNDS));
         mockMvc.perform(post("/acquirer/authorizations/" + refused + "/capture"))

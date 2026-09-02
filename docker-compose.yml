@@ -111,6 +111,10 @@ services:
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/ledger
       MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
       MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
+      # What an internal call has to carry to move money between the platform's books and a
+      # merchant's. A default for a stack on a laptop; a real deployment supplies its own,
+      # and the service refuses to start if nothing does.
+      MIZAN_INTERNAL_SERVICE_TOKEN: ${MIZAN_INTERNAL_SERVICE_TOKEN:-a-shared-secret-for-local-runs}
     depends_on:
       postgres:
         condition: service_healthy
@@ -131,10 +135,16 @@ services:
     environment:
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/payment
       MIZAN_ACQUIRER_URL: http://bank-simulator:8086
+      # The books, reached directly rather than through the edge. This is not a merchant's
+      # request being forwarded; it is the platform recording what it did.
+      MIZAN_LEDGER_URL: http://ledger-service:8082
+      MIZAN_INTERNAL_SERVICE_TOKEN: ${MIZAN_INTERNAL_SERVICE_TOKEN:-a-shared-secret-for-local-runs}
       MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
       MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
     depends_on:
       postgres:
+        condition: service_healthy
+      ledger-service:
         condition: service_healthy
     ports:
       - "8083:8083"

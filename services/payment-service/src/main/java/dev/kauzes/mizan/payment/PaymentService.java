@@ -26,16 +26,92 @@ public class PaymentService {
 
     private final PaymentRepository payments;
     private final AcquirerClient acquirer;
+    private final LedgerClient ledger;
     private final UnknownOutcomes unknownOutcomes;
 
     public PaymentService(
             PaymentRepository payments,
             AcquirerClient acquirer,
+            LedgerClient ledger,
             UnknownOutcomes unknownOutcomes) {
 
         this.payments = payments;
         this.acquirer = acquirer;
+        this.ledger = ledger;
         this.unknownOutcomes = unknownOutcomes;
+    }
+
+    /**
+     * Takes the money, and writes down that it was taken.
+     *
+     * <p>Three things happen, in an order chosen for what each failure leaves behind. The
+     * acquirer is asked first, because until it has taken the money there is nothing to
+     * record and an entry would be a record of something that did not happen. The ledger is
+     * written second. The payment is marked captured last, so the state never runs ahead of
+     * the books.
+     *
+     * <p>Every step is repeatable, which is what makes that ordering usable rather than just
+     * tidy. A capture whose answer was lost is sent again: the acquirer says the money is
+     * already taken, the ledger answers with the entry it already wrote, and the payment ends
+     * captured pointing at that same entry. Nothing is taken twice and nothing is recorded
+     * twice.
+     */
+    @Transactional
+    public PaymentResponse capture(UUID merchantId, UUID paymentId) {
+        Payment payment = mine(merchantId, paymentId);
+        refuseUnless(payment, PaymentStatus.CAPTURED, "captured");
+
+        acquirer.capture(payment.acquirerReference());
+
+        // If this throws, the transaction rolls back and the payment stays authorized while
+        // the acquirer holds a capture. That is the honest state: the money is taken and not
+        // yet recorded, the caller is told which, and sending the capture again finishes it.
+        UUID entry = ledger.recordCapture(merchantId, payment);
+
+        payment.captured(entry);
+        log.info("captured payment {} and recorded it as entry {}", paymentId, entry);
+        return PaymentResponse.of(payment);
+    }
+
+    /**
+     * Releases the reservation, and posts nothing.
+     *
+     * <p>An authorization was a promise that the money was there. A void withdraws the
+     * promise. No money ever moved, so the books have nothing to say, and writing an entry
+     * for it would put a movement in the journal that never happened — which ADR 0012 refuses
+     * for the same reason it refuses deletions.
+     */
+    @Transactional
+    public PaymentResponse release(UUID merchantId, UUID paymentId, String because) {
+        Payment payment = mine(merchantId, paymentId);
+        refuseUnless(payment, PaymentStatus.VOIDED, "voided");
+
+        acquirer.release(payment.acquirerReference());
+
+        payment.voided(because);
+        log.info("voided payment {}", paymentId);
+        return PaymentResponse.of(payment);
+    }
+
+    /**
+     * Refuses in terms of where the payment already is, before anybody else is troubled.
+     *
+     * <p>A payment that cannot be captured should not cause a capture to be attempted at the
+     * acquirer and then be undone, and "that is not allowed" tells a caller nothing they can
+     * act on. The same two sentences the state machine itself refuses in: where this payment
+     * is, and where it could go instead.
+     */
+    private static void refuseUnless(Payment payment, PaymentStatus next, String verb) {
+        if (!payment.status().canMoveTo(next)) {
+            throw new UnprocessableException(
+                    "A payment that is "
+                            + payment.status()
+                            + " cannot be "
+                            + verb
+                            + (payment.status().isFinal()
+                                    ? ". That is where this payment ends."
+                                    : ". It can only become " + payment.status().next() + "."));
+        }
     }
 
     /**
@@ -56,15 +132,7 @@ public class PaymentService {
         // Checked before the acquirer is troubled, so a payment that cannot be authorized is
         // refused in terms of where it already is rather than after somebody else's system
         // has done work for us.
-        if (!payment.status().canMoveTo(PaymentStatus.AUTHORIZED)) {
-            throw new UnprocessableException(
-                    "A payment that is "
-                            + payment.status()
-                            + " cannot be authorized"
-                            + (payment.status().isFinal()
-                                    ? ". That is where this payment ends."
-                                    : "."));
-        }
+        refuseUnless(payment, PaymentStatus.AUTHORIZED, "authorized");
 
         AcquirerClient.AcquirerDecision decision;
         try {

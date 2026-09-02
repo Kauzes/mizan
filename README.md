@@ -116,6 +116,16 @@ other protected route.
   way. Nobody has to ask for that: a sweep finds payments nobody knows the outcome of.
 - An acquirer with no record of a request is a real answer, meaning nothing happened. Such a
   payment stays unresolved and can be attempted again, rather than being called declined.
+- Capturing takes the money, then writes the entry, then marks the payment. Never the other
+  order: a payment that says captured with nothing in the books is a lie somebody has to find,
+  while an entry with the payment still authorized is one retry from finished. Every step is
+  repeatable, so that retry is safe.
+- A capture crosses two sets of books, debiting the platform's clearing account and crediting
+  the merchant's settlement account, so no merchant-scoped endpoint may write it. It goes to
+  an internal route that is outside `/api/`, is not routed to from the edge, and needs a
+  credential only the platform's own services hold.
+- A void posts nothing. No money moved, and an entry recording a movement that did not happen
+  is worse than no entry at all.
 - A payment moves through a state machine written down in one place, only ever forwards, and
   every step is recorded in a history the database refuses to let anybody rewrite. An illegal
   transition is refused in terms of the two states rather than as a generic error.

@@ -15,7 +15,11 @@ spring:
       ddl-auto: validate
     open-in-view: false
   flyway:
-    locations: classpath:db/migration
+    # Namespaced by service rather than the plain db/migration every service used to share.
+    # One classpath is enough to make that ambiguous: a test that runs two services in one
+    # JVM finds two V1s and Flyway refuses, which is how MIZ-45 found this. The files and
+    # their checksums are unchanged, so an existing schema history still matches.
+    locations: classpath:db/migration/payment
 
 mizan:
   acquirer:
@@ -25,6 +29,16 @@ mizan:
     # How long to wait before the answer counts as not having arrived. Short enough that a
     # merchant is not left holding a request, long enough that an ordinary answer arrives.
     timeout: ${MIZAN_ACQUIRER_TIMEOUT:5s}
+  ledger:
+    # The books live in another service, reached directly rather than through the edge: this
+    # is not a merchant's request being forwarded, it is the platform recording what it did.
+    base-url: ${MIZAN_LEDGER_URL:http://localhost:8082}
+    timeout: ${MIZAN_LEDGER_TIMEOUT:5s}
+  internal:
+    # What proves to the ledger that this is a service and not a merchant. There is no
+    # default: a blank one would make the internal endpoints open, and this service refuses
+    # to start without it rather than discovering it at the first capture.
+    service-token: ${MIZAN_INTERNAL_SERVICE_TOKEN:}
 
 springdoc:
   # Keys in a stable order, so a regenerated spec differs only where the API differs and the
