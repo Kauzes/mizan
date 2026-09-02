@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import dev.kauzes.mizan.common.identity.Role;
 import dev.kauzes.mizan.test.Callers;
+import dev.kauzes.mizan.test.Idempotently;
 import dev.kauzes.mizan.test.MizanIntegrationTest;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -189,6 +190,7 @@ class BalanceTest extends MizanIntegrationTest {
     private ResultActions postEntry(Books books, long amount) throws Exception {
         return mockMvc.perform(post("/api/v1/merchants/" + books.merchantId + "/entries")
                         .with(books.writer())
+                        .with(Idempotently.freshKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"externalReference":"%s","description":"A movement",
@@ -229,6 +231,7 @@ class BalanceTest extends MizanIntegrationTest {
         try {
             String body = mockMvc.perform(post("/api/v1/merchants/" + merchantId + "/accounts")
                             .with(Callers.as(userId, merchantId, Role.ADMIN))
+                        .with(Idempotently.freshKey())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {"code":"%s","name":"%s","type":"%s","currency":"TRY"}

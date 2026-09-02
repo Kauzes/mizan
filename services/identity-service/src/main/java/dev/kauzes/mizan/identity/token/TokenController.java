@@ -1,5 +1,6 @@
 package dev.kauzes.mizan.identity.token;
 
+import dev.kauzes.mizan.common.web.NotIdempotent;
 import dev.kauzes.mizan.common.web.PublicEndpoint;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -24,6 +25,7 @@ public class TokenController {
 
     @PostMapping
     @PublicEndpoint(because = "nobody has a token before they sign in")
+    @NotIdempotent(because = "there is no merchant yet to scope a key to")
     @Operation(
             summary = "Sign in",
             description = "Exchanges an email and a password for an access and refresh token.")
@@ -41,6 +43,9 @@ public class TokenController {
 
     @PostMapping("/refresh")
     @PublicEndpoint(because = "the refresh token is the credential; no access token is held")
+    @NotIdempotent(
+            because = "the refresh token is single use, which is a stronger guarantee "
+                    + "than a key: presenting it twice is caught and revokes the family")
     @Operation(
             summary = "Refresh a token pair",
             description =

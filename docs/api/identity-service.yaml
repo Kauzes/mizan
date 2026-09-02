@@ -138,6 +138,17 @@ paths:
         schema:
           type: string
           format: uuid
+      - description: "Names this attempt, so that repeating it cannot repeat its effect.\
+          \ Sending the same key again returns what the first call produced, with\
+          \ the same status, so a retry after a lost response is safe. The same key\
+          \ with a different body is refused. A key belongs to one merchant and one\
+          \ operation."
+        in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          maxLength: 200
       requestBody:
         content:
           application/json:
@@ -157,6 +168,9 @@ paths:
           $ref: "#/components/responses/UNAUTHORIZED"
         "403":
           $ref: "#/components/responses/FORBIDDEN"
+        "409":
+          $ref: "#/components/responses/CONFLICT"
+          description: That key was already used for a different request
       security:
       - merchantJwt: []
       summary: Issue an API key
@@ -220,6 +234,17 @@ paths:
         schema:
           type: string
           format: uuid
+      - description: "Names this attempt, so that repeating it cannot repeat its effect.\
+          \ Sending the same key again returns what the first call produced, with\
+          \ the same status, so a retry after a lost response is safe. The same key\
+          \ with a different body is refused. A key belongs to one merchant and one\
+          \ operation."
+        in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          maxLength: 200
       responses:
         "201":
           content:
@@ -233,6 +258,9 @@ paths:
           $ref: "#/components/responses/FORBIDDEN"
         "404":
           $ref: "#/components/responses/NOT_FOUND"
+        "409":
+          $ref: "#/components/responses/CONFLICT"
+          description: That key was already used for a different request
         "422":
           $ref: "#/components/responses/UNPROCESSABLE"
       security:
@@ -283,6 +311,17 @@ paths:
         schema:
           type: string
           format: uuid
+      - description: "Names this attempt, so that repeating it cannot repeat its effect.\
+          \ Sending the same key again returns what the first call produced, with\
+          \ the same status, so a retry after a lost response is safe. The same key\
+          \ with a different body is refused. A key belongs to one merchant and one\
+          \ operation."
+        in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          maxLength: 200
       requestBody:
         content:
           application/json:

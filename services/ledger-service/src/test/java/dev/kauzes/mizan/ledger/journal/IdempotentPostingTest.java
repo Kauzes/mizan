@@ -9,6 +9,7 @@ import dev.kauzes.mizan.common.identity.Role;
 import dev.kauzes.mizan.ledger.journal.JournalRequests.PostEntryRequest;
 import dev.kauzes.mizan.ledger.journal.JournalRequests.PostingRequest;
 import dev.kauzes.mizan.test.Callers;
+import dev.kauzes.mizan.test.Idempotently;
 import dev.kauzes.mizan.test.MizanIntegrationTest;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -112,6 +113,7 @@ class IdempotentPostingTest extends MizanIntegrationTest {
         // map should not be told its retry is a different request.
         mockMvc.perform(post(entries(books))
                         .with(books.writer())
+                        .with(Idempotently.freshKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"externalReference":"%s","description":"Card payment captured",
@@ -180,6 +182,7 @@ class IdempotentPostingTest extends MizanIntegrationTest {
 
         mockMvc.perform(post(entries(books))
                         .with(books.writer())
+                        .with(Idempotently.freshKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"description":"Anonymous","occurredAt":"%s","postings":[
@@ -224,6 +227,7 @@ class IdempotentPostingTest extends MizanIntegrationTest {
     private ResultActions postEntry(Books books, String reference, long amount) throws Exception {
         return mockMvc.perform(post(entries(books))
                 .with(books.writer())
+                        .with(Idempotently.freshKey())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"externalReference":"%s","description":"Card payment captured",
@@ -270,6 +274,7 @@ class IdempotentPostingTest extends MizanIntegrationTest {
             String body = bodyOf(mockMvc.perform(post("/api/v1/merchants/" + merchantId
                             + "/accounts")
                     .with(Callers.as(userId, merchantId, Role.ADMIN))
+                        .with(Idempotently.freshKey())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                             {"code":"%s","name":"%s","type":"%s","currency":"TRY"}

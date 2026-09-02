@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import dev.kauzes.mizan.common.identity.RequestSigning;
 import dev.kauzes.mizan.common.identity.Role;
 import dev.kauzes.mizan.test.Callers;
+import dev.kauzes.mizan.test.Idempotently;
 import dev.kauzes.mizan.test.MizanIntegrationTest;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -157,7 +158,8 @@ class ApiKeyLifecycleTest extends MizanIntegrationTest {
 
         JsonNode rotated = JSON.readTree(body(
                 mockMvc.perform(post(keys(account) + "/" + original.id + "/rotate")
-                                .with(account.owner()))
+                                .with(account.owner())
+                        .with(Idempotently.freshKey()))
                         .andExpect(status().isCreated())));
 
         Key replacement = new Key(
@@ -209,6 +211,7 @@ class ApiKeyLifecycleTest extends MizanIntegrationTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(post(keys(account))
                         .with(account.as(Role.ADMIN))
+                        .with(Idempotently.freshKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"sneaky\",\"role\":\"OWNER\"}"))
                 .andExpect(status().isForbidden());
@@ -290,6 +293,7 @@ class ApiKeyLifecycleTest extends MizanIntegrationTest {
     private JsonNode issue(Account account, String name, Role role) throws Exception {
         return JSON.readTree(body(mockMvc.perform(post(keys(account))
                         .with(account.owner())
+                        .with(Idempotently.freshKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"%s\",\"role\":\"%s\"}".formatted(name, role)))
                 .andExpect(status().isCreated())));

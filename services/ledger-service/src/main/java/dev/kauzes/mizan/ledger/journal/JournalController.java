@@ -1,6 +1,7 @@
 package dev.kauzes.mizan.ledger.journal;
 
 import dev.kauzes.mizan.common.identity.Permission;
+import dev.kauzes.mizan.common.web.NotIdempotent;
 import dev.kauzes.mizan.common.web.RequiresPermission;
 import dev.kauzes.mizan.ledger.journal.JournalRequests.EntryResponse;
 import dev.kauzes.mizan.ledger.journal.JournalRequests.PostEntryRequest;
@@ -50,6 +51,9 @@ public class JournalController {
 
     @PostMapping
     @RequiresPermission(Permission.ENTRY_POST)
+    @NotIdempotent(
+            because = "an entry carries its own external reference, which does this and "
+                    + "also ties the entry to what caused it. See MIZ-36.")
     @Operation(
             summary = "Post an entry",
             description =

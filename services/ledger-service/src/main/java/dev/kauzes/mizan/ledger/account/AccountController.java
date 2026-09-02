@@ -1,6 +1,7 @@
 package dev.kauzes.mizan.ledger.account;
 
 import dev.kauzes.mizan.common.identity.Permission;
+import dev.kauzes.mizan.common.web.Idempotent;
 import dev.kauzes.mizan.common.web.RequiresPermission;
 import dev.kauzes.mizan.ledger.account.AccountRequests.AccountResponse;
 import dev.kauzes.mizan.ledger.account.AccountRequests.BalanceResponse;
@@ -52,6 +53,7 @@ public class AccountController {
 
     @PostMapping
     @RequiresPermission(Permission.ACCOUNT_MANAGE)
+    @Idempotent
     @Operation(
             summary = "Open an account",
             description =

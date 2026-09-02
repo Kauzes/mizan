@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import dev.kauzes.mizan.common.identity.Role;
 import dev.kauzes.mizan.ledger.integrity.IntegrityReport.CurrencyTotal;
 import dev.kauzes.mizan.test.Callers;
+import dev.kauzes.mizan.test.Idempotently;
 import dev.kauzes.mizan.test.MizanIntegrationTest;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -256,6 +257,7 @@ class LedgerIntegrityTest extends MizanIntegrationTest {
             String body = mockMvc.perform(post("/api/v1/merchants/" + books.merchantId
                             + "/accounts")
                     .with(Callers.as(books.userId, books.merchantId, Role.ADMIN))
+                        .with(Idempotently.freshKey())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                             {"code":"%s","name":"%s","type":"%s","currency":"%s"}
@@ -279,6 +281,7 @@ class LedgerIntegrityTest extends MizanIntegrationTest {
 
         mockMvc.perform(post("/api/v1/merchants/" + books.merchantId + "/entries")
                         .with(Callers.as(books.userId, books.merchantId, Role.ADMIN))
+                        .with(Idempotently.freshKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"externalReference":"%s","description":"A movement",

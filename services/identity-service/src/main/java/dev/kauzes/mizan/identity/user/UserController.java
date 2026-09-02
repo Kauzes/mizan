@@ -1,6 +1,8 @@
 package dev.kauzes.mizan.identity.user;
 
 import dev.kauzes.mizan.common.identity.Permission;
+import dev.kauzes.mizan.common.web.Idempotent;
+import dev.kauzes.mizan.common.web.NotIdempotent;
 import dev.kauzes.mizan.common.web.RequiresPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -53,6 +55,7 @@ public class UserController {
 
     @PostMapping
     @RequiresPermission(Permission.USER_MANAGE)
+    @Idempotent
     @Operation(summary = "Add a user to a merchant")
     @ApiResponse(responseCode = "201", description = "The user that was added")
     @ApiResponse(responseCode = "400", ref = "#/components/responses/VALIDATION_FAILED")
@@ -71,6 +74,9 @@ public class UserController {
 
     @PutMapping("/{userId}/roles")
     @RequiresPermission(Permission.ROLE_MANAGE)
+    @NotIdempotent(
+            because = "replacing a set of roles with the same set twice leaves the same "
+                    + "roles, so a repeat changes nothing")
     @Operation(
             summary = "Replace a user's roles",
             description = "The set sent is the set the user holds afterwards.")
@@ -94,6 +100,9 @@ public class UserController {
 
     @DeleteMapping("/{userId}")
     @RequiresPermission(Permission.USER_MANAGE)
+    @NotIdempotent(
+            because = "removing a user who is already gone is refused as not found, "
+                    + "which is the same answer a repeat should get")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Remove a user from a merchant")
     @ApiResponse(responseCode = "204", description = "The user is gone")

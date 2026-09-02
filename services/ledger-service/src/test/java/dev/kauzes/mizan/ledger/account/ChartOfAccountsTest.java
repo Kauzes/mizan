@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import dev.kauzes.mizan.common.identity.Role;
 import dev.kauzes.mizan.test.Callers;
+import dev.kauzes.mizan.test.Idempotently;
 import dev.kauzes.mizan.test.MizanIntegrationTest;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -103,6 +104,7 @@ class ChartOfAccountsTest extends MizanIntegrationTest {
 
         mockMvc.perform(post(accounts(merchant))
                         .with(merchant.manager())
+                        .with(Idempotently.freshKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"code":"x","name":"X","type":"SOMETHING","currency":"TRY"}
@@ -164,6 +166,7 @@ class ChartOfAccountsTest extends MizanIntegrationTest {
 
         mockMvc.perform(post(accounts(merchant))
                         .with(merchant.as(Role.ANALYST))
+                        .with(Idempotently.freshKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"code":"sneaky","name":"Sneaky","type":"ASSET","currency":"TRY"}
@@ -201,6 +204,7 @@ class ChartOfAccountsTest extends MizanIntegrationTest {
 
         return mockMvc.perform(post(accounts(merchant))
                 .with(merchant.manager())
+                        .with(Idempotently.freshKey())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"code":"%s","name":"%s","type":"%s","currency":"%s"}

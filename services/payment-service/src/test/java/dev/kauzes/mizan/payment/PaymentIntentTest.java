@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import dev.kauzes.mizan.common.identity.Role;
 import dev.kauzes.mizan.common.money.Money;
 import dev.kauzes.mizan.test.Callers;
+import dev.kauzes.mizan.test.Idempotently;
 import dev.kauzes.mizan.test.MizanIntegrationTest;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -167,6 +168,7 @@ class PaymentIntentTest extends MizanIntegrationTest {
                 .andExpect(status().isOk());
         mockMvc.perform(post(payments(merchant))
                         .with(merchant.as(Role.VIEWER))
+                        .with(Idempotently.freshKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"amount":1000,"currency":"TRY","reference":"not-mine"}
@@ -218,6 +220,7 @@ class PaymentIntentTest extends MizanIntegrationTest {
 
         return mockMvc.perform(post(payments(merchant))
                 .with(merchant.writer())
+                        .with(Idempotently.freshKey())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"amount":%d,"currency":"%s","reference":"%s",
