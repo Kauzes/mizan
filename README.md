@@ -107,6 +107,17 @@ other protected route.
   should not be able to mint one, least of all the component facing the internet.
 - Refresh tokens are single use. Presenting a spent one revokes every token descended from
   that sign in, because a replay and a theft cannot be told apart.
+- A state change and the event announcing it are written in one transaction, to one
+  database, as a row in an outbox. A broker cannot join a database transaction, so publishing
+  either way round leaves a window where the money moved and nobody was told, or everybody
+  was told about money that never moved. Recording an event outside a transaction is refused
+  rather than allowed to quietly give up the only property that matters.
+- An event's payload is a record written for consumers, never an entity handed to a
+  serialiser. Its envelope carries what every consumer needs whatever the type — id, type,
+  version, aggregate, merchant, when, and the correlation id of the request that caused it.
+- The events a service publishes are a list it owns, so adding one is a decision rather than
+  a string appearing at a call site. A payment intent announces nothing: nobody was contacted
+  and no money moved.
 - An authorization posts nothing to the books. It is a promise that the money is there, not
   a movement of it, and the ledger records movements. Capturing is what moves it.
 - A timeout is not a decline. The acquirer failing to answer is recorded as not knowing, and

@@ -28,17 +28,20 @@ public class PaymentService {
     private final AcquirerClient acquirer;
     private final LedgerClient ledger;
     private final UnknownOutcomes unknownOutcomes;
+    private final PaymentEvents events;
 
     public PaymentService(
             PaymentRepository payments,
             AcquirerClient acquirer,
             LedgerClient ledger,
-            UnknownOutcomes unknownOutcomes) {
+            UnknownOutcomes unknownOutcomes,
+            PaymentEvents events) {
 
         this.payments = payments;
         this.acquirer = acquirer;
         this.ledger = ledger;
         this.unknownOutcomes = unknownOutcomes;
+        this.events = events;
     }
 
     /**
@@ -69,6 +72,10 @@ public class PaymentService {
         UUID entry = ledger.recordCapture(merchantId, payment);
 
         payment.captured(entry);
+        // In this transaction, so the capture and the announcement of it commit together or
+        // not at all. Nothing is published here; a row is written and MIZ-48 drains it.
+        events.record(payment, null);
+
         log.info("captured payment {} and recorded it as entry {}", paymentId, entry);
         return PaymentResponse.of(payment);
     }
@@ -89,6 +96,8 @@ public class PaymentService {
         acquirer.release(payment.acquirerReference());
 
         payment.voided(because);
+        events.record(payment, because);
+
         log.info("voided payment {}", paymentId);
         return PaymentResponse.of(payment);
     }
@@ -160,6 +169,7 @@ public class PaymentService {
             log.info("payment {} was declined: {}", paymentId, decision.reason());
         }
 
+        events.record(payment, decision.reason());
         return PaymentResponse.of(payment);
     }
 
