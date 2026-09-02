@@ -195,6 +195,12 @@ lists every service, and a service's own UI is on its own port, `http://localhos
 `bank-simulator` is absent from the gateway's list on purpose; it stands in for a system
 outside the platform and is not routed there.
 
+What it does is decided by the last four digits of the card it is given, so any outcome can be
+provoked without the platform knowing it is talking to a simulator: `0002` declines for
+insufficient funds, `0005` for do not honour, `0007` for a stolen card, `0069` approves but
+withholds the answer for longer than the caller will wait, and anything else approves. Its
+catalogue is in [its own spec](docs/api/bank-simulator.yaml).
+
 Errors are part of the contract rather than an afterthought: the problem detail schema and a
 response for every `ErrorCode` are contributed to each spec by `common-web`, so an operation
 documents a failure by naming the code it can return. Authentication schemes are described
