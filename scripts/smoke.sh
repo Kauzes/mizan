@@ -151,7 +151,52 @@ refused=$(authed 200 POST "$GATEWAY/api/v1/merchants/$MERCHANT/payments/$DECLINE
 pass "declined with insufficient_funds, which is what the merchant will be asked about"
 
 # ---------------------------------------------------------------------------------------
-step "9. The books balance"
+step "9. The capture was announced, and somebody else can read it"
+
+# Through the broker rather than through the outbox table, because "we wrote a row" and
+# "a consumer can see it" are different claims and only the second one matters to anybody
+# else. Skipped rather than failed where there is no Compose stack to ask, since everything
+# above this point works against any deployment.
+if command -v docker > /dev/null 2>&1 && docker compose ps kafka > /dev/null 2>&1; then
+    TOPIC_DUMP="$(mktemp)"
+
+    # The relay publishes on a timer, so this may need asking more than once.
+    #
+    # MSYS_NO_PATHCONV stops Git Bash on Windows rewriting the path inside the container
+    # into a Windows one, which it does silently and which then fails as "no such file".
+    # It means nothing anywhere else.
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        MSYS_NO_PATHCONV=1 docker compose exec -T kafka \
+            /opt/kafka/bin/kafka-console-consumer.sh \
+            --bootstrap-server localhost:9092 \
+            --topic mizan.payment.events \
+            --from-beginning --timeout-ms 4000 \
+            2>/dev/null > "$TOPIC_DUMP" || true
+
+        if grep -q "$PAYMENT" "$TOPIC_DUMP" 2>/dev/null; then
+            break
+        fi
+    done
+
+    grep "$PAYMENT" "$TOPIC_DUMP" | grep -q '"type":"payment.captured"' \
+        || fail "the capture of $PAYMENT never reached mizan.payment.events"
+    grep -q "$ENTRY" "$TOPIC_DUMP" \
+        || fail "the event does not say where in the books the money landed"
+    pass "payment.captured reached mizan.payment.events, carrying the ledger entry"
+
+    # The one thing an event must never carry, on a topic several services and a broker's
+    # disk will hold.
+    if grep -q "4000000000000000" "$TOPIC_DUMP"; then
+        fail "a card number is on the topic"
+    fi
+    pass "and no card number is on it, nor could be: this service does not keep one"
+    rm -f "$TOPIC_DUMP"
+else
+    note "no Compose stack to ask, so the broker was not checked"
+fi
+
+# ---------------------------------------------------------------------------------------
+step "10. The books balance"
 
 integrity=$(call 200 GET "$LEDGER/actuator/ledgerintegrity")
 sound=$(printf '%s' "$integrity" | field sound)
