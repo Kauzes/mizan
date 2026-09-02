@@ -1,6 +1,8 @@
 package dev.kauzes.mizan.identity.apikey;
 
 import dev.kauzes.mizan.common.identity.Permission;
+import dev.kauzes.mizan.common.web.Idempotent;
+import dev.kauzes.mizan.common.web.NotIdempotent;
 import dev.kauzes.mizan.common.web.RequiresPermission;
 import dev.kauzes.mizan.identity.apikey.ApiKeyResponses.ApiKeyResponse;
 import dev.kauzes.mizan.identity.apikey.ApiKeyResponses.IssueKeyRequest;
@@ -54,6 +56,7 @@ public class ApiKeyController {
 
     @PostMapping
     @RequiresPermission(Permission.API_KEY_MANAGE)
+    @Idempotent
     @Operation(
             summary = "Issue an API key",
             description =
@@ -73,6 +76,7 @@ public class ApiKeyController {
 
     @PostMapping("/{keyId}/rotate")
     @RequiresPermission(Permission.API_KEY_MANAGE)
+    @Idempotent
     @Operation(
             summary = "Rotate an API key",
             description =
@@ -100,6 +104,8 @@ public class ApiKeyController {
 
     @DeleteMapping("/{keyId}")
     @RequiresPermission(Permission.API_KEY_MANAGE)
+    @NotIdempotent(
+            because = "revoking a key that is already revoked leaves it revoked")
     @Operation(
             summary = "Revoke an API key",
             description = "Takes effect on the next request, not on the next cache expiry.")

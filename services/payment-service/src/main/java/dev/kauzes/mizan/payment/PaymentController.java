@@ -1,6 +1,7 @@
 package dev.kauzes.mizan.payment;
 
 import dev.kauzes.mizan.common.identity.Permission;
+import dev.kauzes.mizan.common.web.Idempotent;
 import dev.kauzes.mizan.common.web.RequiresPermission;
 import dev.kauzes.mizan.payment.PaymentRequests.CreatePaymentRequest;
 import dev.kauzes.mizan.payment.PaymentRequests.PaymentResponse;
@@ -49,6 +50,7 @@ public class PaymentController {
 
     @PostMapping
     @RequiresPermission(Permission.PAYMENT_WRITE)
+    @Idempotent
     @Operation(
             summary = "Create a payment intent",
             description =

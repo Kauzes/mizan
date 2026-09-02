@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import dev.kauzes.mizan.test.Callers;
+import dev.kauzes.mizan.test.Idempotently;
 import dev.kauzes.mizan.test.MizanIntegrationTest;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -72,6 +73,7 @@ class TenantIsolationTest extends MizanIntegrationTest {
 
         mockMvc.perform(post("/api/v1/merchants/" + theirs.id + "/users")
                         .with(mine.owner())
+                        .with(Idempotently.freshKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"%s","password":"%s","fullName":"Intruder",\

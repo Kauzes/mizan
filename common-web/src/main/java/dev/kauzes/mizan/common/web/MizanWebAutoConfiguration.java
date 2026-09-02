@@ -4,6 +4,7 @@ import java.util.List;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -55,6 +56,13 @@ public class MizanWebAutoConfiguration {
             return new AuthorizationDeclarations(mappings);
         }
 
+        @Bean
+        @ConditionalOnMissingBean
+        public IdempotencyDeclarations idempotencyDeclarations(
+                ObjectProvider<RequestMappingHandlerMapping> mappings) {
+            return new IdempotencyDeclarations(mappings);
+        }
+
         /**
          * Puts the authorization check in front of every handler, and lets one ask for the
          * caller as an argument. Registered here rather than left to each service, so an
@@ -73,13 +81,67 @@ public class MizanWebAutoConfiguration {
                     // published signing keys are not endpoints anybody annotates, and
                     // refusing them for saying nothing would be refusing them for not being
                     // controllers of ours.
-                    registry.addInterceptor(authorization).addPathPatterns("/api/**");
+                    registry.addInterceptor(authorization).addPathPatterns("/api/**").order(0);
                 }
 
                 @Override
                 public void addArgumentResolvers(
                         List<HandlerMethodArgumentResolver> resolvers) {
                     resolvers.add(new CallerArgumentResolver());
+                }
+            };
+        }
+    }
+
+    /**
+     * The half of idempotency that needs somewhere to write. A service with no database
+     * still gets the annotations and the startup check, and any endpoint it marks
+     * idempotent would have nowhere to record a result, which the check cannot know and
+     * the missing bean makes obvious at once.
+     */
+    @AutoConfiguration(
+            afterName = {
+                "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration",
+                "org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration"
+            })
+    @ConditionalOnClass(name = "org.springframework.jdbc.core.JdbcTemplate")
+    @ConditionalOnBean(org.springframework.jdbc.core.JdbcTemplate.class)
+    public static class Idempotency {
+
+        @Bean
+        @ConditionalOnMissingBean
+        public IdempotencyStore idempotencyStore(
+                org.springframework.jdbc.core.JdbcTemplate jdbc) {
+            return new IdempotencyStore(jdbc);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        public IdempotencyFilter idempotencyFilter(
+                @Value("${mizan.idempotency.maximum-body:1048576}") int maximumBody) {
+            return new IdempotencyFilter(maximumBody);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        public IdempotencyInterceptor idempotencyInterceptor(IdempotencyStore store) {
+            return new IdempotencyInterceptor(store);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean(name = "mizanIdempotencyConfigurer")
+        public WebMvcConfigurer mizanIdempotencyConfigurer(
+                IdempotencyInterceptor idempotency) {
+
+            return new WebMvcConfigurer() {
+
+                @Override
+                public void addInterceptors(InterceptorRegistry registry) {
+                    // After authorization: an unauthorized request should not be able to
+                    // claim a key, and a refusal should not be recorded as an outcome.
+                    registry.addInterceptor(idempotency)
+                            .addPathPatterns("/api/**")
+                            .order(10);
                 }
             };
         }
@@ -117,6 +179,12 @@ public class MizanWebAutoConfiguration {
         @ConditionalOnMissingBean
         public RequiredPermissionCustomizer requiredPermissionCustomizer() {
             return new RequiredPermissionCustomizer();
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        public IdempotencyCustomizer idempotencyCustomizer() {
+            return new IdempotencyCustomizer();
         }
     }
 }

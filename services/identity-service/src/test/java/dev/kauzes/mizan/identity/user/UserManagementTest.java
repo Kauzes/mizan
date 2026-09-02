@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import dev.kauzes.mizan.common.identity.Role;
 import dev.kauzes.mizan.test.Callers;
+import dev.kauzes.mizan.test.Idempotently;
 import dev.kauzes.mizan.test.MizanIntegrationTest;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -144,6 +145,7 @@ class UserManagementTest extends MizanIntegrationTest {
 
         mockMvc.perform(post(users(account))
                         .with(account.owner())
+                        .with(Idempotently.freshKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"%s","password":"%s","fullName":"Nobody","roles":[]}
@@ -182,6 +184,7 @@ class UserManagementTest extends MizanIntegrationTest {
 
         return mockMvc.perform(post(users(account))
                 .with(caller)
+                        .with(Idempotently.freshKey())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"email":"%s","password":"%s","fullName":"Alex Kauzes","roles":["%s"]}

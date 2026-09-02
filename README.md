@@ -112,6 +112,11 @@ other protected route.
 - A payment moves through a state machine written down in one place, only ever forwards, and
   every step is recorded in a history the database refuses to let anybody rewrite. An illegal
   transition is refused in terms of the two states rather than as a generic error.
+- Every write under `/api/` says what a repeat of it does, with `@Idempotent` or
+  `@NotIdempotent` and a reason, and a service refuses to start if one says neither. An
+  idempotent write needs an `Idempotency-Key`; sending the same one again returns what the
+  first call produced, with the same status, and the same key with a different body is
+  refused.
 - Every write endpoint accepts an idempotency key and a replay returns the original result.
   In the ledger that key is the entry's external reference: required, unique per merchant,
   and answered on a retry with the first call's entry and the first call's status, so a

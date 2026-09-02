@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import dev.kauzes.mizan.common.identity.Role;
 import dev.kauzes.mizan.test.Callers;
+import dev.kauzes.mizan.test.Idempotently;
 import dev.kauzes.mizan.test.MizanIntegrationTest;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -238,6 +239,7 @@ class JournalTest extends MizanIntegrationTest {
                 .andExpect(status().isOk());
         mockMvc.perform(post(entries(books))
                         .with(books.as(Role.VIEWER))
+                        .with(Idempotently.freshKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"externalReference":"ref-not-mine-to-write","description":"Not mine to write","occurredAt":"%s","postings":[
@@ -386,6 +388,7 @@ class JournalTest extends MizanIntegrationTest {
             String body = bodyOf(mockMvc.perform(
                     post("/api/v1/merchants/" + books.merchantId + "/accounts")
                             .with(Callers.as(books.userId, books.merchantId, Role.ADMIN))
+                        .with(Idempotently.freshKey())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {"code":"%s","name":"%s","type":"%s","currency":"%s"}
@@ -399,6 +402,7 @@ class JournalTest extends MizanIntegrationTest {
     private ResultActions postEntry(Books books, String body) throws Exception {
         return mockMvc.perform(post(entries(books))
                 .with(books.writer())
+                        .with(Idempotently.freshKey())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
     }

@@ -1,6 +1,7 @@
 package dev.kauzes.mizan.identity.merchant;
 
 import dev.kauzes.mizan.common.identity.Permission;
+import dev.kauzes.mizan.common.web.NotIdempotent;
 import dev.kauzes.mizan.common.web.PublicEndpoint;
 import dev.kauzes.mizan.common.web.RequiresPermission;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,6 +32,10 @@ public class MerchantController {
 
     @PostMapping
     @PublicEndpoint(because = "opening the first account cannot require an account")
+    @NotIdempotent(
+            because = "there is no merchant yet to scope a key to, and the email is "
+                    + "unique, so a repeat is refused by the database rather than "
+                    + "quietly accepted")
     @Operation(
             summary = "Register a merchant",
             description =

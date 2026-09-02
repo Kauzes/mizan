@@ -62,6 +62,17 @@ paths:
         schema:
           type: string
           format: uuid
+      - description: "Names this attempt, so that repeating it cannot repeat its effect.\
+          \ Sending the same key again returns what the first call produced, with\
+          \ the same status, so a retry after a lost response is safe. The same key\
+          \ with a different body is refused. A key belongs to one merchant and one\
+          \ operation."
+        in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          maxLength: 200
       requestBody:
         content:
           application/json:
