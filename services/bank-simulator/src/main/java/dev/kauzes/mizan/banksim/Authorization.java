@@ -79,13 +79,26 @@ final class Authorization {
         return state;
     }
 
-    /** Taking an authorization that is not held is the caller's mistake, and is refused. */
+    /**
+     * Takes the money, or says it already has.
+     *
+     * <p>Repeating a capture is not an error. A caller whose answer was lost has to be able
+     * to ask again, and a second capture that took the money twice would be far worse than
+     * one that says the money is already taken. Capturing something that was voided, on the
+     * other hand, is a real contradiction and is refused.
+     */
     synchronized void capture() {
+        if (state == AuthorizationState.CAPTURED) {
+            return;
+        }
         requireHeld("captured");
         state = AuthorizationState.CAPTURED;
     }
 
     synchronized void voidIt() {
+        if (state == AuthorizationState.VOIDED) {
+            return;
+        }
         requireHeld("voided");
         state = AuthorizationState.VOIDED;
     }

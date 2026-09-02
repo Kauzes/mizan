@@ -73,6 +73,17 @@ final class PaymentRequests {
         }
     }
 
+    @Schema(description = "Why the reservation is being released")
+    record VoidRequest(
+            @Schema(
+                            description =
+                                    "Kept on the step, so somebody reading the history later "
+                                            + "can see why rather than only that.",
+                            example = "the customer cancelled the order")
+                    @jakarta.validation.constraints.Size(max = 500)
+                    String reason) {
+    }
+
     @Schema(description = "A payment, and where it has got to")
     record PaymentResponse(
             UUID id,
@@ -92,6 +103,13 @@ final class PaymentRequests {
                     String cardLastFour,
             @Schema(description = "Why the acquirer refused, if it did")
                     String declineReason,
+            @Schema(
+                            description =
+                                    "The entry in the ledger that records the money moving. "
+                                            + "Present once the payment is captured, and never "
+                                            + "on one that was voided, because a released "
+                                            + "reservation moved nothing.")
+                    UUID ledgerEntryId,
             Instant createdAt,
             Instant updatedAt,
             @Schema(description = "Oldest first") List<TransitionResponse> history) {
@@ -109,6 +127,7 @@ final class PaymentRequests {
                     payment.acquirerReference(),
                     payment.cardLastFour(),
                     payment.declineReason(),
+                    payment.ledgerEntryId(),
                     payment.createdAt(),
                     payment.updatedAt(),
                     payment.history().stream().map(TransitionResponse::of).toList());

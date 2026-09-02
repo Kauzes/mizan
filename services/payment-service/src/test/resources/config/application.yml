@@ -1,0 +1,8 @@
+# Test-only overrides. See the note on the ledger's copy of this file.
+#
+# The ledger's address is not here: the tests that need one start a ledger of their own and
+# point at the port it was given.
+
+mizan:
+  internal:
+    service-token: a-service-token-for-tests

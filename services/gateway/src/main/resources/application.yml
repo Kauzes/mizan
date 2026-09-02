@@ -41,34 +41,41 @@ spring:
               uri: http://notification-service:8085
               predicates:
                 - Path=/api/v1/notifications/**
+            # These exist for two things: a published API contract and a health probe. They
+            # used to be /internal/<service>/**, which meant every internal endpoint any
+            # service would ever add was reachable from the edge by anyone holding a token.
+            # MIZ-45 added the first internal endpoint that can move money, and a blanket
+            # route would have exposed it the day it was written. A list of what is forwarded
+            # fails closed: the next internal endpoint is unreachable until somebody decides
+            # it should not be.
             - id: identity-service-internal
               uri: http://identity-service:8081
               predicates:
-                - Path=/internal/identity-service/**
+                - Path=/internal/identity-service/v3/api-docs,/internal/identity-service/v3/api-docs/**,/internal/identity-service/actuator/health,/internal/identity-service/actuator/health/**
               filters:
                 - StripPrefix=2
             - id: ledger-service-internal
               uri: http://ledger-service:8082
               predicates:
-                - Path=/internal/ledger-service/**
+                - Path=/internal/ledger-service/v3/api-docs,/internal/ledger-service/v3/api-docs/**,/internal/ledger-service/actuator/health,/internal/ledger-service/actuator/health/**
               filters:
                 - StripPrefix=2
             - id: payment-service-internal
               uri: http://payment-service:8083
               predicates:
-                - Path=/internal/payment-service/**
+                - Path=/internal/payment-service/v3/api-docs,/internal/payment-service/v3/api-docs/**,/internal/payment-service/actuator/health,/internal/payment-service/actuator/health/**
               filters:
                 - StripPrefix=2
             - id: risk-service-internal
               uri: http://risk-service:8084
               predicates:
-                - Path=/internal/risk-service/**
+                - Path=/internal/risk-service/v3/api-docs,/internal/risk-service/v3/api-docs/**,/internal/risk-service/actuator/health,/internal/risk-service/actuator/health/**
               filters:
                 - StripPrefix=2
             - id: notification-service-internal
               uri: http://notification-service:8085
               predicates:
-                - Path=/internal/notification-service/**
+                - Path=/internal/notification-service/v3/api-docs,/internal/notification-service/v3/api-docs/**,/internal/notification-service/actuator/health,/internal/notification-service/actuator/health/**
               filters:
                 - StripPrefix=2
 

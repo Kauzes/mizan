@@ -16,6 +16,9 @@ tags:
   name: Journal
 - description: The chart of accounts a merchant's money moves through
   name: Accounts
+- description: "Entries that cross between a merchant's books and the platform's.\
+    \ Not reachable from the edge, and not part of the merchant API."
+  name: Journal (internal)
 paths:
   /api/v1/merchants/{merchantId}/accounts:
     get:
@@ -214,7 +217,7 @@ paths:
         The call is idempotent on externalReference: sending the same reference again returns the entry the first call wrote, with the same id and the same status, so a retry after a dropped response is safe. The same reference sent with different postings is refused.
 
         Requires the ENTRY_POST permission, held by: OWNER, ADMIN. The caller must be acting for the merchant in the path.
-      operationId: post
+      operationId: post_1
       parameters:
       - in: path
         name: merchantId
@@ -287,6 +290,33 @@ paths:
       summary: Read an entry and its postings
       tags:
       - Journal
+  /internal/entries:
+    post:
+      description: "Idempotent on externalReference, exactly as the merchant-facing\
+        \ post is: a caller that never heard the answer sends the same request again\
+        \ and is given the entry the first call wrote. That is what makes a capture\
+        \ safe to retry."
+      operationId: post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InternalEntryRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntryResponse"
+          description: "The entry, or the one already written"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
+      summary: Post an entry across the platform's books and a merchant's
+      tags:
+      - Journal (internal)
 components:
   headers:
     X-Correlation-Id:
@@ -533,6 +563,55 @@ components:
       required:
       - field
       - message
+    InternalEntryRequest:
+      type: object
+      description: A movement that may cross between two sets of books
+      properties:
+        description:
+          type: string
+          example: Card payment captured
+          maxLength: 500
+          minLength: 0
+        externalReference:
+          type: string
+          example: payment:8f21c0d4-capture
+          maxLength: 200
+          minLength: 0
+        merchantId:
+          type: string
+          format: uuid
+          description: Whose books the merchant side of this entry belongs to
+        occurredAt:
+          type: string
+          format: date-time
+        postings:
+          type: array
+          items:
+            $ref: "#/components/schemas/InternalPosting"
+          maxItems: 2147483647
+          minItems: 2
+      required:
+      - description
+      - externalReference
+      - merchantId
+      - occurredAt
+      - postings
+    InternalPosting:
+      type: object
+      description: "One side of a movement, naming its account by code"
+      properties:
+        accountCode:
+          type: string
+          example: platform.clearing.try
+          maxLength: 100
+          minLength: 0
+        amount:
+          type: integer
+          format: int64
+          description: Signed minor units. Positive is a debit.
+          example: 125000
+      required:
+      - accountCode
     OpenAccountRequest:
       type: object
       description: An account to open

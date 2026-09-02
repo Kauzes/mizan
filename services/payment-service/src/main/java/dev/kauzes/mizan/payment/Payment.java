@@ -81,6 +81,16 @@ public class Payment {
     @Column(name = "decline_reason")
     private String declineReason;
 
+    /**
+     * The entry in the ledger that records the money moving, once it has.
+     *
+     * <p>Null until then, and null forever on a payment that was voided: a void releases a
+     * reservation, and a reservation was never a movement. The database will not let a
+     * captured payment leave this empty.
+     */
+    @Column(name = "ledger_entry_id")
+    private UUID ledgerEntryId;
+
     @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @OrderBy("at asc")
     private List<PaymentTransition> history = new ArrayList<>();
@@ -147,6 +157,34 @@ public class Payment {
         this.cardLastFour = cardLastFour;
         this.declineReason = reason;
         moveTo(PaymentStatus.DECLINED, reason);
+    }
+
+    /**
+     * Records that the money has been taken and where the books say so.
+     *
+     * <p>The entry comes first and the state second, and that order is the whole point. A
+     * payment that says captured with nothing in the books is a lie somebody has to find; an
+     * entry with a payment still saying authorized is a retry away from being finished, and
+     * the retry is safe because the entry carries the payment's own reference.
+     */
+    public void captured(UUID ledgerEntryId) {
+        this.ledgerEntryId = Objects.requireNonNull(ledgerEntryId, "ledgerEntryId");
+        moveTo(PaymentStatus.CAPTURED, null);
+    }
+
+    /**
+     * Records that the reservation has been released.
+     *
+     * <p>Nothing is posted. No money moved, so there is nothing for the books to say, and an
+     * entry that recorded a movement of zero would be a record of something that did not
+     * happen.
+     */
+    public void voided(String because) {
+        moveTo(PaymentStatus.VOIDED, because);
+    }
+
+    public UUID ledgerEntryId() {
+        return ledgerEntryId;
     }
 
     public String acquirerReference() {

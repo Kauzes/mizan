@@ -80,6 +80,58 @@ public class AcquirerClient {
     }
 
     /**
+     * Takes the money the acquirer is holding.
+     *
+     * <p>Safe to send again. The acquirer answers a repeated capture with the capture it
+     * already made, which is what lets this platform retry after a lost answer without taking
+     * the money twice.
+     */
+    public void capture(String acquirerReference) {
+        call("capture", acquirerReference);
+    }
+
+    /** Releases the money the acquirer is holding. Also safe to send again. */
+    public void release(String acquirerReference) {
+        call("void", acquirerReference);
+    }
+
+    private void call(String what, String acquirerReference) {
+        try {
+            http.post()
+                    .uri("/acquirer/authorizations/{reference}/" + what, acquirerReference)
+                    .retrieve()
+                    .toBodilessEntity();
+
+        } catch (ResourceAccessException noAnswer) {
+            log.warn("no answer from the acquirer asking it to {} {}", what, acquirerReference);
+            throw new MizanException(
+                    ErrorCode.UPSTREAM_TIMEOUT,
+                    "The acquirer did not answer in time. Whether the payment was "
+                            + what.replace("void", "voided").replace("capture", "captured")
+                            + " is not yet known.",
+                    noAnswer);
+        } catch (org.springframework.web.client.HttpClientErrorException refused) {
+            // The acquirer disagrees about what this authorization is. Repeating is fine by
+            // it, so this is a real contradiction rather than a retry, and is passed on as
+            // one instead of being turned into a server error.
+            log.warn("the acquirer refused to {} {}: {}", what, acquirerReference,
+                    refused.getResponseBodyAsString());
+            throw new MizanException(
+                    ErrorCode.UNPROCESSABLE,
+                    "The acquirer will not " + what + " this authorization.",
+                    refused);
+        } catch (MizanException already) {
+            throw already;
+        } catch (Exception unreachable) {
+            log.error("could not reach the acquirer to {} {}", what, acquirerReference, unreachable);
+            throw new MizanException(
+                    ErrorCode.UPSTREAM_UNAVAILABLE,
+                    "The acquirer could not be reached.",
+                    unreachable);
+        }
+    }
+
+    /**
      * Asks the acquirer what it did with a request, if anything.
      *
      * <p>Keyed on the payment's id, because that is what the request carried and what a

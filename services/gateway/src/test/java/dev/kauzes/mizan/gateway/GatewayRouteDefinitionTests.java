@@ -99,6 +99,31 @@ class GatewayRouteDefinitionTests {
     }
 
     @Test
+    void theInternalRoutesForwardOnlyDocumentationAndHealth() {
+        // They were /internal/<service>/**, which forwarded every internal endpoint any
+        // service would ever add. MIZ-45 wrote the first one that can move money between a
+        // merchant's books and the platform's; a blanket route would have published it the
+        // day it was written.
+        java.util.List<String> forwarded = definitions().values().stream()
+                .filter(route -> route.getId().endsWith("-internal"))
+                .flatMap(route -> route.getPredicates().stream())
+                .flatMap(predicate -> predicate.getArgs().values().stream())
+                .flatMap(paths -> java.util.Arrays.stream(paths.split(",")))
+                .map(path -> path.endsWith("/**") ? path.substring(0, path.length() - 3) : path)
+                .toList();
+
+        assertThat(forwarded).isNotEmpty();
+        assertThat(forwarded)
+                .as("an internal route forwards a published contract and a health probe, and "
+                        + "nothing else, because nothing else under /internal is the edge's to "
+                        + "hand out")
+                .allSatisfy(path -> assertThat(
+                                path.endsWith("/v3/api-docs") || path.endsWith("/actuator/health"))
+                        .as("%s", path)
+                        .isTrue());
+    }
+
+    @Test
     void theAcquirerIsNotReachableFromOutside() {
         assertThat(definitions().values())
                 .noneSatisfy(route -> assertThat(route.getUri().toString())

@@ -32,6 +32,21 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Account> findForUpdateByIdAndMerchantId(UUID id, UUID merchantId);
 
+    /**
+     * The same lock, without the merchant scope, for the one caller that legitimately needs
+     * both sets of books at once.
+     *
+     * <p>Not a way around the scoping: what may be reached is decided above this, in
+     * {@code JournalService}, and another merchant's account is refused there whichever books
+     * are open. This exists because a platform account has no merchant to scope by, and a
+     * capture moves money between one of those and a merchant's.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Account> findForUpdateById(UUID id);
+
     /** For the platform's own accounts, looked up by the code a migration gave them. */
     Optional<Account> findByCodeAndMerchantIdIsNull(String code);
+
+    /** For a merchant's, looked up by the code the merchant gave them. */
+    Optional<Account> findByMerchantIdAndCode(UUID merchantId, String code);
 }

@@ -15,7 +15,18 @@ spring:
       ddl-auto: validate
     open-in-view: false
   flyway:
-    locations: classpath:db/migration
+    # Namespaced by service rather than the plain db/migration every service used to share.
+    # One classpath is enough to make that ambiguous: a test that runs two services in one
+    # JVM finds two V1s and Flyway refuses, which is how MIZ-45 found this. The files and
+    # their checksums are unchanged, so an existing schema history still matches.
+    locations: classpath:db/migration/ledger
+
+mizan:
+  internal:
+    # The credential an internal call has to carry. Those endpoints move money between the
+    # platform's books and a merchant's, which is the one thing no merchant endpoint may do,
+    # so the service refuses to start without one rather than running with them open.
+    service-token: ${MIZAN_INTERNAL_SERVICE_TOKEN:}
 
 springdoc:
   # Keys in a stable order, so a regenerated spec differs only where the API differs and the

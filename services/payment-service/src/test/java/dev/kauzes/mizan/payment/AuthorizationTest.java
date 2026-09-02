@@ -97,15 +97,13 @@ class AuthorizationTest extends MizanIntegrationTest {
 
         authorize(merchant, payment, GOOD_CARD).andExpect(status().isOk());
 
-        // An authorization is a promise that the money is there, not a movement of it. This
-        // service holds no ledger reference for a payment because there is nothing in the
-        // ledger to point at until MIZ-45 captures it.
-        assertThat(jdbc.queryForList(
-                        "select column_name from information_schema.columns "
-                                + "where table_name = 'payment'",
-                        String.class))
-                .as("nothing here records a ledger entry, because there is not one yet")
-                .noneSatisfy(column -> assertThat(column).contains("ledger"));
+        // An authorization is a promise that the money is there, not a movement of it, so
+        // there is nothing in the ledger for this payment to point at. Capturing is what
+        // makes an entry; a payment that was only authorized has none.
+        assertThat(jdbc.queryForObject(
+                        "select ledger_entry_id from payment where id = ?", Object.class, payment))
+                .as("an authorized payment points at no entry, because none was written")
+                .isNull();
     }
 
     @Test
@@ -145,7 +143,8 @@ class AuthorizationTest extends MizanIntegrationTest {
         authorize(merchant, payment, GOOD_CARD)
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.detail")
-                        .value("A payment that is AUTHORIZED cannot be authorized."));
+                        .value("A payment that is AUTHORIZED cannot be authorized. It can "
+                                + "only become [CAPTURED, VOIDED]."));
     }
 
     @Test

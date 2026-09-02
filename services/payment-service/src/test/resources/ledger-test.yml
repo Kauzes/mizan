@@ -1,0 +1,31 @@
+# Configuration for the ledger that CaptureTest starts in this JVM.
+#
+# A name of its own, for the same reason the acquirer has one: two services put an
+# application.yml at the root of the classpath and only one of them can win. Reading its own
+# file also means this context does not inherit the payment service's datasource, which
+# points at a different database.
+#
+# The datasource and the service credential are passed as arguments rather than written here,
+# because the first is a container that does not exist until the test runs and the second is
+# a secret that should not be sitting in a file even in a test.
+
+server:
+  port: 0
+
+spring:
+  main:
+    banner-mode: off
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    # The reason migrations are namespaced by service at all. Both services' migrations are
+    # on this classpath, and db/migration would find two of every version.
+    locations: classpath:db/migration/ledger
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

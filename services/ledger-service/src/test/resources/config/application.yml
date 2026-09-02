@@ -1,0 +1,7 @@
+# Test-only overrides, at config/ so they sit above the service's own application.yml rather
+# than replacing it. Nothing here changes behaviour; it supplies the one secret the service
+# refuses to start without, which is exactly the point of it refusing.
+
+mizan:
+  internal:
+    service-token: a-service-token-for-tests
