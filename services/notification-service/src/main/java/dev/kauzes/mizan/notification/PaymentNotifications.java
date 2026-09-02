@@ -35,7 +35,7 @@ public class PaymentNotifications {
      * <p>A constant rather than a class name: renaming the class would otherwise make every
      * event it has already handled look unhandled, and it would do all of them again.
      */
-    private static final String HANDLER = "payment-notifications";
+    static final String HANDLER = "payment-notifications";
 
     private final Inbox inbox;
     private final JdbcTemplate jdbc;

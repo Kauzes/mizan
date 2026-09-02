@@ -67,7 +67,18 @@ public class Inbox {
      * @param work what to do with it, run inside the transaction that records it
      */
     public void once(String handler, String message, Consumer<ReceivedEvent> work) {
-        ReceivedEvent event = ReceivedEvent.from(json.readTree(message));
+        ReceivedEvent event;
+        try {
+            event = ReceivedEvent.from(json.readTree(message));
+        } catch (RuntimeException notAnEvent) {
+            // A message that cannot be read will not read differently in a second. Saying so
+            // is what stops it being retried in a loop while everything behind it waits: it
+            // goes straight to the dead letter topic, where a person can look at it.
+            throw new UnprocessableEventException(
+                    "this message is not an event this service can read: "
+                            + notAnEvent.getMessage(),
+                    notAnEvent);
+        }
 
         // The id the producer put on the envelope, so a log line here can be joined to the
         // request that caused the event several services ago.

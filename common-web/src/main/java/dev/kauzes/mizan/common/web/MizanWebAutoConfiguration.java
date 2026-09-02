@@ -138,6 +138,14 @@ public class MizanWebAutoConfiguration {
 
             return new dev.kauzes.mizan.common.web.inbox.Inbox(jdbc, json, transactions);
         }
+
+        @Bean
+        @ConditionalOnMissingBean
+        public dev.kauzes.mizan.common.web.inbox.DeadLetters deadLetters(
+                org.springframework.jdbc.core.JdbcTemplate jdbc) {
+
+            return new dev.kauzes.mizan.common.web.inbox.DeadLetters(jdbc);
+        }
     }
 
     /**
