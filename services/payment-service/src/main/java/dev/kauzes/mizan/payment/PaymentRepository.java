@@ -1,5 +1,6 @@
 package dev.kauzes.mizan.payment;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,4 +14,7 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     Optional<Payment> findByMerchantIdAndReference(UUID merchantId, String reference);
 
     List<Payment> findByMerchantIdOrderByCreatedAtDesc(UUID merchantId);
+
+    /** What the resolver sweeps: payments nobody knows the outcome of, that have settled. */
+    List<Payment> findByStatusAndUpdatedAtBefore(PaymentStatus status, Instant before);
 }

@@ -47,6 +47,7 @@ public class AcquirerController {
                     - `0005`: declined, do_not_honour
                     - `0007`: declined, stolen_card
                     - `0069`: approved, but the answer takes longer than the caller will wait
+                    - `0068`: declined, but likewise. A caller who gave up cannot tell this                     apart from `0069`, which is why resolving a timeout means asking rather                     than assuming
 
                     Sending the same requestId again returns the first decision rather than \
                     authorizing a second time, which is what a real acquirer does and what \

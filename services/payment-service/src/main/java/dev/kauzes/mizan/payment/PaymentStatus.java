@@ -21,6 +21,13 @@ public enum PaymentStatus {
     /** An intent. Recorded, nothing attempted, nobody contacted, no money anywhere. */
     CREATED,
 
+    /**
+     * The acquirer was asked and did not answer. Not a refusal: the money may well be
+     * reserved and the reply lost. A payment sits here until somebody asks the acquirer what
+     * actually happened, which MIZ-44's resolver does without being told to.
+     */
+    AUTHORIZATION_UNKNOWN,
+
     /** The acquirer has approved and reserved the money. Nothing has moved yet. */
     AUTHORIZED,
 
@@ -38,7 +45,11 @@ public enum PaymentStatus {
     /** Where this payment may go from here. Empty means it is finished. */
     public Set<PaymentStatus> next() {
         return switch (this) {
-            case CREATED -> EnumSet.of(AUTHORIZED, DECLINED);
+            case CREATED -> EnumSet.of(AUTHORIZED, DECLINED, AUTHORIZATION_UNKNOWN);
+            // Resolution turns not knowing into knowing. A payment the acquirer has no
+            // record of stays here and may simply be attempted again, which is why
+            // AUTHORIZED is reachable from here as well.
+            case AUTHORIZATION_UNKNOWN -> EnumSet.of(AUTHORIZED, DECLINED);
             case AUTHORIZED -> EnumSet.of(CAPTURED, VOIDED);
             case DECLINED, CAPTURED, VOIDED -> NOWHERE;
         };

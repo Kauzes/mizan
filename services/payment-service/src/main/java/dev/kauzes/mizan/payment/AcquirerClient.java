@@ -79,6 +79,52 @@ public class AcquirerClient {
         }
     }
 
+    /**
+     * Asks the acquirer what it did with a request, if anything.
+     *
+     * <p>Keyed on the payment's id, because that is what the request carried and what a
+     * caller who never heard the answer still has. An empty answer is a real answer: this
+     * acquirer has no record, so nothing was authorized.
+     */
+    public java.util.Optional<AcquirerDecision> lookUp(UUID paymentId) {
+        try {
+            return http.get()
+                    .uri(builder -> builder
+                            .path("/acquirer/authorizations")
+                            .queryParam("requestId", paymentId.toString())
+                            .build())
+                    .exchange((request, response) -> {
+                        // The status is read rather than the body, because a 404 here carries
+                        // a problem detail and reading that as an authorization is how the
+                        // first version of this turned "nothing happened" into an error.
+                        if (response.getStatusCode().value() == 404) {
+                            return java.util.Optional.<AcquirerDecision>empty();
+                        }
+                        if (!response.getStatusCode().is2xxSuccessful()) {
+                            throw new MizanException(
+                                    ErrorCode.UPSTREAM_UNAVAILABLE,
+                                    "The acquirer answered "
+                                            + response.getStatusCode().value()
+                                            + " when asked about this payment.");
+                        }
+                        return java.util.Optional.ofNullable(
+                                        response.bodyTo(AcquirerResponse.class))
+                                .map(AcquirerResponse::asDecision);
+                    });
+
+        } catch (MizanException already) {
+            throw already;
+        } catch (Exception unreachable) {
+            // Not knowing whether we can ask is different from having asked and been told
+            // nothing. The payment stays unresolved and the next sweep tries again.
+            log.warn("could not ask the acquirer about payment {}", paymentId, unreachable);
+            throw new MizanException(
+                    ErrorCode.UPSTREAM_UNAVAILABLE,
+                    "The acquirer could not be asked about this payment.",
+                    unreachable);
+        }
+    }
+
     /** What the acquirer decided, in this service's own words. */
     public record AcquirerDecision(
             String acquirerReference,

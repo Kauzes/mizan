@@ -14,30 +14,40 @@ package dev.kauzes.mizan.banksim;
 public enum Behaviour {
 
     /** The ordinary case, and what anything unrecognised does. */
-    APPROVE("0000", null),
+    APPROVE("0000", null, false),
 
     /** The customer has not got it. */
-    DECLINE_INSUFFICIENT_FUNDS("0002", "insufficient_funds"),
+    DECLINE_INSUFFICIENT_FUNDS("0002", "insufficient_funds", false),
 
     /** The issuer refused and did not say why, which happens more than anybody would like. */
-    DECLINE_DO_NOT_HONOUR("0005", "do_not_honour"),
+    DECLINE_DO_NOT_HONOUR("0005", "do_not_honour", false),
 
     /** The card has been reported. */
-    DECLINE_STOLEN("0007", "stolen_card"),
+    DECLINE_STOLEN("0007", "stolen_card", false),
 
     /**
      * Takes longer than the caller is prepared to wait. Not a failure: the authorization
      * happens, and the answer arrives after whoever asked has stopped listening, which is
      * exactly the state MIZ-44 has to resolve by asking rather than assuming.
      */
-    APPROVE_SLOWLY("0069", null);
+    APPROVE_SLOWLY("0069", null, true),
+
+    /**
+     * The same, refused. A caller who gave up waiting has no way of telling this apart from
+     * the one above, which is the point: resolving a timeout has to cope with the answer
+     * being either, and a catalogue that could only produce one of them would let a resolver
+     * that always guessed "approved" pass its tests.
+     */
+    DECLINE_SLOWLY("0068", "do_not_honour", true);
 
     private final String lastFour;
     private final String reason;
+    private final boolean slow;
 
-    Behaviour(String lastFour, String reason) {
+    Behaviour(String lastFour, String reason, boolean slow) {
         this.lastFour = lastFour;
         this.reason = reason;
+        this.slow = slow;
     }
 
     public String lastFour() {
@@ -54,7 +64,7 @@ public enum Behaviour {
     }
 
     public boolean isSlow() {
-        return this == APPROVE_SLOWLY;
+        return slow;
     }
 
     /** What this card asks for. Anything not in the catalogue is an ordinary approval. */

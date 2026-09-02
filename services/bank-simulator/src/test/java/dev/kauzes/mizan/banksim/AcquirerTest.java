@@ -40,6 +40,7 @@ class AcquirerTest {
     private static final String DO_NOT_HONOUR = "4000000000000005";
     private static final String STOLEN = "4000000000000007";
     private static final String SLOW = "4000000000000069";
+    private static final String SLOW_DECLINE = "4000000000000068";
 
     @Autowired
     private MockMvc mockMvc;
@@ -188,6 +189,28 @@ class AcquirerTest {
             Thread.sleep(50);
         }
         return false;
+    }
+
+    @Test
+    @Timeout(30)
+    void aSlowDeclineIsRecordedAsADeclineRatherThanAnApproval() throws Exception {
+        String requestId = request();
+
+        CompletableFuture<Void> inFlight = CompletableFuture.runAsync(() -> {
+            try {
+                authorize(requestId, SLOW_DECLINE);
+            } catch (Exception ignored) {
+                // Expected: the caller gives up.
+            }
+        });
+
+        // A resolver that assumed a timeout meant approval would be wrong exactly here.
+        assertThat(lookedUpWithin(requestId, Duration.ofSeconds(10))).isTrue();
+        mockMvc.perform(get("/acquirer/authorizations").param("requestId", requestId))
+                .andExpect(jsonPath("$.outcome").value("DECLINED"))
+                .andExpect(jsonPath("$.reason").value("do_not_honour"));
+
+        inFlight.join();
     }
 
     private String request() {

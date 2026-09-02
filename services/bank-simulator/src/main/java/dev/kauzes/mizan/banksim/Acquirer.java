@@ -59,9 +59,8 @@ public class Acquirer {
         // Recorded before the answer is withheld, never after. That ordering is the whole
         // point of the slow card: the money is reserved, the caller does not know it, and a
         // lookup during the wait already finds it. MIZ-44 resolves exactly that state.
-        Authorization decided = byRequest.computeIfAbsent(
-                request.requestId(),
-                id -> record(request, behaviour.isSlow() ? Behaviour.APPROVE : behaviour));
+        Authorization decided =
+                byRequest.computeIfAbsent(request.requestId(), id -> record(request, behaviour));
 
         if (behaviour.isSlow()) {
             waitLongerThanTheCallerWill();
