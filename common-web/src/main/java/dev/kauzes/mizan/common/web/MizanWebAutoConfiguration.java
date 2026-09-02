@@ -94,6 +94,38 @@ public class MizanWebAutoConfiguration {
     }
 
     /**
+     * The outbox, for a service that has both a database to write it to and a mapper to
+     * serialise a payload with.
+     *
+     * <p>Ordered after the JDBC auto-configurations for the reason MIZ-41 found the hard way:
+     * a {@code @ConditionalOnBean} evaluated before the bean it asks about has been defined
+     * is simply false, and the mechanism it guards then does not exist while everything goes
+     * on looking correct.
+     */
+    @AutoConfiguration(
+            afterName = {
+                "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration",
+                "org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration",
+                "org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration"
+            })
+    @ConditionalOnClass(name = "org.springframework.jdbc.core.JdbcTemplate")
+    @ConditionalOnBean({
+        org.springframework.jdbc.core.JdbcTemplate.class,
+        tools.jackson.databind.ObjectMapper.class
+    })
+    public static class Events {
+
+        @Bean
+        @ConditionalOnMissingBean
+        public dev.kauzes.mizan.common.web.outbox.Outbox outbox(
+                org.springframework.jdbc.core.JdbcTemplate jdbc,
+                tools.jackson.databind.ObjectMapper json) {
+
+            return new dev.kauzes.mizan.common.web.outbox.Outbox(jdbc, json);
+        }
+    }
+
+    /**
      * The half of idempotency that needs somewhere to write. A service with no database
      * still gets the annotations and the startup check, and any endpoint it marks
      * idempotent would have nowhere to record a result, which the check cannot know and

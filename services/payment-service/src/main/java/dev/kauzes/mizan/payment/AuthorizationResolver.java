@@ -39,17 +39,20 @@ public class AuthorizationResolver {
 
     private final PaymentRepository payments;
     private final AcquirerClient acquirer;
+    private final PaymentEvents events;
     private final TransactionTemplate transaction;
     private final Duration settleFirst;
 
     public AuthorizationResolver(
             PaymentRepository payments,
             AcquirerClient acquirer,
+            PaymentEvents events,
             PlatformTransactionManager transactions,
             @Value("${mizan.acquirer.resolve-after:10s}") Duration settleFirst) {
 
         this.payments = payments;
         this.acquirer = acquirer;
+        this.events = events;
         this.transaction = new TransactionTemplate(transactions);
         this.settleFirst = settleFirst;
     }
@@ -129,6 +132,10 @@ public class AuthorizationResolver {
                 log.info("payment {} turned out to be declined: {}", paymentId, decision.reason());
             }
 
+            // A payment resolved by the sweep announces itself exactly as one resolved by
+            // the original call does. A consumer cannot tell which happened, and should not
+            // need to: the event says what the payment became, not how we came to know.
+            events.record(payment, decision.reason());
             return PaymentRequests.PaymentResponse.of(payment);
         });
     }
