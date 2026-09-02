@@ -41,6 +41,25 @@ final class PaymentRequests {
                     String description) {
     }
 
+    @Schema(description = "The card to authorize against")
+    record AuthorizeRequest(
+            @Schema(
+                            description =
+                                    "The card. Only its last four digits are kept, and the "
+                                            + "acquirer decides what to do from them: see its "
+                                            + "own documentation for the catalogue.",
+                            example = "4000000000000000")
+                    @NotBlank
+                    @Pattern(regexp = "[0-9]{12,19}", message = "must look like a card number")
+                    String card) {
+
+        /** A card number is not something to print. */
+        @Override
+        public String toString() {
+            return "AuthorizeRequest[card=****]";
+        }
+    }
+
     @Schema(description = "One step a payment took")
     record TransitionResponse(
             @Schema(description = "Null for the first step") PaymentStatus from,
@@ -67,6 +86,12 @@ final class PaymentRequests {
                     Set<PaymentStatus> allowedNext,
             String reference,
             String description,
+            @Schema(description = "The acquirer's reference, once there is an authorization")
+                    String acquirerReference,
+            @Schema(description = "The last four digits of the card, and all that is kept")
+                    String cardLastFour,
+            @Schema(description = "Why the acquirer refused, if it did")
+                    String declineReason,
             Instant createdAt,
             Instant updatedAt,
             @Schema(description = "Oldest first") List<TransitionResponse> history) {
@@ -81,6 +106,9 @@ final class PaymentRequests {
                     payment.status().next(),
                     payment.reference(),
                     payment.description(),
+                    payment.acquirerReference(),
+                    payment.cardLastFour(),
+                    payment.declineReason(),
                     payment.createdAt(),
                     payment.updatedAt(),
                     payment.history().stream().map(TransitionResponse::of).toList());

@@ -17,6 +17,15 @@ spring:
   flyway:
     locations: classpath:db/migration
 
+mizan:
+  acquirer:
+    # The acquirer stands outside the platform, so this is the one place a service reaches
+    # for somebody else's system. Compose points it at the simulator.
+    base-url: ${MIZAN_ACQUIRER_URL:http://localhost:8086}
+    # How long to wait before the answer counts as not having arrived. Short enough that a
+    # merchant is not left holding a request, long enough that an ordinary answer arrives.
+    timeout: ${MIZAN_ACQUIRER_TIMEOUT:5s}
+
 springdoc:
   # Keys in a stable order, so a regenerated spec differs only where the API differs and the
   # committed file stays reviewable.

@@ -1,0 +1,26 @@
+# Configuration for the acquirer that AuthorizationTest starts in this JVM.
+#
+# It has a name of its own because both services put an application.yml at the root of the
+# classpath, and on the test classpath only one of them can win. Rather than fight that with
+# property precedence, the acquirer is given its own file and told to read it.
+#
+# The exclusions are the other half of the same problem: this JVM has the payment service's
+# JPA and Flyway on the classpath, and an acquirer that keeps everything in memory should not
+# be trying to open a database because of what happens to be next to it.
+
+server:
+  port: 0
+
+spring:
+  main:
+    banner-mode: off
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
+      - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
+
+mizan:
+  acquirer:
+    # Long enough that the payment service's own timeout is what expires, not this.
+    slow-response: 20s

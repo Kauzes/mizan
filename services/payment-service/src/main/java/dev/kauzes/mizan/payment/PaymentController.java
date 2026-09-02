@@ -3,6 +3,7 @@ package dev.kauzes.mizan.payment;
 import dev.kauzes.mizan.common.identity.Permission;
 import dev.kauzes.mizan.common.web.Idempotent;
 import dev.kauzes.mizan.common.web.RequiresPermission;
+import dev.kauzes.mizan.payment.PaymentRequests.AuthorizeRequest;
 import dev.kauzes.mizan.payment.PaymentRequests.CreatePaymentRequest;
 import dev.kauzes.mizan.payment.PaymentRequests.PaymentResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -78,6 +79,42 @@ public class PaymentController {
         return ResponseEntity.created(
                         URI.create("/api/v1/merchants/" + merchantId + "/payments/" + created.id()))
                 .body(created);
+    }
+
+    @PostMapping("/{paymentId}/authorize")
+    @RequiresPermission(Permission.PAYMENT_WRITE)
+    @Idempotent
+    @Operation(
+            summary = "Authorize a payment",
+            description =
+                    """
+                    Asks the acquirer to reserve the money. An approval moves the payment to                     AUTHORIZED and a refusal to DECLINED, keeping the reason the acquirer                     gave.
+
+                    Nothing is posted to the books. An authorization is a promise that the                     money is there rather than a movement of it, and the ledger records                     movements. Capturing is what moves it.
+
+                    Only the last four digits of the card are kept.""")
+    @ApiResponse(responseCode = "200", description = "The payment, authorized or declined")
+    @ApiResponse(responseCode = "400", ref = "#/components/responses/VALIDATION_FAILED")
+    @ApiResponse(
+            responseCode = "404",
+            ref = "#/components/responses/NOT_FOUND",
+            description = "This merchant has no payment with that id")
+    @ApiResponse(
+            responseCode = "422",
+            ref = "#/components/responses/UNPROCESSABLE",
+            description = "This payment is not in a state that can be authorized")
+    @ApiResponse(
+            responseCode = "504",
+            ref = "#/components/responses/UPSTREAM_TIMEOUT",
+            description =
+                    "The acquirer did not answer in time. Whether the payment was authorized "
+                            + "is not yet known, and is not assumed")
+    public PaymentResponse authorize(
+            @PathVariable UUID merchantId,
+            @PathVariable UUID paymentId,
+            @Valid @RequestBody AuthorizeRequest request) {
+
+        return payments.authorize(merchantId, paymentId, request);
     }
 
     @GetMapping("/{paymentId}")

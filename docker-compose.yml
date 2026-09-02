@@ -130,6 +130,7 @@ services:
         MODULE: payment-service
     environment:
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/payment
+      MIZAN_ACQUIRER_URL: http://bank-simulator:8086
       MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
       MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
     depends_on:
