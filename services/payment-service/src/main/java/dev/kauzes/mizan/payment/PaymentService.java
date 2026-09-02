@@ -1,6 +1,8 @@
 package dev.kauzes.mizan.payment;
 
 import dev.kauzes.mizan.common.error.ConflictException;
+import dev.kauzes.mizan.common.error.ErrorCode;
+import dev.kauzes.mizan.common.error.MizanException;
 import dev.kauzes.mizan.common.error.NotFoundException;
 import dev.kauzes.mizan.common.error.UnprocessableException;
 import dev.kauzes.mizan.common.money.Money;
@@ -24,10 +26,16 @@ public class PaymentService {
 
     private final PaymentRepository payments;
     private final AcquirerClient acquirer;
+    private final UnknownOutcomes unknownOutcomes;
 
-    public PaymentService(PaymentRepository payments, AcquirerClient acquirer) {
+    public PaymentService(
+            PaymentRepository payments,
+            AcquirerClient acquirer,
+            UnknownOutcomes unknownOutcomes) {
+
         this.payments = payments;
         this.acquirer = acquirer;
+        this.unknownOutcomes = unknownOutcomes;
     }
 
     /**
@@ -58,11 +66,22 @@ public class PaymentService {
                                     : "."));
         }
 
-        AcquirerClient.AcquirerDecision decision = acquirer.authorize(
-                payment.id(),
-                payment.money().amount(),
-                payment.money().currency().getCurrencyCode(),
-                request.card());
+        AcquirerClient.AcquirerDecision decision;
+        try {
+            decision = acquirer.authorize(
+                    payment.id(),
+                    payment.money().amount(),
+                    payment.money().currency().getCurrencyCode(),
+                    request.card());
+        } catch (MizanException noAnswer) {
+            if (noAnswer.errorCode() == ErrorCode.UPSTREAM_TIMEOUT) {
+                // Recorded in a transaction of its own, because this one is about to roll
+                // back: the caller is told by an exception being thrown, and a note written
+                // here would go with it. The same lesson as MIZ-33 and MIZ-36.
+                unknownOutcomes.record(merchantId, paymentId, noAnswer.getMessage());
+            }
+            throw noAnswer;
+        }
 
         if (decision.approved()) {
             payment.authorized(decision.acquirerReference(), decision.cardLastFour());

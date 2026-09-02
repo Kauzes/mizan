@@ -13,9 +13,37 @@ import org.junit.jupiter.api.Test;
 class PaymentStatusTest {
 
     @Test
-    void aPaymentStartsByBeingAuthorizedOrRefused() {
+    void aPaymentStartsByBeingAuthorizedRefusedOrLeftInDoubt() {
+        // The third one is not a failure mode of the payment but of the answer: the acquirer
+        // was asked and did not say. MIZ-44 resolves it by asking again rather than guessing.
         assertThat(PaymentStatus.CREATED.next())
+                .containsExactlyInAnyOrder(
+                        PaymentStatus.AUTHORIZED,
+                        PaymentStatus.DECLINED,
+                        PaymentStatus.AUTHORIZATION_UNKNOWN);
+    }
+
+    @Test
+    void notKnowingIsSomewhereAPaymentCanLeave() {
+        assertThat(PaymentStatus.AUTHORIZATION_UNKNOWN.isFinal())
+                .as("a payment nobody knows the outcome of is not finished, it is unresolved")
+                .isFalse();
+        assertThat(PaymentStatus.AUTHORIZATION_UNKNOWN.next())
                 .containsExactlyInAnyOrder(PaymentStatus.AUTHORIZED, PaymentStatus.DECLINED);
+    }
+
+    @Test
+    void aDecidedPaymentCannotBecomeUndecided() {
+        for (PaymentStatus decided : EnumSet.of(
+                PaymentStatus.AUTHORIZED,
+                PaymentStatus.DECLINED,
+                PaymentStatus.CAPTURED,
+                PaymentStatus.VOIDED)) {
+
+            assertThat(decided.canMoveTo(PaymentStatus.AUTHORIZATION_UNKNOWN))
+                    .as("%s is an answer, and an answer does not become a question", decided)
+                    .isFalse();
+        }
     }
 
     @Test

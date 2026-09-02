@@ -42,7 +42,7 @@ class PaymentIntentTest extends MizanIntegrationTest {
                 .andExpect(jsonPath("$.status").value("CREATED"))
                 .andExpect(jsonPath("$.amount").value(125000))
                 .andExpect(jsonPath("$.currency").value("TRY"))
-                .andExpect(jsonPath("$.allowedNext.length()").value(2))
+                .andExpect(jsonPath("$.allowedNext.length()").value(3))
                 .andReturn()
                 .getResponse()
                 .getHeader("Location");

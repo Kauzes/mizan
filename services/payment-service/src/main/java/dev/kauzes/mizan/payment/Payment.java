@@ -61,6 +61,14 @@ public class Payment {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /**
+     * What stops two resolutions writing two answers. The sweep and a caller's own retry can
+     * reach one payment at the same moment, and only one of them may decide it.
+     */
+    @jakarta.persistence.Version
+    @Column(nullable = false)
+    private long version;
+
     /** The acquirer's own reference for the authorization, once there is one. */
     @Column(name = "acquirer_reference")
     private String acquirerReference;
@@ -115,6 +123,15 @@ public class Payment {
         history.add(new PaymentTransition(this, status, next, reason));
         this.status = next;
         this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+    }
+
+    /**
+     * Records that the acquirer was asked and did not answer.
+     *
+     * <p>Not a refusal, and not a failure of the payment: a failure of the answer to arrive.
+     */
+    public void outcomeUnknown(String because) {
+        moveTo(PaymentStatus.AUTHORIZATION_UNKNOWN, because);
     }
 
     /** Records an approval. The money is reserved; nothing has moved and nothing is posted. */

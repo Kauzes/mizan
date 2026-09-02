@@ -176,12 +176,12 @@ class AuthorizationTest extends MizanIntegrationTest {
                         .value("The acquirer did not answer in time. Whether the payment was "
                                 + "authorized is not yet known."));
 
-        // And the payment does not claim anything happened. It has not been declined, which
-        // would be a lie, and it is not authorized, which would be a guess. MIZ-44 is what
-        // turns this into an answer.
+        // And the payment says what is true: nobody knows. Not declined, which would be a
+        // lie, and not authorized, which would be a guess. MIZ-44's resolver is what turns
+        // this into an answer, by asking.
         assertThat(jdbc.queryForObject(
                         "select status from payment where id = ?", String.class, payment))
-                .isEqualTo("CREATED");
+                .isEqualTo("AUTHORIZATION_UNKNOWN");
     }
 
     @Test

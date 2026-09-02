@@ -414,6 +414,7 @@ components:
             type: string
             enum:
             - CREATED
+            - AUTHORIZATION_UNKNOWN
             - AUTHORIZED
             - DECLINED
             - CAPTURED
@@ -452,6 +453,7 @@ components:
           type: string
           enum:
           - CREATED
+          - AUTHORIZATION_UNKNOWN
           - AUTHORIZED
           - DECLINED
           - CAPTURED
@@ -542,6 +544,7 @@ components:
           description: Null for the first step
           enum:
           - CREATED
+          - AUTHORIZATION_UNKNOWN
           - AUTHORIZED
           - DECLINED
           - CAPTURED
@@ -552,6 +555,7 @@ components:
           type: string
           enum:
           - CREATED
+          - AUTHORIZATION_UNKNOWN
           - AUTHORIZED
           - DECLINED
           - CAPTURED
