@@ -35,7 +35,8 @@ public enum Role {
             Permission.ENTRY_READ,
             Permission.ENTRY_POST,
             Permission.PAYMENT_READ,
-            Permission.PAYMENT_WRITE)),
+            Permission.PAYMENT_WRITE,
+            Permission.NOTIFICATION_READ)),
 
     /**
      * Reviews payments the risk engine held back. Holds nothing administrative on purpose:
@@ -46,14 +47,16 @@ public enum Role {
             Permission.MERCHANT_READ,
             Permission.ACCOUNT_READ,
             Permission.ENTRY_READ,
-            Permission.PAYMENT_READ)),
+            Permission.PAYMENT_READ,
+            Permission.NOTIFICATION_READ)),
 
     /** Reads, and changes nothing. */
     VIEWER(EnumSet.of(
             Permission.MERCHANT_READ,
             Permission.ACCOUNT_READ,
             Permission.ENTRY_READ,
-            Permission.PAYMENT_READ));
+            Permission.PAYMENT_READ,
+            Permission.NOTIFICATION_READ));
 
     private final Set<Permission> permissions;
 

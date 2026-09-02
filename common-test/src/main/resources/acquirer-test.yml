@@ -1,4 +1,4 @@
-# Configuration for the acquirer that AuthorizationTest starts in this JVM.
+# Configuration for the acquirer, for any test that starts one in its own JVM.
 #
 # It has a name of its own because both services put an application.yml at the root of the
 # classpath, and on the test classpath only one of them can win. Rather than fight that with
@@ -7,6 +7,9 @@
 # The exclusions are the other half of the same problem: this JVM has the payment service's
 # JPA and Flyway on the classpath, and an acquirer that keeps everything in memory should not
 # be trying to open a database because of what happens to be next to it.
+#
+# It lives in common-test rather than beside one service's tests because more than one
+# service now starts this one in-process, and a copy per service is a copy that drifts.
 
 server:
   port: 0

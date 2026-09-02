@@ -41,5 +41,8 @@ public enum Permission {
     PAYMENT_READ,
 
     /** Start a payment, and move it along: authorize, capture, void. */
-    PAYMENT_WRITE
+    PAYMENT_WRITE,
+
+    /** Read what the platform has decided the merchant should be told, and about what. */
+    NOTIFICATION_READ
 }
