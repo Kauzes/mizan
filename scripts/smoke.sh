@@ -225,7 +225,27 @@ print(sum(1 for n in json.load(sys.stdin) if n["kind"] == "PAYMENT_CAPTURED"))
 pass "one capture, one notification, however many times the event was delivered"
 
 # ---------------------------------------------------------------------------------------
-step "11. The books balance"
+step "11. The money can be given back, and never more than was taken"
+
+# The step MIZ-26 could not have: it asked for a refund here and refunds did not exist. This
+# is what it was asking for.
+refund=$(authed 201 POST "$GATEWAY/api/v1/merchants/$MERCHANT/payments/$PAYMENT/refunds" \
+    "{\"amount\":25000,\"reference\":\"return-$RUN\",\"reason\":\"the customer sent one back\"}")
+refund_entry=$(printf '%s' "$refund" | field ledgerEntryId)
+pass "refunded 250.00 of 1250.00, recorded as entry $refund_entry"
+
+corrects=$(authed 200 GET "$GATEWAY/api/v1/merchants/$MERCHANT/entries/$refund_entry" | field corrects)
+[ "$corrects" = "$ENTRY" ] \
+    || fail "the refund entry names $corrects rather than the capture $ENTRY"
+pass "and it names the capture it reverses, so both stay readable and neither is edited"
+
+# The whole point of the arithmetic: what is left is what is left.
+authed 422 POST "$GATEWAY/api/v1/merchants/$MERCHANT/payments/$PAYMENT/refunds" \
+    "{\"amount\":100001,\"reference\":\"too-much-$RUN\"}" > /dev/null
+pass "and one more minor unit than remains is refused"
+
+# ---------------------------------------------------------------------------------------
+step "12. The books balance"
 
 integrity=$(call 200 GET "$LEDGER/actuator/ledgerintegrity")
 sound=$(printf '%s' "$integrity" | field sound)

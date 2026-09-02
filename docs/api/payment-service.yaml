@@ -267,6 +267,115 @@ paths:
       summary: Capture an authorized payment
       tags:
       - Payments
+  /api/v1/merchants/{merchantId}/payments/{paymentId}/refunds:
+    get:
+      description: |-
+        Most recent first.
+
+        Requires the PAYMENT_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
+      operationId: refunds
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: paymentId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RefundResponse"
+          description: The payment's refunds
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+      security:
+      - merchantJwt: []
+      summary: List a payment's refunds
+      tags:
+      - Payments
+    post:
+      description: |-
+        Gives money back through the acquirer and records the movement as an entry                     that names the capture it reverses. Nothing is deleted and the capture is                     not touched: a correction is a new movement naming the old one, so the                     history says what happened rather than what somebody wishes had.
+
+        A payment may be refunded more than once until the captured amount is                     exhausted. The total can never exceed what was captured, and that holds                     under concurrent requests, not only polite ones.
+
+        Only a captured payment can be refunded. Releasing a reservation that was                     never taken is a void, and the two have different consequences in the                     books.
+
+        The reference is the merchant's own name for the refund and is unique                     within the payment, so a caller who never received this response can send                     it again and cannot refund twice.
+
+        Requires the PAYMENT_WRITE permission, held by: OWNER, ADMIN. The caller must be acting for the merchant in the path.
+      operationId: refund
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: paymentId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Names this attempt, so that repeating it cannot repeat its effect.\
+          \ Sending the same key again returns what the first call produced, with\
+          \ the same status, so a retry after a lost response is safe. The same key\
+          \ with a different body is refused. A key belongs to one merchant and one\
+          \ operation."
+        in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          maxLength: 200
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefundRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefundResponse"
+          description: "The refund, as made"
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+        "409":
+          $ref: "#/components/responses/CONFLICT"
+          description: That key was already used for a different request
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
+        "504":
+          $ref: "#/components/responses/UPSTREAM_TIMEOUT"
+      security:
+      - merchantJwt: []
+      summary: "Refund a captured payment, in full or in part"
+      tags:
+      - Payments
   /api/v1/merchants/{merchantId}/payments/{paymentId}/void:
     post:
       description: |-
@@ -576,6 +685,15 @@ components:
           format: uuid
         reference:
           type: string
+        refundableAmount:
+          type: integer
+          format: int64
+          description: What could still be given back. Zero unless the payment is
+            captured and not wholly refunded.
+        refundedAmount:
+          type: integer
+          format: int64
+          description: What has been given back so far
         status:
           type: string
           enum:
@@ -659,6 +777,69 @@ components:
       - timestamp
       - title
       - type
+    RefundRequest:
+      type: object
+      description: Money to give back
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: "Minor units, at most what is left unrefunded"
+          example: 25000
+          minimum: 0
+        currency:
+          type: string
+          description: "The payment's currency. Optional, and checked if given: a\
+            \ refund in another currency is a mistake rather than a conversion."
+          example: TRY
+        reason:
+          type: string
+          example: the customer returned one of two items
+          maxLength: 500
+          minLength: 0
+        reference:
+          type: string
+          description: "The merchant's own name for this refund, unique within the\
+            \ payment. Sending it again returns the first refund rather than making\
+            \ a second."
+          example: order-1043-return
+          maxLength: 200
+          minLength: 0
+      required:
+      - reference
+    RefundResponse:
+      type: object
+      description: Money given back
+      properties:
+        acquirerReference:
+          type: string
+          description: The acquirer's reference for the money going back
+        amount:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        currency:
+          type: string
+        id:
+          type: string
+          format: uuid
+        ledgerEntryId:
+          type: string
+          format: uuid
+          description: The entry in the ledger that records it
+        paymentId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+        reference:
+          type: string
+        status:
+          type: string
+          enum:
+          - SUCCEEDED
     TransitionResponse:
       type: object
       description: One step a payment took

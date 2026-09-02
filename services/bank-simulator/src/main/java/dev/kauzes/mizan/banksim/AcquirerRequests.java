@@ -43,6 +43,36 @@ final class AcquirerRequests {
         }
     }
 
+    @Schema(description = "Money to give back")
+    record RefundRequest(
+            @Schema(
+                            description =
+                                    "The caller's own identifier for this refund. Sending it "
+                                            + "again returns the first result rather than "
+                                            + "refunding twice.",
+                            example = "payment-8f21c0d4-refund-1")
+                    @NotBlank
+                    @Size(max = 200)
+                    String reference,
+            @Schema(description = "Minor units, at most what is left unrefunded", example = "25000")
+                    @Positive
+                    long amount) {
+    }
+
+    @Schema(description = "Money given back")
+    record RefundResponse(
+            @Schema(example = "rfnd_2Bk9xQ1mLp4T") String acquirerReference,
+            @Schema(description = "The caller's own identifier, echoed") String reference,
+            @Schema(description = "The authorization this was refunded against")
+                    String authorizationReference,
+            @Schema(description = "What this refund gave back") long amount,
+            String currency,
+            @Schema(description = "What has been given back in total, including this")
+                    long refundedInTotal,
+            @Schema(description = "What is left that could still be refunded") long remaining,
+            Instant refundedAt) {
+    }
+
     @Schema(description = "What the acquirer decided")
     record AuthorizationResponse(
             @Schema(

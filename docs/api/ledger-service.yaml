@@ -567,6 +567,12 @@ components:
       type: object
       description: A movement that may cross between two sets of books
       properties:
+        corrects:
+          type: string
+          format: uuid
+          description: "The entry this one corrects, if it is a correction. A refund\
+            \ names the capture it gives back, so the two are readable together and\
+            \ neither is edited."
         description:
           type: string
           example: Card payment captured

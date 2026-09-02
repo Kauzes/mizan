@@ -89,12 +89,46 @@ public class LedgerClient {
                 "payment:" + payment.id() + ":capture",
                 "Card payment captured, " + payment.reference(),
                 Instant.now(),
+                null,
                 List.of(
                         // Positive is a debit. The platform holds more at the acquirer...
                         new Posting(CLEARING + currency, amount),
                         // ...and owes the merchant more. The two sum to zero, which is what
                         // the ledger checks before it writes anything.
                         new Posting(SETTLEMENT + currency, -amount)));
+
+        return post(entry);
+    }
+
+    /**
+     * Records money going back, as an entry that names the capture it reverses.
+     *
+     * <p>The opposite postings to a capture: the merchant is owed less and the platform holds
+     * less at the acquirer. Nothing is deleted and the capture is not touched — a correction
+     * is a new movement that names the old one, so both stay readable and the history says
+     * what actually happened rather than what somebody wishes had.
+     */
+    public UUID recordRefund(
+            UUID merchantId, Payment payment, long amount, String reference) {
+
+        String currency = payment.money().currency().getCurrencyCode().toLowerCase(Locale.ROOT);
+
+        Entry entry = new Entry(
+                merchantId,
+                // Derived from the payment and the merchant's own name for this refund, so it
+                // is the same on every attempt. A reference generated per attempt would let a
+                // retry after a lost answer write a second entry for one refund, which is the
+                // exact failure the ledger's idempotency exists to prevent.
+                "refund:" + payment.id() + ":" + reference,
+                "Card payment refunded, " + payment.reference() + " (" + reference + ")",
+                Instant.now(),
+                // The capture this gives back. The ledger checks it belongs to this merchant.
+                payment.ledgerEntryId(),
+                List.of(
+                        // The platform holds less at the acquirer...
+                        new Posting(CLEARING + currency, -amount),
+                        // ...and owes the merchant less. Exactly the capture, the other way up.
+                        new Posting(SETTLEMENT + currency, amount)));
 
         return post(entry);
     }
@@ -160,6 +194,8 @@ public class LedgerClient {
             String externalReference,
             String description,
             Instant occurredAt,
+            /** The entry this one corrects, for a refund. Null for anything that is not one. */
+            UUID corrects,
             List<Posting> postings) {
     }
 

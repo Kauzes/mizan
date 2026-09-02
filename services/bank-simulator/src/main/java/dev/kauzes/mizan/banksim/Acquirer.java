@@ -4,6 +4,8 @@ import dev.kauzes.mizan.common.error.NotFoundException;
 import dev.kauzes.mizan.common.error.UnprocessableException;
 import dev.kauzes.mizan.banksim.AcquirerRequests.AuthorizationResponse;
 import dev.kauzes.mizan.banksim.AcquirerRequests.AuthorizeRequest;
+import dev.kauzes.mizan.banksim.AcquirerRequests.RefundRequest;
+import dev.kauzes.mizan.banksim.AcquirerRequests.RefundResponse;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Base64;
@@ -92,6 +94,39 @@ public class Acquirer {
             throw new UnprocessableException(refused.getMessage());
         }
         return responseFor(authorization);
+    }
+
+    /**
+     * Gives money back, in full or in part, more than once.
+     *
+     * <p>Keyed on the caller's own reference, so a refund whose answer was lost can be sent
+     * again and gives the money back once. The acquirer does its own arithmetic on how much is
+     * left: a platform that gets it wrong is refused here rather than believed.
+     */
+    public RefundResponse refund(String acquirerReference, RefundRequest request) {
+        Authorization authorization = find(acquirerReference);
+        long refunded;
+        try {
+            refunded = authorization.refund(request.reference(), request.amount());
+        } catch (IllegalStateException refused) {
+            throw new UnprocessableException(refused.getMessage());
+        }
+
+        log.info(
+                "refunded {} of {} against {}",
+                refunded,
+                authorization.amount(),
+                acquirerReference);
+
+        return new RefundResponse(
+                "rfnd_" + reference(),
+                request.reference(),
+                acquirerReference,
+                refunded,
+                authorization.currency(),
+                authorization.refunded(),
+                authorization.remaining(),
+                java.time.Instant.now());
     }
 
     /**

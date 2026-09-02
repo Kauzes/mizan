@@ -2,6 +2,8 @@ package dev.kauzes.mizan.banksim;
 
 import dev.kauzes.mizan.banksim.AcquirerRequests.AuthorizationResponse;
 import dev.kauzes.mizan.banksim.AcquirerRequests.AuthorizeRequest;
+import dev.kauzes.mizan.banksim.AcquirerRequests.RefundRequest;
+import dev.kauzes.mizan.banksim.AcquirerRequests.RefundResponse;
 import dev.kauzes.mizan.common.error.NotFoundException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -80,6 +82,28 @@ public class AcquirerController {
             description = "It was refused, or has already been taken or released")
     public AuthorizationResponse voidAuthorization(@PathVariable String acquirerReference) {
         return acquirer.voidAuthorization(acquirerReference);
+    }
+
+    @PostMapping("/authorizations/{acquirerReference}/refund")
+    @Operation(
+            summary = "Give back money that was taken",
+            description =
+                    """
+                    In full or in part, and more than once, until nothing is left unrefunded.                     Only money that was actually taken can be given back: refunding something                     that was voided or refused is refused.
+
+                    Idempotent on the caller's own reference. Sending the same one again                     returns what the first call gave back rather than giving it back twice.""")
+    @ApiResponse(responseCode = "200", description = "What was given back")
+    @ApiResponse(responseCode = "400", ref = "#/components/responses/VALIDATION_FAILED")
+    @ApiResponse(responseCode = "404", ref = "#/components/responses/NOT_FOUND")
+    @ApiResponse(
+            responseCode = "422",
+            ref = "#/components/responses/UNPROCESSABLE",
+            description =
+                    "The money was never taken, or this would give back more than was taken")
+    public RefundResponse refund(
+            @PathVariable String acquirerReference, @Valid @RequestBody RefundRequest request) {
+
+        return acquirer.refund(acquirerReference, request);
     }
 
     @GetMapping("/authorizations")
