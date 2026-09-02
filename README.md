@@ -172,6 +172,16 @@ other protected route.
   payment keeps only the total given back, which is the number the limit is checked against.
 - The total refunded can never exceed what was captured, and the payment row is locked before
   that is decided. A limit is only a limit if reading it and writing it are one thing.
+- A refund writes down where it has got to before each step, in its own transaction, so a
+  process that dies mid flight leaves a record of what was attempted rather than nothing. It
+  is then finished from the step it reached, never restarted: the acquirer must not be asked
+  twice for money it has already returned.
+- "It said no" and "it said nothing" are different facts. Only an outright refusal releases the
+  amount a refund reserved; a silence keeps it, because the money may already be gone and
+  giving the headroom back is how the same money gets refunded twice.
+- A refund nobody can finish is retried a bounded number of times and then left for a person,
+  keeping its reservation. Retrying forever is how one broken refund becomes a service doing
+  nothing else.
 - Only a captured payment can be refunded, and only in the currency it was taken in. This
   platform has no exchange rate, and inventing one to be helpful is how a refund gives back a
   different amount of money than was taken.

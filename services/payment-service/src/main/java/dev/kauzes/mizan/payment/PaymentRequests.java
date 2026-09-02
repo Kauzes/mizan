@@ -118,7 +118,7 @@ final class PaymentRequests {
             long amount,
             String currency,
             String reference,
-            Refund.Status status,
+            RefundStatus status,
             String reason,
             @Schema(description = "The acquirer's reference for the money going back")
                     String acquirerReference,
