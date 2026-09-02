@@ -35,5 +35,11 @@ public enum Permission {
     ENTRY_READ,
 
     /** Write to the books. The one permission that moves money. */
-    ENTRY_POST
+    ENTRY_POST,
+
+    /** See a merchant's payments and what has happened to them. */
+    PAYMENT_READ,
+
+    /** Start a payment, and move it along: authorize, capture, void. */
+    PAYMENT_WRITE
 }

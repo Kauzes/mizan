@@ -33,7 +33,9 @@ public enum Role {
             Permission.ACCOUNT_READ,
             Permission.ACCOUNT_MANAGE,
             Permission.ENTRY_READ,
-            Permission.ENTRY_POST)),
+            Permission.ENTRY_POST,
+            Permission.PAYMENT_READ,
+            Permission.PAYMENT_WRITE)),
 
     /**
      * Reviews payments the risk engine held back. Holds nothing administrative on purpose:
@@ -41,11 +43,17 @@ public enum Role {
      * Reading the books is part of the job; the rest arrives with the review queue in MIZ-6.
      */
     ANALYST(EnumSet.of(
-            Permission.MERCHANT_READ, Permission.ACCOUNT_READ, Permission.ENTRY_READ)),
+            Permission.MERCHANT_READ,
+            Permission.ACCOUNT_READ,
+            Permission.ENTRY_READ,
+            Permission.PAYMENT_READ)),
 
     /** Reads, and changes nothing. */
     VIEWER(EnumSet.of(
-            Permission.MERCHANT_READ, Permission.ACCOUNT_READ, Permission.ENTRY_READ));
+            Permission.MERCHANT_READ,
+            Permission.ACCOUNT_READ,
+            Permission.ENTRY_READ,
+            Permission.PAYMENT_READ));
 
     private final Set<Permission> permissions;
 

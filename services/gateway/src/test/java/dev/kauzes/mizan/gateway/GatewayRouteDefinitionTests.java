@@ -37,7 +37,9 @@ class GatewayRouteDefinitionTests {
         assertThat(byId.get("payment-service").getPredicates())
                 .singleElement()
                 .satisfies(predicate -> assertThat(predicate.getArgs().values())
-                        .containsExactly("/api/v1/payments/**"));
+                        .containsExactly(
+                                "/api/v1/merchants/*/payments",
+                                "/api/v1/merchants/*/payments/**"));
     }
 
     @Test
@@ -77,6 +79,9 @@ class GatewayRouteDefinitionTests {
         // should win says so with an order rather than by being read first.
         assertThat(byId.get("ledger-service").getOrder())
                 .as("the more specific route has to be tried first")
+                .isLessThan(byId.get("identity-service").getOrder());
+        assertThat(byId.get("payment-service").getOrder())
+                .as("and the same for a merchant's payments")
                 .isLessThan(byId.get("identity-service").getOrder());
     }
 

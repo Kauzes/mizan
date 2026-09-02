@@ -109,6 +109,9 @@ other protected route.
   that sign in, because a replay and a theft cannot be told apart.
 - Every state change that produces an event writes both in one local transaction, through
   a transactional outbox.
+- A payment moves through a state machine written down in one place, only ever forwards, and
+  every step is recorded in a history the database refuses to let anybody rewrite. An illegal
+  transition is refused in terms of the two states rather than as a generic error.
 - Every write endpoint accepts an idempotency key and a replay returns the original result.
   In the ledger that key is the entry's external reference: required, unique per merchant,
   and answered on a retry with the first call's entry and the first call's status, so a

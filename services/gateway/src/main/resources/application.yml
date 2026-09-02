@@ -30,8 +30,9 @@ spring:
                 - Path=/api/v1/merchants,/api/v1/merchants/**,/api/v1/tokens,/api/v1/tokens/**
             - id: payment-service
               uri: http://payment-service:8083
+              order: -100
               predicates:
-                - Path=/api/v1/payments/**
+                - Path=/api/v1/merchants/*/payments,/api/v1/merchants/*/payments/**
             - id: risk-service
               uri: http://risk-service:8084
               predicates:
