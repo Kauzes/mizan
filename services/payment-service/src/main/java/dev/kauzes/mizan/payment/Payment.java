@@ -61,6 +61,18 @@ public class Payment {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** The acquirer's own reference for the authorization, once there is one. */
+    @Column(name = "acquirer_reference")
+    private String acquirerReference;
+
+    /** All that is kept of the card, and all a person needs to recognise the payment. */
+    @Column(name = "card_last_four")
+    private String cardLastFour;
+
+    /** What the acquirer said when it refused, so the merchant can be told why. */
+    @Column(name = "decline_reason")
+    private String declineReason;
+
     @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @OrderBy("at asc")
     private List<PaymentTransition> history = new ArrayList<>();
@@ -103,6 +115,33 @@ public class Payment {
         history.add(new PaymentTransition(this, status, next, reason));
         this.status = next;
         this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+    }
+
+    /** Records an approval. The money is reserved; nothing has moved and nothing is posted. */
+    public void authorized(String acquirerReference, String cardLastFour) {
+        this.acquirerReference = acquirerReference;
+        this.cardLastFour = cardLastFour;
+        moveTo(PaymentStatus.AUTHORIZED, null);
+    }
+
+    /** Records a refusal, keeping the acquirer's reason rather than inventing one. */
+    public void declined(String acquirerReference, String cardLastFour, String reason) {
+        this.acquirerReference = acquirerReference;
+        this.cardLastFour = cardLastFour;
+        this.declineReason = reason;
+        moveTo(PaymentStatus.DECLINED, reason);
+    }
+
+    public String acquirerReference() {
+        return acquirerReference;
+    }
+
+    public String cardLastFour() {
+        return cardLastFour;
+    }
+
+    public String declineReason() {
+        return declineReason;
     }
 
     public UUID id() {

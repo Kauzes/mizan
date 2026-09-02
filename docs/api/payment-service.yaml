@@ -139,6 +139,74 @@ paths:
       summary: Read a payment
       tags:
       - Payments
+  /api/v1/merchants/{merchantId}/payments/{paymentId}/authorize:
+    post:
+      description: |-
+        Asks the acquirer to reserve the money. An approval moves the payment to                     AUTHORIZED and a refusal to DECLINED, keeping the reason the acquirer                     gave.
+
+        Nothing is posted to the books. An authorization is a promise that the                     money is there rather than a movement of it, and the ledger records                     movements. Capturing is what moves it.
+
+        Only the last four digits of the card are kept.
+
+        Requires the PAYMENT_WRITE permission, held by: OWNER, ADMIN. The caller must be acting for the merchant in the path.
+      operationId: authorize
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: paymentId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Names this attempt, so that repeating it cannot repeat its effect.\
+          \ Sending the same key again returns what the first call produced, with\
+          \ the same status, so a retry after a lost response is safe. The same key\
+          \ with a different body is refused. A key belongs to one merchant and one\
+          \ operation."
+        in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          maxLength: 200
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthorizeRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResponse"
+          description: "The payment, authorized or declined"
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+        "409":
+          $ref: "#/components/responses/CONFLICT"
+          description: That key was already used for a different request
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
+        "504":
+          $ref: "#/components/responses/UPSTREAM_TIMEOUT"
+      security:
+      - merchantJwt: []
+      summary: Authorize a payment
+      tags:
+      - Payments
 components:
   headers:
     X-Correlation-Id:
@@ -274,6 +342,19 @@ components:
         X-Correlation-Id:
           $ref: "#/components/headers/X-Correlation-Id"
   schemas:
+    AuthorizeRequest:
+      type: object
+      description: The card to authorize against
+      properties:
+        card:
+          type: string
+          description: "The card. Only its last four digits are kept, and the acquirer\
+            \ decides what to do from them: see its own documentation for the catalogue."
+          example: "4000000000000000"
+          minLength: 1
+          pattern: "[0-9]{12,19}"
+      required:
+      - card
     CreatePaymentRequest:
       type: object
       description: A payment about to be attempted
@@ -323,6 +404,9 @@ components:
       type: object
       description: "A payment, and where it has got to"
       properties:
+        acquirerReference:
+          type: string
+          description: "The acquirer's reference, once there is an authorization"
         allowedNext:
           type: array
           description: Where this payment may go next. Empty when it is finished.
@@ -338,11 +422,17 @@ components:
         amount:
           type: integer
           format: int64
+        cardLastFour:
+          type: string
+          description: "The last four digits of the card, and all that is kept"
         createdAt:
           type: string
           format: date-time
         currency:
           type: string
+        declineReason:
+          type: string
+          description: "Why the acquirer refused, if it did"
         description:
           type: string
         history:

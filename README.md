@@ -109,6 +109,10 @@ other protected route.
   that sign in, because a replay and a theft cannot be told apart.
 - Every state change that produces an event writes both in one local transaction, through
   a transactional outbox.
+- An authorization posts nothing to the books. It is a promise that the money is there, not
+  a movement of it, and the ledger records movements. Capturing is what moves it.
+- A timeout is not a decline. The acquirer failing to answer is recorded as not knowing, and
+  never as a refusal.
 - A payment moves through a state machine written down in one place, only ever forwards, and
   every step is recorded in a history the database refuses to let anybody rewrite. An illegal
   transition is refused in terms of the two states rather than as a generic error.
