@@ -166,6 +166,15 @@ other protected route.
   credential only the platform's own services hold.
 - A void posts nothing. No money moved, and an entry recording a movement that did not happen
   is worse than no entry at all.
+- A refund is a new movement, not an undoing. The capture entry stays and the refund is its
+  own entry with the opposite postings, naming the one it reverses, so both stay readable.
+- A refund is not a state of the payment: a half refunded payment is still captured. The
+  payment keeps only the total given back, which is the number the limit is checked against.
+- The total refunded can never exceed what was captured, and the payment row is locked before
+  that is decided. A limit is only a limit if reading it and writing it are one thing.
+- Only a captured payment can be refunded, and only in the currency it was taken in. This
+  platform has no exchange rate, and inventing one to be helpful is how a refund gives back a
+  different amount of money than was taken.
 - A payment moves through a state machine written down in one place, only ever forwards, and
   every step is recorded in a history the database refuses to let anybody rewrite. An illegal
   transition is refused in terms of the two states rather than as a generic error.

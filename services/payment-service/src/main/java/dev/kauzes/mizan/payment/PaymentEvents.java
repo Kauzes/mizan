@@ -82,12 +82,32 @@ public class PaymentEvents {
             Instant at) {
     }
 
+    public record Refunded(
+            UUID paymentId,
+            UUID merchantId,
+            UUID refundId,
+            /** What this refund gave back, which is not necessarily the whole payment. */
+            long amount,
+            /** What has been given back in total, so a consumer need not add them up. */
+            long refundedInTotal,
+            /** What the payment was for in the first place. */
+            long capturedAmount,
+            String currency,
+            String reference,
+            String refundReference,
+            String acquirerReference,
+            UUID ledgerEntryId,
+            String reason,
+            Instant at) {
+    }
+
     /** The closed set. */
     public enum Type implements EventType {
         AUTHORIZED("payment.authorized"),
         DECLINED("payment.declined"),
         CAPTURED("payment.captured"),
-        VOIDED("payment.voided");
+        VOIDED("payment.voided"),
+        REFUNDED("payment.refunded");
 
         private final String type;
 
@@ -176,6 +196,30 @@ public class PaymentEvents {
             case CREATED, AUTHORIZATION_UNKNOWN -> {
             }
         }
+    }
+
+    /**
+     * Records that money has gone back.
+     *
+     * <p>Separate from {@link #record}, because a refund is not a state the payment moved to:
+     * a half refunded payment is still captured. Deriving this from the payment's status would
+     * mean the status having to describe two things at once.
+     */
+    public void recordRefund(Payment payment, Refund refund) {
+        write(Type.REFUNDED, payment, new Refunded(
+                payment.id(),
+                payment.merchantId(),
+                refund.id(),
+                refund.amount(),
+                payment.refundedAmount(),
+                payment.money().amount(),
+                refund.currency(),
+                payment.reference(),
+                refund.reference(),
+                refund.acquirerReference(),
+                refund.ledgerEntryId(),
+                refund.reason(),
+                refund.updatedAt()));
     }
 
     private void write(Type type, Payment payment, Object payload) {

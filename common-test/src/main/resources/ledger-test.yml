@@ -32,3 +32,12 @@ springdoc:
     enabled: false
   swagger-ui:
     enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # The integrity check, because a test that moves money should be able to ask whether
+        # the books still balance. This file replaces the service's own configuration rather
+        # than adding to it, so anything the service exposes has to be named here too.
+        include: health, ledgerintegrity

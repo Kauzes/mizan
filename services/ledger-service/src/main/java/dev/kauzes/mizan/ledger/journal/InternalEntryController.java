@@ -92,7 +92,7 @@ public class InternalEntryController {
                         request.externalReference(),
                         request.description(),
                         request.occurredAt(),
-                        null,
+                        request.corrects(),
                         postings),
                 JournalService.Books.THE_MERCHANTS_AND_THE_PLATFORMS);
 
@@ -139,6 +139,12 @@ public class InternalEntryController {
             @Schema(example = "Card payment captured") @NotBlank @Size(max = 500)
                     String description,
             @NotNull Instant occurredAt,
+            @Schema(
+                            description =
+                                    "The entry this one corrects, if it is a correction. A "
+                                            + "refund names the capture it gives back, so the "
+                                            + "two are readable together and neither is edited.")
+                    UUID corrects,
             @NotNull @Size(min = 2, message = "an entry moves money between at least two accounts")
                     List<@Valid InternalPosting> postings) {
     }

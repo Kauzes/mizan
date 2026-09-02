@@ -94,6 +94,41 @@ paths:
       summary: Take an authorized amount
       tags:
       - Acquirer
+  /acquirer/authorizations/{acquirerReference}/refund:
+    post:
+      description: |-
+        In full or in part, and more than once, until nothing is left unrefunded.                     Only money that was actually taken can be given back: refunding something                     that was voided or refused is refused.
+
+        Idempotent on the caller's own reference. Sending the same one again                     returns what the first call gave back rather than giving it back twice.
+      operationId: refund
+      parameters:
+      - in: path
+        name: acquirerReference
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefundRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefundResponse"
+          description: What was given back
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
+      summary: Give back money that was taken
+      tags:
+      - Acquirer
   /acquirer/authorizations/{acquirerReference}/void:
     post:
       operationId: voidAuthorization
@@ -406,6 +441,55 @@ components:
       - timestamp
       - title
       - type
+    RefundRequest:
+      type: object
+      description: Money to give back
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: "Minor units, at most what is left unrefunded"
+          example: 25000
+          minimum: 0
+        reference:
+          type: string
+          description: The caller's own identifier for this refund. Sending it again
+            returns the first result rather than refunding twice.
+          example: payment-8f21c0d4-refund-1
+          maxLength: 200
+          minLength: 0
+      required:
+      - reference
+    RefundResponse:
+      type: object
+      description: Money given back
+      properties:
+        acquirerReference:
+          type: string
+          example: rfnd_2Bk9xQ1mLp4T
+        amount:
+          type: integer
+          format: int64
+          description: What this refund gave back
+        authorizationReference:
+          type: string
+          description: The authorization this was refunded against
+        currency:
+          type: string
+        reference:
+          type: string
+          description: "The caller's own identifier, echoed"
+        refundedAt:
+          type: string
+          format: date-time
+        refundedInTotal:
+          type: integer
+          format: int64
+          description: "What has been given back in total, including this"
+        remaining:
+          type: integer
+          format: int64
+          description: What is left that could still be refunded
   securitySchemes:
     merchantApiKey:
       description: "The merchant's API key, naming which key signed the request. Public,\

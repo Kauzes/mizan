@@ -6,6 +6,8 @@ import dev.kauzes.mizan.common.web.RequiresPermission;
 import dev.kauzes.mizan.payment.PaymentRequests.AuthorizeRequest;
 import dev.kauzes.mizan.payment.PaymentRequests.CreatePaymentRequest;
 import dev.kauzes.mizan.payment.PaymentRequests.PaymentResponse;
+import dev.kauzes.mizan.payment.PaymentRequests.RefundRequest;
+import dev.kauzes.mizan.payment.PaymentRequests.RefundResponse;
 import dev.kauzes.mizan.payment.PaymentRequests.VoidRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -37,9 +39,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class PaymentController {
 
     private final PaymentService payments;
+    private final RefundService refunds;
 
-    public PaymentController(PaymentService payments) {
+    public PaymentController(PaymentService payments, RefundService refunds) {
         this.payments = payments;
+        this.refunds = refunds;
     }
 
     @GetMapping
@@ -176,6 +180,65 @@ public class PaymentController {
 
         return payments.release(
                 merchantId, paymentId, request == null ? null : request.reason());
+    }
+
+    @PostMapping("/{paymentId}/refunds")
+    @RequiresPermission(Permission.PAYMENT_WRITE)
+    @Idempotent
+    @Operation(
+            summary = "Refund a captured payment, in full or in part",
+            description =
+                    """
+                    Gives money back through the acquirer and records the movement as an entry                     that names the capture it reverses. Nothing is deleted and the capture is                     not touched: a correction is a new movement naming the old one, so the                     history says what happened rather than what somebody wishes had.
+
+                    A payment may be refunded more than once until the captured amount is                     exhausted. The total can never exceed what was captured, and that holds                     under concurrent requests, not only polite ones.
+
+                    Only a captured payment can be refunded. Releasing a reservation that was                     never taken is a void, and the two have different consequences in the                     books.
+
+                    The reference is the merchant's own name for the refund and is unique                     within the payment, so a caller who never received this response can send                     it again and cannot refund twice.""")
+    @ApiResponse(responseCode = "201", description = "The refund, as made")
+    @ApiResponse(responseCode = "400", ref = "#/components/responses/VALIDATION_FAILED")
+    @ApiResponse(
+            responseCode = "404",
+            ref = "#/components/responses/NOT_FOUND",
+            description = "This merchant has no payment with that id")
+    @ApiResponse(
+            responseCode = "422",
+            ref = "#/components/responses/UNPROCESSABLE",
+            description =
+                    "The payment was never captured, this would give back more than was taken, "
+                            + "the currency is not the payment's, or the books would not accept "
+                            + "the movement")
+    @ApiResponse(
+            responseCode = "504",
+            ref = "#/components/responses/UPSTREAM_TIMEOUT",
+            description =
+                    "The acquirer did not answer in time. Whether the money has gone back is "
+                            + "not yet known, and is not assumed")
+    public ResponseEntity<RefundResponse> refund(
+            @PathVariable UUID merchantId,
+            @PathVariable UUID paymentId,
+            @Valid @RequestBody RefundRequest request) {
+
+        RefundResponse refunded = refunds.refund(merchantId, paymentId, request);
+        return ResponseEntity.created(
+                        URI.create("/api/v1/merchants/" + merchantId + "/payments/" + paymentId
+                                + "/refunds/" + refunded.id()))
+                .body(refunded);
+    }
+
+    @GetMapping("/{paymentId}/refunds")
+    @RequiresPermission(Permission.PAYMENT_READ)
+    @Operation(summary = "List a payment's refunds", description = "Most recent first.")
+    @ApiResponse(responseCode = "200", description = "The payment's refunds")
+    @ApiResponse(
+            responseCode = "404",
+            ref = "#/components/responses/NOT_FOUND",
+            description = "This merchant has no payment with that id")
+    public List<RefundResponse> refunds(
+            @PathVariable UUID merchantId, @PathVariable UUID paymentId) {
+
+        return refunds.list(merchantId, paymentId);
     }
 
     @GetMapping("/{paymentId}")

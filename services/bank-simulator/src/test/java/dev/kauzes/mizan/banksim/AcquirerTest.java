@@ -130,6 +130,72 @@ class AcquirerTest {
     }
 
     @Test
+    void givesBackMoneyItTook_inPartAndThenTheRest() throws Exception {
+        String reference = referenceFrom(authorize(request(), GOOD_CARD));
+        mockMvc.perform(post("/acquirer/authorizations/" + reference + "/capture"))
+                .andExpect(status().isOk());
+
+        refund(reference, "r1", 25000)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.amount").value(25000))
+                .andExpect(jsonPath("$.refundedInTotal").value(25000))
+                .andExpect(jsonPath("$.remaining").value(100000));
+
+        refund(reference, "r2", 100000)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.refundedInTotal").value(125000))
+                .andExpect(jsonPath("$.remaining").value(0));
+    }
+
+    @Test
+    void willNotGiveBackMoreThanItTook() throws Exception {
+        String reference = referenceFrom(authorize(request(), GOOD_CARD));
+        mockMvc.perform(post("/acquirer/authorizations/" + reference + "/capture"))
+                .andExpect(status().isOk());
+        refund(reference, "r1", 100000).andExpect(status().isOk());
+
+        // Its own arithmetic, not something it trusts a caller to have got right.
+        refund(reference, "r2", 25001)
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.detail")
+                        .value("cannot refund 25001 of 125000 when 100000 has already been "
+                                + "refunded"));
+    }
+
+    @Test
+    void givingBackTwiceWithOneReferenceGivesBackOnce() throws Exception {
+        String reference = referenceFrom(authorize(request(), GOOD_CARD));
+        mockMvc.perform(post("/acquirer/authorizations/" + reference + "/capture"))
+                .andExpect(status().isOk());
+
+        refund(reference, "same-reference", 25000).andExpect(status().isOk());
+        refund(reference, "same-reference", 25000)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.refundedInTotal").value(25000));
+    }
+
+    @Test
+    void willNotGiveBackMoneyItNeverTook() throws Exception {
+        String held = referenceFrom(authorize(request(), GOOD_CARD));
+
+        // Authorized and not captured. Releasing a reservation is a void, and calling it a
+        // refund would mean the books recording a movement that never happened.
+        refund(held, "r1", 1000)
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.detail")
+                        .value("an authorization that is HELD cannot be refunded; only money "
+                                + "that was taken can be given back"));
+    }
+
+    private ResultActions refund(String reference, String ourReference, long amount)
+            throws Exception {
+
+        return mockMvc.perform(post("/acquirer/authorizations/" + reference + "/refund")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reference\":\"" + ourReference + "\",\"amount\":" + amount + "}"));
+    }
+
+    @Test
     void refusesToContradictItself() throws Exception {
         String voided = referenceFrom(authorize(request(), GOOD_CARD));
         mockMvc.perform(post("/acquirer/authorizations/" + voided + "/void"))

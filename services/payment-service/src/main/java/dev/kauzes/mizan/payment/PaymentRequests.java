@@ -84,6 +84,63 @@ final class PaymentRequests {
                     String reason) {
     }
 
+    @Schema(description = "Money to give back")
+    record RefundRequest(
+            @Schema(description = "Minor units, at most what is left unrefunded", example = "25000")
+                    @jakarta.validation.constraints.Positive(
+                            message = "a refund has to be for more than nothing")
+                    long amount,
+            @Schema(
+                            description =
+                                    "The payment's currency. Optional, and checked if given: a "
+                                            + "refund in another currency is a mistake rather "
+                                            + "than a conversion.",
+                            example = "TRY")
+                    String currency,
+            @Schema(
+                            description =
+                                    "The merchant's own name for this refund, unique within the "
+                                            + "payment. Sending it again returns the first "
+                                            + "refund rather than making a second.",
+                            example = "order-1043-return")
+                    @NotBlank
+                    @Size(max = 200)
+                    String reference,
+            @Schema(example = "the customer returned one of two items")
+                    @Size(max = 500)
+                    String reason) {
+    }
+
+    @Schema(description = "Money given back")
+    record RefundResponse(
+            UUID id,
+            UUID paymentId,
+            long amount,
+            String currency,
+            String reference,
+            Refund.Status status,
+            String reason,
+            @Schema(description = "The acquirer's reference for the money going back")
+                    String acquirerReference,
+            @Schema(description = "The entry in the ledger that records it")
+                    UUID ledgerEntryId,
+            Instant createdAt) {
+
+        static RefundResponse of(Refund refund) {
+            return new RefundResponse(
+                    refund.id(),
+                    refund.paymentId(),
+                    refund.amount(),
+                    refund.currency(),
+                    refund.reference(),
+                    refund.status(),
+                    refund.reason(),
+                    refund.acquirerReference(),
+                    refund.ledgerEntryId(),
+                    refund.createdAt());
+        }
+    }
+
     @Schema(description = "A payment, and where it has got to")
     record PaymentResponse(
             UUID id,
@@ -110,6 +167,12 @@ final class PaymentRequests {
                                             + "on one that was voided, because a released "
                                             + "reservation moved nothing.")
                     UUID ledgerEntryId,
+            @Schema(description = "What has been given back so far") long refundedAmount,
+            @Schema(
+                            description =
+                                    "What could still be given back. Zero unless the payment is "
+                                            + "captured and not wholly refunded.")
+                    long refundableAmount,
             Instant createdAt,
             Instant updatedAt,
             @Schema(description = "Oldest first") List<TransitionResponse> history) {
@@ -128,6 +191,8 @@ final class PaymentRequests {
                     payment.cardLastFour(),
                     payment.declineReason(),
                     payment.ledgerEntryId(),
+                    payment.refundedAmount(),
+                    payment.refundableAmount(),
                     payment.createdAt(),
                     payment.updatedAt(),
                     payment.history().stream().map(TransitionResponse::of).toList());

@@ -91,6 +91,16 @@ public class Payment {
     @Column(name = "ledger_entry_id")
     private UUID ledgerEntryId;
 
+    /**
+     * What has been given back so far.
+     *
+     * <p>Kept here rather than summed from the refunds on every request, because it is the
+     * number the limit is checked against and it has to be read under a lock. Summing would
+     * mean locking every refund row instead of one payment row.
+     */
+    @Column(name = "refunded_amount", nullable = false)
+    private long refundedAmount;
+
     @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @OrderBy("at asc")
     private List<PaymentTransition> history = new ArrayList<>();
@@ -185,6 +195,46 @@ public class Payment {
 
     public UUID ledgerEntryId() {
         return ledgerEntryId;
+    }
+
+    public long refundedAmount() {
+        return refundedAmount;
+    }
+
+    /** What could still be given back. Zero once the whole capture has been refunded. */
+    public long refundableAmount() {
+        return status == PaymentStatus.CAPTURED ? amount - refundedAmount : 0;
+    }
+
+    /**
+     * Records that some of the money has gone back.
+     *
+     * <p>Refuses to give back more than was taken, and refuses to give back anything at all
+     * from a payment whose money never moved. Both are checked again by the database, which
+     * is what holds if this is ever wrong.
+     */
+    public void refunded(long amount) {
+        if (status != PaymentStatus.CAPTURED) {
+            throw new UnprocessableException(
+                    "A payment that is "
+                            + status
+                            + " cannot be refunded. Only money that was captured can be given "
+                            + "back; releasing a reservation is a void.");
+        }
+        if (amount <= 0) {
+            throw new UnprocessableException("A refund has to be for more than nothing.");
+        }
+        if (amount > refundableAmount()) {
+            throw new UnprocessableException(
+                    "Only "
+                            + refundableAmount()
+                            + " of this payment is left to refund, and "
+                            + amount
+                            + " was asked for.");
+        }
+
+        this.refundedAmount += amount;
+        this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 
     public String acquirerReference() {

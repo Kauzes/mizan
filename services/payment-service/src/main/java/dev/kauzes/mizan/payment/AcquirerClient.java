@@ -132,6 +132,88 @@ public class AcquirerClient {
     }
 
     /**
+     * Asks the acquirer to give money back.
+     *
+     * <p>Keyed on the refund's own reference, so a call whose answer was lost can be repeated
+     * and gives the money back once. The acquirer does its own arithmetic on what is left,
+     * which means this platform's limit and the acquirer's have to agree — and when they do
+     * not, the acquirer wins, because it is the one holding the money.
+     */
+    public AcquirerRefund refund(String acquirerReference, String reference, long amount) {
+        try {
+            AcquirerRefundResponse answer = http.post()
+                    .uri("/acquirer/authorizations/{reference}/refund", acquirerReference)
+                    .body(new AcquirerRefundRequest(reference, amount))
+                    .retrieve()
+                    .body(AcquirerRefundResponse.class);
+
+            if (answer == null) {
+                throw new MizanException(
+                        ErrorCode.UPSTREAM_UNAVAILABLE, "The acquirer said nothing.");
+            }
+            return new AcquirerRefund(
+                    answer.acquirerReference(), answer.amount(), answer.remaining());
+
+        } catch (ResourceAccessException noAnswer) {
+            // Whether the money went back is not known. Deciding it did not would let the
+            // merchant refund it a second time, which is the expensive direction to be wrong
+            // in. MIZ-52 is what resolves this by asking.
+            log.warn("no answer from the acquirer refunding {}", acquirerReference, noAnswer);
+            throw new MizanException(
+                    ErrorCode.UPSTREAM_TIMEOUT,
+                    "The acquirer did not answer in time. Whether the money has gone back is "
+                            + "not yet known.",
+                    noAnswer);
+
+        } catch (org.springframework.web.client.HttpClientErrorException refused) {
+            log.warn(
+                    "the acquirer refused to refund {}: {}",
+                    acquirerReference,
+                    refused.getResponseBodyAsString());
+            throw new MizanException(
+                    ErrorCode.UNPROCESSABLE,
+                    "The acquirer will not refund this payment: " + detailOf(refused),
+                    refused);
+
+        } catch (MizanException already) {
+            throw already;
+        } catch (Exception unreachable) {
+            log.error("could not reach the acquirer to refund {}", acquirerReference, unreachable);
+            throw new MizanException(
+                    ErrorCode.UPSTREAM_UNAVAILABLE,
+                    "The acquirer could not be reached.",
+                    unreachable);
+        }
+    }
+
+    /** The acquirer's own sentence, if it sent one, rather than this service's guess at it. */
+    private static String detailOf(org.springframework.web.client.HttpClientErrorException refused) {
+        org.springframework.http.ProblemDetail problem =
+                refused.getResponseBodyAs(org.springframework.http.ProblemDetail.class);
+        return problem == null || problem.getDetail() == null
+                ? "it answered " + refused.getStatusCode().value()
+                : problem.getDetail();
+    }
+
+    /** What the acquirer gave back. */
+    public record AcquirerRefund(String acquirerReference, long amount, long remaining) {
+    }
+
+    private record AcquirerRefundRequest(String reference, long amount) {
+    }
+
+    private record AcquirerRefundResponse(
+            String acquirerReference,
+            String reference,
+            String authorizationReference,
+            long amount,
+            String currency,
+            long refundedInTotal,
+            long remaining,
+            Instant refundedAt) {
+    }
+
+    /**
      * Asks the acquirer what it did with a request, if anything.
      *
      * <p>Keyed on the payment's id, because that is what the request carried and what a
