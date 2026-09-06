@@ -194,6 +194,11 @@ services:
       # key secrets: a compromise of one should not be a compromise of the other. A deployment
       # sets this from wherever it keeps secrets.
       MIZAN_WEBHOOK_ENCRYPTION_KEY: bWl6YW4td2ViaG9vay1zaWduaW5nLWxvY2FsLWtleSE=
+      # Off, and it stays off. Turning it on lets a merchant register an endpoint inside this
+      # network, which makes the platform a way to issue requests on a stranger's behalf. It
+      # exists so that a demonstration on a laptop can point a webhook at a server running on
+      # that laptop, and for nothing else.
+      MIZAN_WEBHOOK_ALLOW_ANY: ${MIZAN_WEBHOOK_ALLOW_ANY:-false}
       MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
       MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
     depends_on:

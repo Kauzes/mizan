@@ -23,7 +23,7 @@ paths:
         Most recent first. Scoped to the merchant in the path.
 
         Requires the NOTIFICATION_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
-      operationId: list_1
+      operationId: list_2
       parameters:
       - in: path
         name: merchantId
@@ -261,6 +261,144 @@ paths:
       security:
       - merchantJwt: []
       summary: "Change what an endpoint receives, or stop it receiving"
+      tags:
+      - Webhooks
+  /api/v1/merchants/{merchantId}/webhook-endpoints/{endpointId}/deliveries:
+    get:
+      description: |-
+        Most recent first, with the status, the last response code and when it was delivered.
+
+        Requires the WEBHOOK_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
+      operationId: list_1
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: endpointId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: limit
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: {}
+          description: The deliveries
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+      security:
+      - merchantJwt: []
+      summary: What has been sent to this endpoint
+      tags:
+      - Webhooks
+  /api/v1/merchants/{merchantId}/webhook-endpoints/{endpointId}/deliveries/{deliveryId}/attempts:
+    get:
+      description: |-
+        Each with its response code, how long it took, and what went wrong. Keeping only the last attempt would answer "is it working now", which is the one question a merchant can already answer themselves.
+
+        Requires the WEBHOOK_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
+      operationId: attempts
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: endpointId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: deliveryId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: {}
+          description: "The attempts, oldest first"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+      security:
+      - merchantJwt: []
+      summary: Every attempt at one delivery
+      tags:
+      - Webhooks
+  /api/v1/merchants/{merchantId}/webhook-endpoints/{endpointId}/deliveries/{deliveryId}/redeliver:
+    post:
+      description: |-
+        Queues the delivery again from attempt zero, with the same body and the same delivery id it had the first time. A merchant who received it already will recognise the repeat.
+
+        Requires the WEBHOOK_MANAGE permission, held by: OWNER, ADMIN. The caller must be acting for the merchant in the path.
+      operationId: redeliver
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: endpointId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: deliveryId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: It is queued
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+      security:
+      - merchantJwt: []
+      summary: Send one again
       tags:
       - Webhooks
   /api/v1/merchants/{merchantId}/webhook-endpoints/{endpointId}/secret:

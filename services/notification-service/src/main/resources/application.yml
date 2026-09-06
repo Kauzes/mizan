@@ -52,6 +52,18 @@ mizan:
     # API key secrets: a compromise of one should not be a compromise of the other. Blank
     # generates one per process, which is only ever right on a laptop and says so in the log.
     encryption-key: ${MIZAN_WEBHOOK_ENCRYPTION_KEY:}
+    # How often deliveries that are due are looked for.
+    deliver-every: ${MIZAN_WEBHOOK_DELIVER_EVERY:2s}
+    # How many are claimed per pass, and how long any one call may take. The timeout is what
+    # bounds how long a merchant whose server hangs can occupy a worker, and is therefore what
+    # makes "a slow endpoint delays nobody else" true rather than hoped for.
+    batch-size: ${MIZAN_WEBHOOK_BATCH_SIZE:32}
+    timeout: ${MIZAN_WEBHOOK_TIMEOUT:10s}
+    # Attempts before a delivery is given up on. Eight, with the backoff below, spans about
+    # five hours -- long enough for an endpoint that is down for an hour to receive everything.
+    attempts: ${MIZAN_WEBHOOK_ATTEMPTS:8}
+    # For tests and for a demonstration on a laptop. See WebhookDestinations.
+    allow-any-destination: ${MIZAN_WEBHOOK_ALLOW_ANY:false}
   events:
     # How many times a message is retried in the listener before it is set aside. Bounded,
     # because the partition waits during these: retrying forever is how one unhandleable event

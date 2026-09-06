@@ -8,6 +8,9 @@ dependencies {
     implementation(libs.springdoc.webmvc.ui)
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-flyway")
+    // Delivering to a merchant's own server is the first time this service calls out to
+    // somebody else's. Boot 4 keeps the blocking client's autoconfiguration in its own module.
+    implementation("org.springframework.boot:spring-boot-restclient")
     // The first service on this platform that listens rather than answers. Both are needed:
     // spring-kafka is the library and spring-boot-kafka is the autoconfiguration that turns
     // it into beans, which Boot 4 keeps apart.

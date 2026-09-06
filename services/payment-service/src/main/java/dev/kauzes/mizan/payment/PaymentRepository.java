@@ -39,6 +39,6 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     List<Payment> findByStatusAndUpdatedAtBeforeAndNeedsAttentionSinceIsNull(
             PaymentStatus status, Instant before);
 
-    /** What needs a person, oldest first, because the oldest has been wrong for longest. */
-    List<Payment> findByNeedsAttentionSinceIsNotNullOrderByNeedsAttentionSinceAsc();
+    /** What needs a person and nobody has dealt with, oldest first. */
+    List<Payment> findByNeedsAttentionSinceIsNotNullAndAttentionHandledAtIsNullOrderByNeedsAttentionSinceAsc();
 }
