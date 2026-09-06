@@ -16,7 +16,7 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 | Milestone | Scope | State |
 |---|---|---|
 | M1 | Foundation, identity, ledger core, payment happy path | complete |
-| M2 | Kafka outbox, risk scoring, refunds and saga compensation | not started |
+| M2 | Kafka outbox, risk scoring, refunds and saga compensation | in progress |
 | M3 | Merchant webhooks, React merchant console | not started |
 | M4 | Settlement, reconciliation, observability | not started |
 | M5 | Kubernetes delivery, load and chaos testing | not started |
@@ -182,6 +182,18 @@ other protected route.
 - A refund nobody can finish is retried a bounded number of times and then left for a person,
   keeping its reservation. Retrying forever is how one broken refund becomes a service doing
   nothing else.
+- Giving up is not an answer and is not a state change. A payment the platform has stopped
+  trying to resolve is exactly as unknown as it was; what changed is that the platform stopped
+  working on it alone, which is a fact about the platform rather than about the money.
+- Everything that needs a person is in one place, at `/actuator/stuck`, whatever kind of stuck
+  it is, showing what the platform believes and what the acquirer believes side by side —
+  asked live, because the reason somebody is looking is that our own record is not to be
+  trusted.
+- An operator can retry one or record that they have dealt with it, and nothing more. Moving
+  money on an operator's say-so would be a way to write the books by hand, which is what a
+  double entry ledger exists to prevent.
+- A decision records who, when, why, and what it changed, and cannot be rewritten or deleted.
+  Evidence the next decision can overwrite is not evidence.
 - Only a captured payment can be refunded, and only in the currency it was taken in. This
   platform has no exchange rate, and inventing one to be helpful is how a refund gives back a
   different amount of money than was taken.

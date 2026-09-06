@@ -28,6 +28,6 @@ public interface RefundRepository extends JpaRepository<Refund, UUID> {
             @org.springframework.data.repository.query.Param("before") java.time.Instant before,
             @org.springframework.data.repository.query.Param("now") java.time.Instant now);
 
-    /** What needs a person: refunds nobody could finish. */
-    List<Refund> findByStatusOrderByUpdatedAtDesc(RefundStatus status);
+    /** What needs a person: refunds nobody could finish, that nobody has dealt with. */
+    List<Refund> findByStatusAndAttentionHandledAtIsNullOrderByUpdatedAtDesc(RefundStatus status);
 }
