@@ -14,6 +14,8 @@ servers:
 tags:
 - description: "What a merchant is to be told, and about what"
   name: Notifications
+- description: "Where a merchant is told what happened, without polling"
+  name: Webhooks
 paths:
   /api/v1/merchants/{merchantId}/notifications:
     get:
@@ -21,7 +23,7 @@ paths:
         Most recent first. Scoped to the merchant in the path.
 
         Requires the NOTIFICATION_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
-      operationId: list
+      operationId: list_1
       parameters:
       - in: path
         name: merchantId
@@ -47,6 +49,260 @@ paths:
       summary: List a merchant's notifications
       tags:
       - Notifications
+  /api/v1/merchants/{merchantId}/webhook-endpoints:
+    get:
+      description: |-
+        Most recent first.
+
+        Requires the WEBHOOK_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
+      operationId: list
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EndpointResponse"
+          description: The merchant's endpoints
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+      security:
+      - merchantJwt: []
+      summary: List a merchant's endpoints
+      tags:
+      - Webhooks
+    post:
+      description: |-
+        Returns the signing secret, once. It is stored encrypted and will not be shown again; if it is lost, rotate it.
+
+        ## Verifying a delivery
+
+        Every delivery carries three headers:
+
+        - `X-Mizan-Signature` — `sha256=` followed by the lowercase hex HMAC
+        - `X-Mizan-Timestamp` — when it was signed, as Unix seconds
+        - `X-Mizan-Delivery` — the delivery's id, the same on every retry
+
+        Compute `HMAC-SHA256(secret, timestamp + "." + body)` over the raw request body, exactly as received and before any parsing, and compare it to the signature with a constant-time comparison. Reject anything whose timestamp is more than five minutes from your clock, or a captured delivery can be replayed at you forever.
+
+        The timestamp is inside the signed string on purpose: signing only the body would let somebody who recorded one delivery send it again unchanged, and the signature would still be valid.
+
+        ## What is refused
+
+        The URL must be https, and must resolve to an address on the public internet. An endpoint pointing inside this platform's own network would make this a way to have Mizan send requests to Mizan on your behalf.
+
+        Requires the WEBHOOK_MANAGE permission, held by: OWNER, ADMIN. The caller must be acting for the merchant in the path.
+      operationId: register
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Names this attempt, so that repeating it cannot repeat its effect.\
+          \ Sending the same key again returns what the first call produced, with\
+          \ the same status, so a retry after a lost response is safe. The same key\
+          \ with a different body is refused. A key belongs to one merchant and one\
+          \ operation."
+        in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          maxLength: 200
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterEndpointRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecretResponse"
+          description: "The endpoint, and its secret, once"
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "409":
+          $ref: "#/components/responses/CONFLICT"
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
+      security:
+      - merchantJwt: []
+      summary: Register an endpoint
+      tags:
+      - Webhooks
+  /api/v1/merchants/{merchantId}/webhook-endpoints/{endpointId}:
+    delete:
+      description: |-
+        Its delivery history goes with it. To stop deliveries and keep the history, disable it instead.
+
+        Requires the WEBHOOK_MANAGE permission, held by: OWNER, ADMIN. The caller must be acting for the merchant in the path.
+      operationId: delete
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: endpointId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: It is gone
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+      security:
+      - merchantJwt: []
+      summary: Remove an endpoint
+      tags:
+      - Webhooks
+    get:
+      description: "Requires the WEBHOOK_READ permission, held by: OWNER, ADMIN, ANALYST,\
+        \ VIEWER. The caller must be acting for the merchant in the path."
+      operationId: find
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: endpointId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EndpointResponse"
+          description: The endpoint
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+      security:
+      - merchantJwt: []
+      summary: Read an endpoint
+      tags:
+      - Webhooks
+    patch:
+      description: |-
+        Disabling keeps the endpoint and its delivery history. Deleting does not.
+
+        Requires the WEBHOOK_MANAGE permission, held by: OWNER, ADMIN. The caller must be acting for the merchant in the path.
+      operationId: update
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: endpointId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEndpointRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EndpointResponse"
+          description: The endpoint as it now stands
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
+      security:
+      - merchantJwt: []
+      summary: "Change what an endpoint receives, or stop it receiving"
+      tags:
+      - Webhooks
+  /api/v1/merchants/{merchantId}/webhook-endpoints/{endpointId}/secret:
+    post:
+      description: |-
+        Returns the new secret, once. Rotation takes effect immediately: every delivery after this call is signed with the new secret, and a receiver still checking the old one will reject them.
+
+        That is deliberate. Accepting both for a while would be a rotation that never finishes and an old secret that is never actually revoked. Deploy the new secret first, or disable the endpoint while you do.
+
+        Requires the WEBHOOK_MANAGE permission, held by: OWNER, ADMIN. The caller must be acting for the merchant in the path.
+      operationId: rotate
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: endpointId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecretResponse"
+          description: "The endpoint, and its new secret, once"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+      security:
+      - merchantJwt: []
+      summary: Rotate the signing secret
+      tags:
+      - Webhooks
 components:
   headers:
     X-Correlation-Id:
@@ -182,6 +438,38 @@ components:
         X-Correlation-Id:
           $ref: "#/components/headers/X-Correlation-Id"
   schemas:
+    EndpointResponse:
+      type: object
+      description: A registered endpoint
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        description:
+          type: string
+        enabled:
+          type: boolean
+        eventTypes:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        secretRotatedAt:
+          type: string
+          format: date-time
+          description: When the secret was last replaced. The secret itself is never
+            returned after it is issued.
+        updatedAt:
+          type: string
+          format: date-time
+        url:
+          type: string
     FieldViolation:
       description: "One rejected field, in the shape a form can render beside the\
         \ input."
@@ -285,6 +573,61 @@ components:
       - timestamp
       - title
       - type
+    RegisterEndpointRequest:
+      type: object
+      description: "Somewhere to be told, and what about"
+      properties:
+        description:
+          type: string
+          example: Production order service
+          maxLength: 200
+          minLength: 0
+        eventTypes:
+          type: array
+          description: Which events this endpoint should receive
+          example:
+          - payment.captured
+          - payment.refunded
+          items:
+            type: string
+          minItems: 1
+          uniqueItems: true
+        url:
+          type: string
+          description: "Must be https, and must resolve to an address on the public\
+            \ internet. An endpoint inside this platform's own network is refused."
+          example: https://api.example.com/webhooks/mizan
+          maxLength: 2000
+          minLength: 0
+      required:
+      - eventTypes
+      - url
+    SecretResponse:
+      type: object
+      description: "A registered endpoint and its signing secret, shown once"
+      properties:
+        endpoint:
+          $ref: "#/components/schemas/EndpointResponse"
+          description: The endpoint
+        secret:
+          type: string
+          description: "Keep this. It is shown now and never again, and it is what\
+            \ you verify a delivery's signature with."
+          example: whsec_Zm9vYmFyYmF6cXV1eA
+    UpdateEndpointRequest:
+      type: object
+      description: What to change about an endpoint
+      properties:
+        enabled:
+          type: boolean
+          description: Stop or resume deliveries. Disabling keeps the endpoint and
+            its history; deleting does not.
+        eventTypes:
+          type: array
+          description: "Replaces what it subscribes to, if given"
+          items:
+            type: string
+          uniqueItems: true
   securitySchemes:
     merchantApiKey:
       description: "The merchant's API key, naming which key signed the request. Public,\

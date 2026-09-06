@@ -1,5 +1,6 @@
 package dev.kauzes.mizan.identity.apikey;
 
+import dev.kauzes.mizan.common.crypto.SecretCipher;
 import dev.kauzes.mizan.common.error.NotFoundException;
 import dev.kauzes.mizan.common.error.UnauthorizedException;
 import dev.kauzes.mizan.common.error.UnprocessableException;

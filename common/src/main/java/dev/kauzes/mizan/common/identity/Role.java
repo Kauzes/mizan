@@ -36,7 +36,9 @@ public enum Role {
             Permission.ENTRY_POST,
             Permission.PAYMENT_READ,
             Permission.PAYMENT_WRITE,
-            Permission.NOTIFICATION_READ)),
+            Permission.NOTIFICATION_READ,
+            Permission.WEBHOOK_READ,
+            Permission.WEBHOOK_MANAGE)),
 
     /**
      * Reviews payments the risk engine held back. Holds nothing administrative on purpose:
@@ -48,7 +50,8 @@ public enum Role {
             Permission.ACCOUNT_READ,
             Permission.ENTRY_READ,
             Permission.PAYMENT_READ,
-            Permission.NOTIFICATION_READ)),
+            Permission.NOTIFICATION_READ,
+            Permission.WEBHOOK_READ)),
 
     /** Reads, and changes nothing. */
     VIEWER(EnumSet.of(
@@ -56,7 +59,8 @@ public enum Role {
             Permission.ACCOUNT_READ,
             Permission.ENTRY_READ,
             Permission.PAYMENT_READ,
-            Permission.NOTIFICATION_READ));
+            Permission.NOTIFICATION_READ,
+            Permission.WEBHOOK_READ));
 
     private final Set<Permission> permissions;
 

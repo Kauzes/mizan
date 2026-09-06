@@ -44,5 +44,17 @@ public enum Permission {
     PAYMENT_WRITE,
 
     /** Read what the platform has decided the merchant should be told, and about what. */
-    NOTIFICATION_READ
+    NOTIFICATION_READ,
+
+    /** See where a merchant has asked to be told, and how deliveries have gone. */
+    WEBHOOK_READ,
+
+    /**
+     * Register an endpoint, rotate its secret, disable it.
+     *
+     * <p>Separate from reading, because rotating a secret breaks every receiver still holding
+     * the old one, and that is not something a person who only needed to look should be able
+     * to do by clicking the wrong thing.
+     */
+    WEBHOOK_MANAGE
 }

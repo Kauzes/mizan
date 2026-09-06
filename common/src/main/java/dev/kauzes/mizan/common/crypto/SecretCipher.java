@@ -1,4 +1,4 @@
-package dev.kauzes.mizan.identity.apikey;
+package dev.kauzes.mizan.common.crypto;
 
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
@@ -10,11 +10,9 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
 /**
- * Encrypts an API key secret for storage, and decrypts it to verify a signature.
+ * Encrypts a shared secret for storage, and decrypts it to use.
  *
  * <p>Encryption rather than hashing, because HMAC is symmetric: the side checking a signature
  * has to hold the same secret that made it, and a hash holds nothing. What this buys is that
@@ -25,13 +23,17 @@ import org.springframework.stereotype.Component;
  * authenticates as well as encrypts, so a row edited in the database fails to decrypt rather
  * than decrypting to something else.
  *
- * <p>Each value is bound to the key it belongs to, by authenticating the key id alongside it.
- * Without that, every ciphertext is interchangeable: somebody able to write to this table
- * could copy the encrypted secret from a key they legitimately hold onto another merchant's
- * row, and then sign that merchant's requests with a secret they already know. Bound, the
- * same ciphertext under a different key id simply fails to open.
+ * <p>Each value is bound to the thing it belongs to, by authenticating that thing's id
+ * alongside it. Without that, every ciphertext is interchangeable: somebody able to write to
+ * the table could copy the encrypted secret from a row they legitimately hold onto another
+ * merchant's row, and then sign that merchant's traffic with a secret they already know.
+ * Bound, the same ciphertext under a different id simply fails to open.
+ *
+ * <p>Lives here rather than beside one of its users because there are now two: the API key
+ * secrets a merchant's server signs with, and the webhook secrets a merchant verifies
+ * deliveries with. They deliberately do not share an encryption key — a compromise of one
+ * should not open the other — but there is no reason for two copies of the same algorithm.
  */
-@Component
 public class SecretCipher {
 
     private static final Logger log = LoggerFactory.getLogger(SecretCipher.class);
@@ -46,8 +48,18 @@ public class SecretCipher {
 
     private final SecretKey key;
 
-    public SecretCipher(@Value("${mizan.security.api-keys.encryption-key:}") String configured) {
-        this.key = configured == null || configured.isBlank() ? generated() : parsed(configured);
+    /** What this cipher is for, used only to make its warnings and errors legible. */
+    private final String purpose;
+
+    /**
+     * @param configured 32 bytes of base64, or blank to generate one for this process, which
+     *     is only ever right on a laptop
+     * @param purpose what these secrets are, and the configuration property that sets the key
+     */
+    public SecretCipher(String configured, String purpose) {
+        this.purpose = purpose;
+        this.key = configured == null || configured.isBlank() ? generated(purpose)
+                : parsed(configured, purpose);
     }
 
     /**
@@ -69,7 +81,7 @@ public class SecretCipher {
             System.arraycopy(ciphertext, 0, stored, nonce.length, ciphertext.length);
             return ENCODER.encodeToString(stored);
         } catch (Exception impossible) {
-            throw new IllegalStateException("could not encrypt an API key secret", impossible);
+            throw new IllegalStateException("could not encrypt a " + purpose, impossible);
         }
     }
 
@@ -84,35 +96,35 @@ public class SecretCipher {
             cipher.updateAAD(boundTo.getBytes(StandardCharsets.UTF_8));
             return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
         } catch (Exception unopenable) {
-            // The row was edited, the value belongs to another key, or the encryption key
-            // changed. All of them mean this key cannot be used, and none of them is
+            // The row was edited, the value belongs to something else, or the encryption key
+            // changed. All of them mean this secret cannot be used, and none of them is
             // something to explain to whoever is holding it.
-            throw new SecretUnavailableException(unopenable);
+            throw new SecretUnavailableException(purpose, unopenable);
         }
     }
 
     /** Raised when a stored secret cannot be opened, whatever the reason. */
-    static final class SecretUnavailableException extends RuntimeException {
+    public static final class SecretUnavailableException extends RuntimeException {
 
-        private SecretUnavailableException(Throwable cause) {
-            super("could not decrypt an API key secret", cause);
+        private SecretUnavailableException(String purpose, Throwable cause) {
+            super("could not decrypt a " + purpose, cause);
         }
     }
 
-    private static SecretKey parsed(String configured) {
+    private static SecretKey parsed(String configured, String purpose) {
         byte[] material = DECODER.decode(configured.trim());
         if (material.length != 32) {
             throw new IllegalStateException(
-                    "mizan.security.api-keys.encryption-key must be 32 bytes of base64, was "
+                    "the encryption key for a " + purpose + " must be 32 bytes of base64, was "
                             + material.length);
         }
         return new SecretKeySpec(material, "AES");
     }
 
-    private static SecretKey generated() {
-        log.warn("no API key encryption key configured, so one was generated for this process. "
-                + "Keys issued now will stop verifying when this service restarts. Set "
-                + "mizan.security.api-keys.encryption-key anywhere that is not a laptop.");
+    private static SecretKey generated(String purpose) {
+        log.warn("no encryption key configured for a {}, so one was generated for this process. "
+                + "Secrets stored now will stop opening when this service restarts. Configure "
+                + "one anywhere that is not a laptop.", purpose);
         try {
             KeyGenerator generator = KeyGenerator.getInstance("AES");
             generator.init(256);

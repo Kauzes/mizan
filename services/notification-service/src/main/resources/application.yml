@@ -47,6 +47,11 @@ spring:
     locations: classpath:db/migration/notification
 
 mizan:
+  webhooks:
+    # The key that opens merchant webhook signing secrets. Deliberately not the key that opens
+    # API key secrets: a compromise of one should not be a compromise of the other. Blank
+    # generates one per process, which is only ever right on a laptop and says so in the log.
+    encryption-key: ${MIZAN_WEBHOOK_ENCRYPTION_KEY:}
   events:
     # How many times a message is retried in the listener before it is set aside. Bounded,
     # because the partition waits during these: retrying forever is how one unhandleable event
