@@ -116,7 +116,8 @@ class StuckPaymentsTest extends MizanIntegrationTest {
         // Decisions are deliberately not cleared: the table refuses to be deleted from, which
         // is the point of it and is asserted below. Every test asks about its own payment.
         jdbc.update("update payment set needs_attention_since = null, attention_reason = null, "
-                + "resolve_attempts = 0 where needs_attention_since is not null");
+                + "attention_handled_at = null, resolve_attempts = 0 "
+                + "where needs_attention_since is not null");
         jdbc.update("update refund set attention_handled_at = now() "
                 + "where status = 'ABANDONED' and attention_handled_at is null");
     }
@@ -257,6 +258,16 @@ class StuckPaymentsTest extends MizanIntegrationTest {
                 .as("nothing about the money changed: a person looked, which is a different "
                         + "and more honest thing than the platform pretending it worked it out")
                 .isEqualTo("AUTHORIZATION_UNKNOWN");
+
+        // And closing means stop. It did not, at first: closing reset the attempt count, so
+        // the sweep picked the payment up, asked five more times and stranded it again. The
+        // smoke check found that by refusing to pass on a stack where somebody had closed one.
+        for (int attempt = 0; attempt < AuthorizationResolver.ATTEMPTS + 2; attempt++) {
+            resolver.resolveWhatIsUnknown();
+        }
+        assertThat(isStuck(payment))
+                .as("closed is closed, and does not quietly become stuck again")
+                .isFalse();
     }
 
     @Test

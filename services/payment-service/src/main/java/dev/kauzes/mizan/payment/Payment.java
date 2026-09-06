@@ -117,6 +117,16 @@ public class Payment {
     @Column(name = "attention_reason")
     private String attentionReason;
 
+    /**
+     * When a person dealt with it.
+     *
+     * <p>Separate from the attention flag, because being stuck stays true: nobody could work
+     * out what happened, and that remains a fact about the payment. What changes is that
+     * somebody has looked, which is a fact about the operator.
+     */
+    @Column(name = "attention_handled_at")
+    private Instant attentionHandledAt;
+
     @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @OrderBy("at asc")
     private List<PaymentTransition> history = new ArrayList<>();
@@ -230,7 +240,11 @@ public class Payment {
     }
 
     public boolean needsAPerson() {
-        return needsAttentionSince != null;
+        return needsAttentionSince != null && attentionHandledAt == null;
+    }
+
+    public Instant attentionHandledAt() {
+        return attentionHandledAt;
     }
 
     /** Records one more fruitless attempt to work out what happened. */
@@ -254,10 +268,23 @@ public class Payment {
         this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 
-    /** A person has decided; it goes back to being the platform's problem, or stops being one. */
-    public void attentionHandled() {
+    /**
+     * A person has looked and decided nothing more is to be done.
+     *
+     * <p>It stops appearing and stays out of the sweep. Resetting the attempts here instead
+     * would put it straight back in front of the resolver, which would ask five more times and
+     * strand it again — which is what this did before the smoke check noticed.
+     */
+    public void attentionClosed() {
+        this.attentionHandledAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        this.updatedAt = attentionHandledAt;
+    }
+
+    /** A person has decided it is worth another go, so it becomes the platform's problem again. */
+    public void attentionRetry() {
         this.needsAttentionSince = null;
         this.attentionReason = null;
+        this.attentionHandledAt = null;
         this.resolveAttempts = 0;
         this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }

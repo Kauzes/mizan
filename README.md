@@ -203,6 +203,18 @@ other protected route.
   not be a compromise of the other.
 - Rotating a secret takes effect immediately rather than overlapping with the old one. Two
   valid secrets is a rotation that never finishes and an old secret that is never revoked.
+- A slow or failing merchant endpoint delays nobody else. Deliveries are claimed with `for
+  update skip locked`, the claim commits before the call is made, and every call has a
+  timeout. Take any one of those away and one broken merchant stops the platform telling
+  anybody anything.
+- A delivery's body is built once and stored, not rebuilt per attempt. A signature covers a
+  body, and a rebuilt one can differ by a field order — at which point the retry carries a
+  signature for something else.
+- Every attempt at a delivery is recorded with its response code and how long it took, and a
+  merchant can read their own. Keeping only the last answers "is it working now", which is the
+  one question they can already answer themselves.
+- Every attempt carries the same delivery id, so a merchant who received one and failed to
+  answer recognises the repeat rather than counting it twice.
 - Only a captured payment can be refunded, and only in the currency it was taken in. This
   platform has no exchange rate, and inventing one to be helpful is how a refund gives back a
   different amount of money than was taken.

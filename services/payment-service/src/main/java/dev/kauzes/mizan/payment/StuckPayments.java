@@ -74,7 +74,7 @@ public class StuckPayments {
     public List<Stuck> everything() {
         List<Stuck> stuck = new ArrayList<>();
 
-        for (Payment payment : payments.findByNeedsAttentionSinceIsNotNullOrderByNeedsAttentionSinceAsc()) {
+        for (Payment payment : payments.findByNeedsAttentionSinceIsNotNullAndAttentionHandledAtIsNullOrderByNeedsAttentionSinceAsc()) {
             stuck.add(new Stuck(
                     "PAYMENT",
                     payment.id(),
@@ -157,7 +157,7 @@ public class StuckPayments {
         return switch (kind) {
             case "PAYMENT" -> {
                 Payment payment = payments.findById(id).orElseThrow();
-                payment.attentionHandled();
+                payment.attentionRetry();
                 yield decided(payment.merchantId(), kind, id, "RETRY", who, why,
                         "the payment is being resolved again from attempt zero");
             }
@@ -183,7 +183,7 @@ public class StuckPayments {
         return switch (kind) {
             case "PAYMENT" -> {
                 Payment payment = payments.findById(id).orElseThrow();
-                payment.attentionHandled();
+                payment.attentionClosed();
                 yield decided(payment.merchantId(), kind, id, "CLOSED", who, why,
                         "the payment no longer needs attention; its state is unchanged");
             }

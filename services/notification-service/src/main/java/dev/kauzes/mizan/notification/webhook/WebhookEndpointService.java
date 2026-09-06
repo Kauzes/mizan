@@ -4,7 +4,6 @@ import dev.kauzes.mizan.common.crypto.SecretCipher;
 import dev.kauzes.mizan.common.error.ConflictException;
 import dev.kauzes.mizan.common.error.NotFoundException;
 import dev.kauzes.mizan.common.error.UnprocessableException;
-import dev.kauzes.mizan.common.net.SafeDestination;
 import dev.kauzes.mizan.notification.webhook.WebhookRequests.EndpointResponse;
 import dev.kauzes.mizan.notification.webhook.WebhookRequests.RegisterEndpointRequest;
 import dev.kauzes.mizan.notification.webhook.WebhookRequests.SecretResponse;
@@ -54,10 +53,16 @@ public class WebhookEndpointService {
 
     private final WebhookEndpointRepository endpoints;
     private final SecretCipher cipher;
+    private final WebhookDestinations destinations;
 
-    public WebhookEndpointService(WebhookEndpointRepository endpoints, SecretCipher cipher) {
+    public WebhookEndpointService(
+            WebhookEndpointRepository endpoints,
+            SecretCipher cipher,
+            WebhookDestinations destinations) {
+
         this.endpoints = endpoints;
         this.cipher = cipher;
+        this.destinations = destinations;
     }
 
     /**
@@ -70,6 +75,7 @@ public class WebhookEndpointService {
     public SecretResponse register(UUID merchantId, RegisterEndpointRequest request) {
         String url = request.url().trim();
         requireSafe(url);
+
         requireKnownTypes(request.eventTypes());
 
         WebhookEndpoint endpoint = new WebhookEndpoint(
@@ -83,9 +89,15 @@ public class WebhookEndpointService {
 
         try {
             endpoints.saveAndFlush(endpoint);
-        } catch (DataIntegrityViolationException taken) {
-            throw new ConflictException(
-                    "This merchant already has an endpoint registered at that URL.");
+        } catch (DataIntegrityViolationException violated) {
+            // Only the one constraint. Reporting every integrity violation as a duplicate URL
+            // is how a genuine bug arrives dressed as a caller's mistake, and it hid one here
+            // for an afternoon.
+            if (isDuplicateUrl(violated)) {
+                throw new ConflictException(
+                        "This merchant already has an endpoint registered at that URL.");
+            }
+            throw violated;
         }
 
         log.info(
@@ -159,6 +171,12 @@ public class WebhookEndpointService {
         return cipher.decrypt(endpoint.encryptedSecret(), endpoint.id().toString());
     }
 
+    /** Whether this violation is the unique index on (merchant, url) and not something else. */
+    private static boolean isDuplicateUrl(DataIntegrityViolationException violated) {
+        String detail = String.valueOf(violated.getMostSpecificCause().getMessage());
+        return detail.contains("webhook_endpoint_url_once");
+    }
+
     private WebhookEndpoint mine(UUID merchantId, UUID endpointId) {
         return endpoints
                 .findByIdAndMerchantId(endpointId, merchantId)
@@ -171,8 +189,9 @@ public class WebhookEndpointService {
      * <p>Checked here, and again at delivery time, because DNS can change its mind in between
      * and a check that only ran at registration is a check an attacker waits out.
      */
-    private static void requireSafe(String url) {
-        SafeDestination.check(url)
+    private void requireSafe(String url) {
+        destinations
+                .check(url)
                 .ifPresent(refusal -> {
                     throw new UnprocessableException(refusal.because());
                 });

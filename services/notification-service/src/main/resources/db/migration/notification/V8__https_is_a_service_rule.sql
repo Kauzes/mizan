@@ -1,0 +1,13 @@
+-- The https rule moves out of the database.
+--
+-- It is enforced twice already, in the two places that matter: when a merchant registers an
+-- endpoint, where it can produce a sentence they can act on, and again at the moment of every
+-- delivery, where it also catches a hostname whose DNS has changed since. The check constraint
+-- was a third copy that could only ever produce a constraint violation.
+--
+-- It also made the delivery path untestable. A test needs a merchant server this JVM can run,
+-- which is plain HTTP on loopback, and a constraint the escape hatch cannot reach means the
+-- interesting half of this feature -- retries, backoff, one slow endpoint not delaying anybody
+-- else -- could not be tested at all. A redundant check that costs the tests for the thing it
+-- is redundant with is a bad trade.
+alter table webhook_endpoint drop constraint webhook_endpoint_https;
