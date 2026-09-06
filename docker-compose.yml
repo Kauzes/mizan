@@ -190,6 +190,10 @@ services:
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/notification
       # The first service on this platform that listens rather than answers.
       MIZAN_KAFKA: kafka:9092
+      # Base64 of "mizan-webhook-signing-local-key!". Deliberately not the key that opens API
+      # key secrets: a compromise of one should not be a compromise of the other. A deployment
+      # sets this from wherever it keeps secrets.
+      MIZAN_WEBHOOK_ENCRYPTION_KEY: bWl6YW4td2ViaG9vay1zaWduaW5nLWxvY2FsLWtleSE=
       MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
       MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
     depends_on:

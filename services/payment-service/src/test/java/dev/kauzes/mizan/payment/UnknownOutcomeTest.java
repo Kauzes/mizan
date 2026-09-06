@@ -110,7 +110,7 @@ class UnknownOutcomeTest extends MizanIntegrationTest {
         UUID payment = create(merchant);
         authorize(merchant, payment, SLOW_APPROVE).andExpect(status().isGatewayTimeout());
 
-        resolver.resolve(merchant.id, payment);
+        resolve(merchant.id, payment);
 
         assertThat(statusOf(payment)).isEqualTo("AUTHORIZED");
         assertThat(jdbc.queryForObject(
@@ -127,7 +127,7 @@ class UnknownOutcomeTest extends MizanIntegrationTest {
         UUID payment = create(merchant);
         authorize(merchant, payment, SLOW_DECLINE).andExpect(status().isGatewayTimeout());
 
-        resolver.resolve(merchant.id, payment);
+        resolve(merchant.id, payment);
 
         // The case that catches a resolver which assumes a timeout means approval.
         assertThat(statusOf(payment)).isEqualTo("DECLINED");
@@ -146,7 +146,7 @@ class UnknownOutcomeTest extends MizanIntegrationTest {
         unknownOutcomes.record(merchant.id, payment, "the acquirer never answered");
         assertThat(statusOf(payment)).isEqualTo("AUTHORIZATION_UNKNOWN");
 
-        resolver.resolve(merchant.id, payment);
+        resolve(merchant.id, payment);
 
         assertThat(statusOf(payment))
                 .as("nothing happened, so nothing is claimed, and it is visible as unresolved")
@@ -158,7 +158,7 @@ class UnknownOutcomeTest extends MizanIntegrationTest {
         Merchant merchant = merchant();
         UUID payment = create(merchant);
         unknownOutcomes.record(merchant.id, payment, "the acquirer never answered");
-        resolver.resolve(merchant.id, payment);
+        resolve(merchant.id, payment);
 
         authorize(merchant, payment, "4000000000000000").andExpect(status().isOk());
 
@@ -171,9 +171,9 @@ class UnknownOutcomeTest extends MizanIntegrationTest {
         UUID payment = create(merchant);
         authorize(merchant, payment, SLOW_APPROVE).andExpect(status().isGatewayTimeout());
 
-        resolver.resolve(merchant.id, payment);
-        resolver.resolve(merchant.id, payment);
-        resolver.resolve(merchant.id, payment);
+        resolve(merchant.id, payment);
+        resolve(merchant.id, payment);
+        resolve(merchant.id, payment);
 
         assertThat(statusOf(payment)).isEqualTo("AUTHORIZED");
         assertThat(transitionsTo(payment, "AUTHORIZED"))
@@ -188,7 +188,7 @@ class UnknownOutcomeTest extends MizanIntegrationTest {
         authorize(merchant, payment, "4000000000000000").andExpect(status().isOk());
 
         // The sweep can reach a payment the original call resolved a moment earlier.
-        resolver.resolve(merchant.id, payment);
+        resolve(merchant.id, payment);
 
         assertThat(statusOf(payment)).isEqualTo("AUTHORIZED");
         assertThat(transitionsTo(payment, "AUTHORIZED")).isEqualTo(1L);
@@ -206,6 +206,22 @@ class UnknownOutcomeTest extends MizanIntegrationTest {
         assertThat(becomes(payment, "AUTHORIZED", Duration.ofSeconds(30)))
                 .as("the sweep should resolve it without being told to")
                 .isTrue();
+    }
+
+    /**
+     * Resolves, and does not mind if the sweep got there first.
+     *
+     * <p>The sweep runs every 300ms in this class, because one test needs it to. That means a
+     * test calling the resolver directly is racing it, and the loser of that race is told so by
+     * the version column — which is the mechanism working, not a failure. What these tests are
+     * about is what the payment becomes, not which of two callers made it happen.
+     */
+    private void resolve(UUID merchantId, UUID payment) {
+        try {
+            resolver.resolve(merchantId, payment);
+        } catch (org.springframework.dao.OptimisticLockingFailureException sweepGotThereFirst) {
+            // Exactly what the sweep itself does with this, and for the same reason.
+        }
     }
 
     private boolean becomes(UUID payment, String expected, Duration patience) throws Exception {
