@@ -23,8 +23,12 @@ import org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProc
  * found only because a live check against the real stack noticed the deliveries piling up.
  *
  * <p>Extended by a service that schedules anything, so the third time is the last.
+ *
+ * <p>An integration test, because a service that schedules work has a database and will not
+ * start without one. Not extending this base let it pass on a laptop with Compose running and
+ * fail in CI, which is its own small lesson about what "it passed locally" is worth.
  */
-public abstract class ScheduledWorkTest {
+public abstract class ScheduledWorkTest extends MizanIntegrationTest {
 
     @Autowired
     private ApplicationContext context;

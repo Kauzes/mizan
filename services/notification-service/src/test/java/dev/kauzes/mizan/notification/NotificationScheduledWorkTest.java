@@ -1,6 +1,5 @@
 package dev.kauzes.mizan.notification;
 
-import dev.kauzes.mizan.test.MizanIntegrationTest;
 import dev.kauzes.mizan.test.ScheduledWorkTest;
 import org.springframework.boot.test.context.SpringBootTest;
 
