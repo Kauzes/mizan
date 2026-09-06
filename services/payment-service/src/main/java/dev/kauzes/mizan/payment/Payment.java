@@ -101,6 +101,22 @@ public class Payment {
     @Column(name = "refunded_amount", nullable = false)
     private long refundedAmount;
 
+    /** How many times resolving an unknown outcome has been tried. */
+    @Column(name = "resolve_attempts", nullable = false)
+    private int resolveAttempts;
+
+    /**
+     * When this payment stopped being something the platform could sort out on its own.
+     *
+     * <p>Null for the overwhelming majority. A payment here is one where retrying has been
+     * tried enough times to conclude it is not working, and a person has to decide.
+     */
+    @Column(name = "needs_attention_since")
+    private Instant needsAttentionSince;
+
+    @Column(name = "attention_reason")
+    private String attentionReason;
+
     @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @OrderBy("at asc")
     private List<PaymentTransition> history = new ArrayList<>();
@@ -199,6 +215,51 @@ public class Payment {
 
     public long refundedAmount() {
         return refundedAmount;
+    }
+
+    public int resolveAttempts() {
+        return resolveAttempts;
+    }
+
+    public Instant needsAttentionSince() {
+        return needsAttentionSince;
+    }
+
+    public String attentionReason() {
+        return attentionReason;
+    }
+
+    public boolean needsAPerson() {
+        return needsAttentionSince != null;
+    }
+
+    /** Records one more fruitless attempt to work out what happened. */
+    public void resolveAttempted() {
+        this.resolveAttempts += 1;
+        this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+    }
+
+    /**
+     * Stops trying, and says so where somebody will see it.
+     *
+     * <p>Not a state change: the payment is still exactly as unknown as it was. What has
+     * changed is that the platform has given up working it out alone, which is a different
+     * fact and deserves a different field.
+     */
+    public void needsAPerson(String because) {
+        if (needsAttentionSince == null) {
+            this.needsAttentionSince = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        }
+        this.attentionReason = because;
+        this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+    }
+
+    /** A person has decided; it goes back to being the platform's problem, or stops being one. */
+    public void attentionHandled() {
+        this.needsAttentionSince = null;
+        this.attentionReason = null;
+        this.resolveAttempts = 0;
+        this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 
     /** What could still be given back. Zero once the whole capture has been refunded. */

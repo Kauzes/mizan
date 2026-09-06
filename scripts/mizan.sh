@@ -11,6 +11,9 @@ set -euo pipefail
 
 GATEWAY="${MIZAN_GATEWAY:-http://localhost:8080}"
 LEDGER="${MIZAN_LEDGER:-http://localhost:8082}"
+# Reached directly for its actuator endpoints, which are the platform's own questions rather
+# than a merchant's and are not routed from the edge.
+PAYMENTS="${MIZAN_PAYMENTS:-http://localhost:8083}"
 
 # Whichever Python is here, chosen by running it rather than by finding it on PATH. Windows
 # ships a python3 that is not an interpreter at all but a stub that advertises the Microsoft

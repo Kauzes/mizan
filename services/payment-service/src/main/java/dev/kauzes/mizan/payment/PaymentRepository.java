@@ -28,4 +28,17 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
 
     /** What the resolver sweeps: payments nobody knows the outcome of, that have settled. */
     List<Payment> findByStatusAndUpdatedAtBefore(PaymentStatus status, Instant before);
+
+    /**
+     * Unresolved payments the platform has not yet given up on.
+     *
+     * <p>The sweep used to ask about every unresolved payment on every pass, forever. That is
+     * right while there is any chance of an answer and wrong once there plainly is not, so
+     * ones that need a person are left out of it.
+     */
+    List<Payment> findByStatusAndUpdatedAtBeforeAndNeedsAttentionSinceIsNull(
+            PaymentStatus status, Instant before);
+
+    /** What needs a person, oldest first, because the oldest has been wrong for longest. */
+    List<Payment> findByNeedsAttentionSinceIsNotNullOrderByNeedsAttentionSinceAsc();
 }

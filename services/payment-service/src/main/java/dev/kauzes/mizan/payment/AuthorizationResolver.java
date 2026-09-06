@@ -43,6 +43,12 @@ public class AuthorizationResolver {
     private final TransactionTemplate transaction;
     private final Duration settleFirst;
 
+    /**
+     * How many times the acquirer is asked about a payment it has no record of before the
+     * platform accepts that asking is not working.
+     */
+    static final int ATTEMPTS = 5;
+
     public AuthorizationResolver(
             PaymentRepository payments,
             AcquirerClient acquirer,
@@ -68,7 +74,8 @@ public class AuthorizationResolver {
     public void resolveWhatIsUnknown() {
         Instant before = Instant.now().minus(settleFirst);
         List<Payment> waiting =
-                payments.findByStatusAndUpdatedAtBefore(PaymentStatus.AUTHORIZATION_UNKNOWN, before);
+                payments.findByStatusAndUpdatedAtBeforeAndNeedsAttentionSinceIsNull(
+                        PaymentStatus.AUTHORIZATION_UNKNOWN, before);
 
         if (waiting.isEmpty()) {
             return;
@@ -116,8 +123,26 @@ public class AuthorizationResolver {
                 // A real answer: the acquirer never saw it, so nothing was reserved. The
                 // payment stays unresolved rather than being called declined, because it was
                 // not declined, and it can be attempted again.
-                log.info("the acquirer has no record of payment {}; nothing was authorized",
-                        paymentId);
+                //
+                // But an acquirer that has never heard of a request will not have heard of it
+                // tomorrow either, so this is not asked forever. After enough passes the
+                // payment stops being swept and starts being a person's problem — which is
+                // the difference between a platform that is patient and one that is stuck.
+                payment.resolveAttempted();
+                if (payment.resolveAttempts() >= ATTEMPTS) {
+                    payment.needsAPerson(
+                            "The acquirer has no record of this payment after "
+                                    + payment.resolveAttempts()
+                                    + " attempts, so nobody can say whether it was authorized.");
+                    log.error(
+                            "NEEDS A PERSON: payment {} of merchant {} cannot be resolved: {}",
+                            paymentId,
+                            merchantId,
+                            payment.attentionReason());
+                } else {
+                    log.info("the acquirer has no record of payment {}; nothing was authorized",
+                            paymentId);
+                }
                 return PaymentRequests.PaymentResponse.of(payment);
             }
 

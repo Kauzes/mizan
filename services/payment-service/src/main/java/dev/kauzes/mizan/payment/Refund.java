@@ -77,6 +77,15 @@ public class Refund {
     @Column(name = "last_error")
     private String lastError;
 
+    /**
+     * When a person dealt with it.
+     *
+     * <p>Separate from the status, because ABANDONED stays true: nobody could finish it, and
+     * that remains a fact about the refund. What changes is that somebody has looked.
+     */
+    @Column(name = "attention_handled_at")
+    private Instant attentionHandledAt;
+
     @jakarta.persistence.Version
     @Column(nullable = false)
     private long version;
@@ -167,6 +176,39 @@ public class Refund {
         return this.attempts >= limit;
     }
 
+    /**
+     * Puts an abandoned refund back in front of the sweep.
+     *
+     * <p>The attempts are reset, because the reason a person is retrying is that something has
+     * changed, and the old count is a record of a world that no longer exists.
+     */
+    public void tryAgain() {
+        if (status != RefundStatus.ABANDONED) {
+            throw new UnprocessableException(
+                    "A refund that is " + status + " is not waiting for anybody.");
+        }
+        // Back to the step it had actually reached, which is what the evidence on the row
+        // says: if the acquirer confirmed, that is still true and must not be undone.
+        this.status = acquirerReference == null ? RefundStatus.REQUESTED : RefundStatus.RETURNED;
+        this.attentionHandledAt = null;
+        this.attempts = 0;
+        this.nextAttemptAt = null;
+        this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+    }
+
+    /**
+     * Records that a person has dealt with it, so it stops appearing.
+     *
+     * <p>Nothing about the money changes, and the reservation stays held. This says a human has
+     * looked and decided, which is a more honest thing than the platform pretending it worked
+     * it out.
+     */
+    public void closedByAPerson() {
+        this.attentionHandledAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        this.nextAttemptAt = null;
+        this.updatedAt = this.attentionHandledAt;
+    }
+
     private static String trim(String why) {
         if (why == null) {
             return null;
@@ -232,6 +274,10 @@ public class Refund {
 
     public String lastError() {
         return lastError;
+    }
+
+    public Instant attentionHandledAt() {
+        return attentionHandledAt;
     }
 
     @Override

@@ -245,7 +245,29 @@ authed 422 POST "$GATEWAY/api/v1/merchants/$MERCHANT/payments/$PAYMENT/refunds" 
 pass "and one more minor unit than remains is refused"
 
 # ---------------------------------------------------------------------------------------
-step "12. The books balance"
+step "12. Nothing is stuck"
+
+# The one place that answers "what needs a person". Asserted here so that a regression which
+# starts stranding payments fails a pull request rather than being noticed next quarter.
+if command -v docker > /dev/null 2>&1 && docker compose ps payment-service > /dev/null 2>&1; then
+    stuck=$(call 200 GET "$PAYMENTS/actuator/stuck")
+    total=$(printf '%s' "$stuck" | field total)
+
+    if [ "$total" != "0" ]; then
+        printf '%s' "$stuck" | "$PYTHON" -c '
+import sys, json
+for one in json.load(sys.stdin)["stuck"]:
+    print("  ", one["kind"], one["id"], "|", one["reason"])
+' >&2
+        fail "$total thing(s) need a person, and a clean run should leave none"
+    fi
+    pass "nothing needs a person, which is what a clean run should leave"
+else
+    note "no Compose stack to ask, so this was not checked"
+fi
+
+# ---------------------------------------------------------------------------------------
+step "13. The books balance"
 
 integrity=$(call 200 GET "$LEDGER/actuator/ledgerintegrity")
 sound=$(printf '%s' "$integrity" | field sound)

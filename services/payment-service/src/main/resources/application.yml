@@ -81,7 +81,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info
+        # stuck is how an operator finds out what no amount of retrying will move, and records
+        # what they decided about it. Reachable only through the gateway's internal route,
+        # which needs a token.
+        include: health, info, stuck
   endpoint:
     health:
       probes:
