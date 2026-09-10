@@ -30,6 +30,7 @@ public class PaymentService {
     private final RiskClient risk;
     private final UnknownOutcomes unknownOutcomes;
     private final PaymentEvents events;
+    private final PaymentSearch search;
 
     public PaymentService(
             PaymentRepository payments,
@@ -37,7 +38,8 @@ public class PaymentService {
             LedgerClient ledger,
             RiskClient risk,
             UnknownOutcomes unknownOutcomes,
-            PaymentEvents events) {
+            PaymentEvents events,
+            PaymentSearch search) {
 
         this.payments = payments;
         this.acquirer = acquirer;
@@ -45,6 +47,7 @@ public class PaymentService {
         this.risk = risk;
         this.unknownOutcomes = unknownOutcomes;
         this.events = events;
+        this.search = search;
     }
 
     /**
@@ -249,11 +252,16 @@ public class PaymentService {
         return PaymentResponse.of(payment);
     }
 
+    /**
+     * A page of a merchant's payments, narrowed by whatever they asked for.
+     *
+     * <p>Here rather than in the controller, so that what a merchant may see and how much of
+     * it they may ask for in one breath stay in the same place as everything else that
+     * decides those questions.
+     */
     @Transactional(readOnly = true)
-    public List<PaymentResponse> list(UUID merchantId) {
-        return payments.findByMerchantIdOrderByCreatedAtDesc(merchantId).stream()
-                .map(PaymentResponse::of)
-                .toList();
+    public PaymentSearch.Found search(UUID merchantId, PaymentQuery query) {
+        return search.find(merchantId, query);
     }
 
     @Transactional(readOnly = true)

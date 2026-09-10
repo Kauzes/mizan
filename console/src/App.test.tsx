@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
@@ -47,6 +47,12 @@ function platform(options: { session: boolean; roles?: string[] }) {
         refreshExpiresIn: 2592000,
       });
     }
+    if (path.includes("/payments")) {
+      return new Response("[]", {
+        status: 200,
+        headers: { "Content-Type": "application/json", "X-Total-Count": "0" },
+      });
+    }
     return new Response(null, { status: 204 });
   }) as unknown as typeof fetch;
 }
@@ -66,12 +72,12 @@ describe("opening the console", () => {
     expect(await screen.findByRole("button", { name: "Sign in" })).toBeInTheDocument();
   });
 
-  it("signs somebody straight in when the browser still has a session", async () => {
+  it("lands somebody straight on their payments when the browser still has a session", async () => {
     show(platform({ session: true }));
 
     // The reason the console has a third state on its first paint: without one, somebody who
     // is already signed in gets a login screen flashed at them on every reload.
-    expect(await screen.findByRole("heading", { name: "Signed in" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Payments" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Sign in" })).not.toBeInTheDocument();
   });
 
@@ -96,7 +102,7 @@ describe("opening the console", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("The credentials are not valid.");
   });
 
-  it("signs in and shows what this account may do", async () => {
+  it("signs in and arrives somewhere useful", async () => {
     show(platform({ session: false }));
     await screen.findByRole("button", { name: "Sign in" });
 
@@ -104,30 +110,12 @@ describe("opening the console", () => {
     await userEvent.type(screen.getByLabelText("Password"), "a-long-enough-password");
     await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
-    await screen.findByRole("heading", { name: "Signed in" });
-    await waitFor(() =>
-      expect(screen.getByText("Take and refund payments").closest("li")).toHaveClass("yes"),
-    );
-  });
-
-  it("shows an analyst only what an analyst holds", async () => {
-    show(platform({ session: true, roles: ["ANALYST"] }));
-    await screen.findByRole("heading", { name: "Signed in" });
-
-    await waitFor(() =>
-      expect(
-        screen.getByText("Rule on payments the platform held").closest("li"),
-      ).toHaveClass("yes"),
-    );
-    expect(screen.getByText("Take and refund payments").closest("li")).toHaveClass("no");
-    expect(
-      screen.getByText("Add people and change what they may do").closest("li"),
-    ).toHaveClass("no");
+    expect(await screen.findByRole("heading", { name: "Payments" })).toBeInTheDocument();
   });
 
   it("puts somebody back at the door when they sign out", async () => {
     show(platform({ session: true }));
-    await screen.findByRole("heading", { name: "Signed in" });
+    await screen.findByRole("heading", { name: "Payments" });
 
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
 

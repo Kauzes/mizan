@@ -179,3 +179,133 @@ button:disabled {
 .starting {
   padding-top: 12vh;
 }
+
+/* -- the payments list ------------------------------------------------------------------ */
+
+.shell > header nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.shell > header nav a {
+  color: var(--muted);
+  text-decoration: none;
+  padding-bottom: 2px;
+  border-bottom: 2px solid transparent;
+}
+
+.shell > header nav a.active {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+.filters {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.filters fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.filters legend {
+  float: left;
+  width: 6rem;
+  color: var(--muted);
+  padding: 0;
+}
+
+.filters fieldset label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.filters .range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filters .range > label:first-child {
+  width: 6rem;
+  color: var(--muted);
+}
+
+.filters input,
+.filters select {
+  font: inherit;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 0.3rem;
+  background: transparent;
+  color: inherit;
+}
+
+.filters input[type="checkbox"] {
+  padding: 0;
+}
+
+table.payments {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+table.payments th,
+table.payments td {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+table.payments th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+table.payments .right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.status {
+  font-size: 0.85rem;
+}
+
+/* The three that mean something is unfinished, and one that means money moved. */
+.status.held_for_review,
+.status.authorization_unknown {
+  color: #a06a1b;
+}
+
+.status.declined {
+  color: var(--refusal);
+}
+
+.status.captured {
+  color: var(--accent);
+}
+
+.paging {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+  font-size: 0.9rem;
+}

@@ -1,4 +1,6 @@
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Home } from "./pages/Home";
+import { Payments } from "./payments/Payments";
 import { SignIn } from "./pages/SignIn";
 import { useSession } from "./session/SessionProvider";
 import { Shell } from "./shell/Shell";
@@ -22,11 +24,21 @@ export function App() {
     );
   }
 
-  return status === "signed-in" ? (
-    <Shell>
-      <Home />
-    </Shell>
-  ) : (
-    <SignIn />
+  if (status !== "signed-in") {
+    return <SignIn />;
+  }
+
+  return (
+    <BrowserRouter>
+      <Shell>
+        <Routes>
+          <Route path="/payments" element={<Payments />} />
+          <Route path="/account" element={<Home />} />
+          <Route path="/" element={<Navigate to="/payments" replace />} />
+          {/* Anything else is a link somebody kept from a version that had more pages. */}
+          <Route path="*" element={<Navigate to="/payments" replace />} />
+        </Routes>
+      </Shell>
+    </BrowserRouter>
   );
 }
