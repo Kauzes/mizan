@@ -48,7 +48,7 @@ public class HeldPayments {
     @Scheduled(fixedDelayString = "${mizan.risk.expire-every:5m}")
     public void expireWhatNobodyRuledOn() {
         Instant heldBefore = Instant.now().minus(holdFor);
-        List<Payment> stale = payments.findByStatusAndHeldAtBefore(
+        List<Payment> stale = payments.findByStatusAndReviewRulingIsNullAndHeldAtBefore(
                 PaymentStatus.HELD_FOR_REVIEW, heldBefore);
 
         if (stale.isEmpty()) {
@@ -65,8 +65,10 @@ public class HeldPayments {
     private void expire(java.util.UUID paymentId, java.util.UUID merchantId) {
         transaction.executeWithoutResult(status -> {
             Payment payment = payments.findByIdAndMerchantId(paymentId, merchantId).orElseThrow();
-            if (payment.status() != PaymentStatus.HELD_FOR_REVIEW) {
-                // An analyst ruled between the query and here. Theirs wins.
+            if (!payment.isWaitingForAPerson()) {
+                // An analyst ruled between the query and here. Theirs wins: expiring a payment
+                // somebody has already released would overrule them by doing nothing, which is
+                // the worst way to be overruled.
                 return;
             }
 

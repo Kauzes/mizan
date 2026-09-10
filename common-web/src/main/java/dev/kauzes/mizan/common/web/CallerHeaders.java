@@ -3,6 +3,7 @@ package dev.kauzes.mizan.common.web;
 import dev.kauzes.mizan.common.error.UnauthorizedException;
 import dev.kauzes.mizan.common.identity.Caller;
 import dev.kauzes.mizan.common.identity.CallerIdentity;
+import dev.kauzes.mizan.common.identity.Principal;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
 
@@ -30,7 +31,8 @@ final class CallerHeaders {
         return new Caller(
                 userId,
                 merchantId,
-                Caller.rolesIn(request.getHeader(CallerIdentity.ROLES_HEADER)));
+                Caller.rolesIn(request.getHeader(CallerIdentity.ROLES_HEADER)),
+                Principal.of(request.getHeader(CallerIdentity.PRINCIPAL_HEADER)));
     }
 
     private static UUID uuid(String value) {

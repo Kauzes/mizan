@@ -126,6 +126,51 @@ public class RiskClient {
         }
     }
 
+    /**
+     * Tells risk what a person decided, and does not mind if it is not listening.
+     *
+     * <p>The same judgement as scoring: risk is a guard, not an invariant, and an analyst
+     * should not be unable to release a customer's payment because a scorer is down. What is
+     * lost is one ruling's worth of learning, which is smaller than a queue that cannot be
+     * worked.
+     */
+    public void ruled(Payment payment, String ruling, String who, String why) {
+        try {
+            breaker.call(() -> http.post()
+                    .uri("/api/v1/risk/rulings")
+                    .body(new RulingRequest(
+                            payment.merchantId(),
+                            payment.id(),
+                            ruling,
+                            payment.riskScore(),
+                            payment.riskReasons(),
+                            who,
+                            why))
+                    .retrieve()
+                    .toBodilessEntity());
+
+        } catch (RuntimeException couldNotTell) {
+            // At warn, because a ruling the scorer never hears about is the feedback loop
+            // quietly not happening, and that is worth noticing even though it is survivable.
+            log.warn(
+                    "risk was not told that {} was {} by {}: {}",
+                    payment.id(),
+                    ruling,
+                    who,
+                    couldNotTell.getMessage());
+        }
+    }
+
+    private record RulingRequest(
+            UUID merchantId,
+            UUID paymentId,
+            String ruling,
+            Integer riskScore,
+            String riskReasons,
+            String ruledBy,
+            String why) {
+    }
+
     /** What state the breaker is in, for anything that wants to show it. */
     public CircuitBreaker breaker() {
         return breaker;

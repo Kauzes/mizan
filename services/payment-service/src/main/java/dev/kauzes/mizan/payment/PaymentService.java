@@ -146,11 +146,21 @@ public class PaymentService {
         // has done work for us.
         refuseUnless(payment, PaymentStatus.AUTHORIZED, "authorized");
 
+        // A held payment goes no further until a person has ruled on it. Without this, the
+        // review is decoration: the merchant whose payment was held could simply send the
+        // authorization again, and the second attempt would skip the scorer entirely on the
+        // grounds that the payment was already held. Being held has to mean stopped.
+        if (payment.isWaitingForAPerson()) {
+            throw new UnprocessableException(
+                    "This payment is held for review. It cannot be authorized until somebody "
+                            + "has released it.");
+        }
+
         // Risk first, because a payment cannot be scored after it has been authorized: the
-        // point of scoring is to not authorize it. A payment already held and released by an
-        // analyst is not scored again — they have overruled the scorer, and asking it a second
-        // time would let it overrule them back.
-        if (payment.status() != PaymentStatus.HELD_FOR_REVIEW) {
+        // point of scoring is to not authorize it. A payment held and released by an analyst
+        // is not scored again — they have overruled the scorer, and asking it a second time
+        // would let it overrule them back.
+        if (!payment.wasReleased()) {
             RiskClient.Assessment assessment = risk.assess(payment, request.card());
             payment.scored(
                     assessment.verdict(),

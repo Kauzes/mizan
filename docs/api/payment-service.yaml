@@ -14,6 +14,8 @@ servers:
 tags:
 - description: "Taking money, from intent to captured"
   name: Payments
+- description: "What this platform stopped, and who decided about it"
+  name: Reviews
 paths:
   /api/v1/merchants/{merchantId}/payments:
     get:
@@ -437,6 +439,152 @@ paths:
       summary: Void an authorized payment
       tags:
       - Payments
+  /api/v1/merchants/{merchantId}/reviews:
+    get:
+      description: |-
+        Oldest first, because the oldest is the customer who has been waiting longest and because a queue worked newest-first grows a tail nobody reaches.
+
+        A payment leaves this list when somebody rules on it, or when it expires on its own. Nothing here has been charged: the money was never reserved.
+
+        Requires the REVIEW_RULE permission, held by: OWNER, ADMIN, ANALYST. The caller must be acting for the merchant in the path.
+      operationId: waiting
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaymentResponse"
+          description: The payments waiting to be ruled on
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+      security:
+      - merchantJwt: []
+      summary: What is waiting for a person
+      tags:
+      - Reviews
+  /api/v1/merchants/{merchantId}/reviews/{paymentId}/refuse:
+    post:
+      description: |-
+        Agrees with the scorer. Nobody was charged, and now nobody will be.
+
+        Recorded against the merchant like any other ruling, so that a pattern of agreement moves this merchant's line the same way a pattern of disagreement does.
+
+        Requires the REVIEW_RULE permission, held by: OWNER, ADMIN, ANALYST. The caller must be acting for the merchant in the path.
+      operationId: refuse
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: paymentId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: caller
+        required: true
+        schema:
+          $ref: "#/components/schemas/Caller"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RulingRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResponse"
+          description: "The payment, refused"
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
+      security:
+      - merchantJwt: []
+      summary: Refuse a held payment
+      tags:
+      - Reviews
+  /api/v1/merchants/{merchantId}/reviews/{paymentId}/release:
+    post:
+      description: |-
+        Says the scorer was wrong about this one. The payment can then be authorized, and will not be scored again: a person has overruled the scorer, and asking it a second time would let it overrule them back.
+
+        Deliberately does not authorize it. Taking the money stays a thing the merchant does, through the same endpoint as any other payment, so that an analyst's click never charges a customer.
+
+        Who ruled is taken from the access token, never from this request, and a merchant's own API key may not rule at all.
+
+        Requires the REVIEW_RULE permission, held by: OWNER, ADMIN, ANALYST. The caller must be acting for the merchant in the path.
+      operationId: release
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: paymentId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: caller
+        required: true
+        schema:
+          $ref: "#/components/schemas/Caller"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RulingRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResponse"
+          description: "The payment, released"
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
+      security:
+      - merchantJwt: []
+      summary: Release a held payment
+      tags:
+      - Reviews
 components:
   headers:
     X-Correlation-Id:
@@ -585,6 +733,32 @@ components:
           pattern: "[0-9]{12,19}"
       required:
       - card
+    Caller:
+      type: object
+      properties:
+        merchantId:
+          type: string
+          format: uuid
+        person:
+          type: boolean
+        principal:
+          type: string
+          enum:
+          - USER
+          - API_KEY
+        roles:
+          type: array
+          items:
+            type: string
+            enum:
+            - OWNER
+            - ADMIN
+            - ANALYST
+            - VIEWER
+          uniqueItems: true
+        userId:
+          type: string
+          format: uuid
     CreatePaymentRequest:
       type: object
       description: A payment about to be attempted
@@ -695,6 +869,20 @@ components:
           type: integer
           format: int64
           description: What has been given back so far
+        reviewRuledAt:
+          type: string
+          format: date-time
+          description: When they did
+        reviewRuledBy:
+          type: string
+          description: "Which person ruled. Never an API key: a review is somebody's\
+            \ judgement, and a control a merchant can automate away is not a control."
+        reviewRuling:
+          type: string
+          description: "What an analyst decided about a payment this platform held:\
+            \ RELEASED or REFUSED. Null on one nobody has ruled on, including one\
+            \ still waiting."
+          example: RELEASED
         riskReasons:
           type: string
           description: "What the scorer objected to, in words. A merchant asking why\
@@ -860,6 +1048,17 @@ components:
           - SUCCEEDED
           - FAILED
           - ABANDONED
+    RulingRequest:
+      type: object
+      description: An analyst's reason for a ruling
+      properties:
+        why:
+          type: string
+          example: "known customer, they called to confirm"
+          maxLength: 1000
+          minLength: 0
+      required:
+      - why
     TransitionResponse:
       type: object
       description: One step a payment took

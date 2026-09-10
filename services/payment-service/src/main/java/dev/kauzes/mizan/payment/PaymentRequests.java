@@ -181,6 +181,18 @@ final class PaymentRequests {
                                     "What the scorer objected to, in words. A merchant asking "
                                             + "why a payment was held is asking for this.")
                     String riskReasons,
+            @Schema(
+                            description =
+                                    "What an analyst decided about a payment this platform "
+                                            + "held: RELEASED or REFUSED. Null on one nobody "
+                                            + "has ruled on, including one still waiting.",
+                            example = "RELEASED")
+                    String reviewRuling,
+            @Schema(description = "Which person ruled. Never an API key: a review is somebody's "
+                            + "judgement, and a control a merchant can automate away is not a "
+                            + "control.")
+                    String reviewRuledBy,
+            @Schema(description = "When they did") Instant reviewRuledAt,
             @Schema(description = "What has been given back so far") long refundedAmount,
             @Schema(
                             description =
@@ -208,6 +220,9 @@ final class PaymentRequests {
                     payment.riskVerdict(),
                     payment.riskScore(),
                     payment.riskReasons(),
+                    payment.reviewRuling(),
+                    payment.reviewRuledBy(),
+                    payment.reviewRuledAt(),
                     payment.refundedAmount(),
                     payment.refundableAmount(),
                     payment.createdAt(),

@@ -39,8 +39,18 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     List<Payment> findByStatusAndUpdatedAtBeforeAndNeedsAttentionSinceIsNull(
             PaymentStatus status, Instant before);
 
-    /** Payments held for review since before a moment, for the expiry sweep. */
-    List<Payment> findByStatusAndHeldAtBefore(PaymentStatus status, Instant heldBefore);
+    /**
+     * Payments held for review that nobody has ruled on, since before a moment.
+     *
+     * <p>The sweep must skip a released payment: a person has already decided, and expiring it
+     * would overrule them by doing nothing, which is the worst way to be overruled.
+     */
+    List<Payment> findByStatusAndReviewRulingIsNullAndHeldAtBefore(
+            PaymentStatus status, Instant heldBefore);
+
+    /** What is waiting for a person, oldest first. */
+    List<Payment> findByMerchantIdAndStatusAndReviewRulingIsNullOrderByHeldAtAsc(
+            UUID merchantId, PaymentStatus status);
 
     /** What needs a person and nobody has dealt with, oldest first. */
     List<Payment> findByNeedsAttentionSinceIsNotNullAndAttentionHandledAtIsNullOrderByNeedsAttentionSinceAsc();

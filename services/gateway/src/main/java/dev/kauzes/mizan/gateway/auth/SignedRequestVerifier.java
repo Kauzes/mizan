@@ -3,6 +3,7 @@ package dev.kauzes.mizan.gateway.auth;
 import dev.kauzes.mizan.common.error.ErrorCode;
 import dev.kauzes.mizan.common.error.MizanException;
 import dev.kauzes.mizan.common.error.UnauthorizedException;
+import dev.kauzes.mizan.common.identity.Principal;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,7 +54,7 @@ public class SignedRequestVerifier {
                         verified.principalId().toString(),
                         verified.merchantId().toString(),
                         List.of(verified.role()),
-                        VerifiedCaller.Principal.API_KEY))
+                        Principal.API_KEY))
                 .onErrorMap(SignedRequestVerifier::asRefusalOrOutage);
     }
 
