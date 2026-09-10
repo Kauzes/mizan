@@ -23,7 +23,7 @@ paths:
         Most recent first. Scoped to the merchant in the path.
 
         Requires the NOTIFICATION_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
-      operationId: list_2
+      operationId: list_3
       parameters:
       - in: path
         name: merchantId
@@ -49,6 +49,55 @@ paths:
       summary: List a merchant's notifications
       tags:
       - Notifications
+  /api/v1/merchants/{merchantId}/webhook-deliveries:
+    get:
+      description: |-
+        Most recent first, across every endpoint. Narrowed to one payment with `paymentId`, which is what a merchant asking "did you tell me about this one" wants.
+
+        Each row names the endpoint it went to; the attempts behind a delivery are read through that endpoint's own route.
+
+        Requires the WEBHOOK_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
+      operationId: list_2
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: Only what was sent about this payment
+        in: query
+        name: paymentId
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: limit
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: {}
+          description: The deliveries
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+      security:
+      - merchantJwt: []
+      summary: What was sent to this merchant
+      tags:
+      - Webhooks
   /api/v1/merchants/{merchantId}/webhook-endpoints:
     get:
       description: |-

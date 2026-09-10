@@ -447,6 +447,13 @@ on an origin of its own.
 - **An empty answer says which filter emptied it.** A merchant who filtered themselves into
   nothing and one who has never taken a payment otherwise see the same blank table, and only
   one of them has something they can fix.
+- **The page that needs three services asks three services.** The payment detail shows the
+  timeline, the risk reasons, the ledger entries it produced and the webhook deliveries it
+  triggered, and it asks payment-service, ledger-service and notification-service separately.
+  A composing endpoint would be one round trip fewer and one service that knows about all
+  three, breaking whenever any of them changed. ADR 0036 has the argument.
+- **A section nobody may read is not fetched.** A panel that renders a refusal is a panel that
+  has told somebody the thing exists.
 - Run it with `npm run dev` in `console`, or reach the Compose stack's copy at
   `http://localhost:5173`.
 
