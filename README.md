@@ -30,7 +30,7 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 | `identity-service` | 8081 | Merchants, users, roles, JWT tokens, merchant API keys |
 | `ledger-service` | 8082 | Double entry accounts, journal entries, postings, reconciliation |
 | `payment-service` | 8083 | Payment lifecycle and saga orchestration, idempotency |
-| `risk-service` | 8084 | Real time scoring, analyst review queue, threshold feedback |
+| `risk-service` | 8084 | Scores a payment and says why; review queue and feedback next |
 | `notification-service` | 8085 | Turns payment events into what a merchant is told; webhooks next |
 | `bank-simulator` | 8086 | Fake acquirer that approves, declines, times out and duplicates |
 | `common` | n/a | Shared money type, error codes, correlation context. No Spring |
@@ -194,6 +194,20 @@ other protected route.
   double entry ledger exists to prevent.
 - A decision records who, when, why, and what it changed, and cannot be rewritten or deleted.
   Evidence the next decision can overwrite is not evidence.
+- Risk scoring returns the reasons, not a number. A score of 68 tells a merchant nothing they
+  can act on and an analyst nothing they can check; a decision nobody can argue with is one
+  nobody can fix.
+- Three verdicts, not two. A scorer that can only approve or block has to be certain about
+  everything, so it is tuned either to let fraud through or to refuse honest customers. Holding
+  a payment for a person costs a delay, which is smaller than either mistake it replaces.
+- Signals add up rather than being tested one at a time, and one of them lowers the score: a
+  scorer that can only add grows more suspicious of a customer the longer they stay. The total
+  is floored at zero so a trusted card cannot bank credit against a later alarming amount.
+- Scoring is a pure function of its request, including the timestamp. The same request scores
+  the same way twice, so a disagreement about a decision can be reproduced by somebody who was
+  not there.
+- A merchant with no history is not treated as suspicious. Cold start is the common case, and a
+  scorer that blocks every merchant's first payment is one nobody switches on.
 - A webhook endpoint has to be https and has to resolve to an address on the public internet,
   checked against every address it resolves to rather than against its hostname. A service
   that fetches whatever URL it is handed is a service that makes requests inside its own

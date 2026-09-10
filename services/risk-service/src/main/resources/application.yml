@@ -21,6 +21,14 @@ spring:
     # their checksums are unchanged, so an existing schema history still matches.
     locations: classpath:db/migration/risk
 
+mizan:
+  risk:
+    # Where the platform's line sits for a merchant who has not chosen their own. A starting
+    # point rather than an answer: a marketplace and a car dealer have different ideas of
+    # alarming, and MIZ-59's feedback loop moves these per merchant from what analysts rule.
+    review-above: ${MIZAN_RISK_REVIEW_ABOVE:40}
+    block-above: ${MIZAN_RISK_BLOCK_ABOVE:70}
+
 springdoc:
   # Keys in a stable order, so a regenerated spec differs only where the API differs and the
   # committed file stays reviewable.
