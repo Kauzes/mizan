@@ -309,3 +309,86 @@ table.payments .right {
   margin-top: 1rem;
   font-size: 0.9rem;
 }
+
+/* -- one payment ------------------------------------------------------------------------ */
+
+.crumbs {
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.crumbs a,
+table.payments a {
+  color: inherit;
+}
+
+dl.facts {
+  display: grid;
+  grid-template-columns: 10rem 1fr;
+  gap: 0.35rem 1rem;
+  margin: 1rem 0 0;
+  font-size: 0.92rem;
+}
+
+dl.facts dt {
+  color: var(--muted);
+}
+
+dl.facts dd {
+  margin: 0;
+}
+
+ol.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.92rem;
+}
+
+ol.timeline li {
+  display: grid;
+  grid-template-columns: 13rem 1fr;
+  gap: 0.75rem;
+}
+
+ol.timeline .at {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+ul.plain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.92rem;
+}
+
+.entry {
+  margin-bottom: 1rem;
+  font-size: 0.92rem;
+}
+
+table.postings {
+  border-collapse: collapse;
+  min-width: 24rem;
+}
+
+table.postings td {
+  padding: 0.25rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+table.postings .right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+table.postings tr.sum td {
+  border-bottom: 0;
+  border-top: 2px solid var(--line);
+  color: var(--muted);
+}

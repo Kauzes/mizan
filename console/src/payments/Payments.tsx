@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { fetchPage, type Page } from "../api/paged";
 import { PlatformError } from "../api/problems";
 import { formatMoney } from "../money/money";
@@ -16,19 +16,7 @@ import {
   toSearchParams,
   type Filters,
 } from "./filters";
-
-/** As much of a payment as a list needs. The detail page asks for the rest. */
-export interface PaymentRow {
-  readonly id: string;
-  readonly amount: number;
-  readonly currency: string;
-  readonly status: string;
-  readonly reference: string;
-  readonly riskVerdict: string | null;
-  readonly riskScore: number | null;
-  readonly cardLastFour: string | null;
-  readonly createdAt: string;
-}
+import type { PaymentRow } from "./types";
 
 export function Payments() {
   const { session, caller } = useSession();
@@ -127,7 +115,9 @@ export function Payments() {
                 <tr key={payment.id}>
                   <td>{when(payment.createdAt)}</td>
                   <td>
-                    <code>{payment.reference}</code>
+                    <Link to={`/payments/${payment.id}`}>
+                      <code>{payment.reference}</code>
+                    </Link>
                   </td>
                   <td className="right">
                     {formatMoney({ amount: payment.amount, currency: payment.currency })}

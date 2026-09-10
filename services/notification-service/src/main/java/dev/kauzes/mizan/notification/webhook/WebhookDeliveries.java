@@ -243,6 +243,29 @@ public class WebhookDeliveries {
                 limit);
     }
 
+    /**
+     * What was sent to this merchant, optionally about one payment.
+     *
+     * <p>The endpoint id comes back with each row on purpose: it is what lets a caller ask
+     * for the attempts behind a delivery without this having to grow a second route that
+     * answers the same question.
+     */
+    public List<Map<String, Object>> forMerchant(UUID merchantId, UUID paymentId, int limit) {
+        String columns = "select id, endpoint_id, notification_id, payment_id, event_type, "
+                + "status, attempts, last_status_code, last_error, delivered_at, created_at, "
+                + "updated_at from webhook_delivery where merchant_id = ?";
+
+        if (paymentId == null) {
+            return jdbc.queryForList(columns + " order by created_at desc limit ?",
+                    merchantId, limit);
+        }
+        return jdbc.queryForList(
+                columns + " and payment_id = ? order by created_at desc limit ?",
+                merchantId,
+                paymentId,
+                limit);
+    }
+
     public List<Map<String, Object>> attemptsOf(UUID merchantId, UUID deliveryId) {
         return jdbc.queryForList(
                 "select a.attempt, a.at, a.status_code, a.duration_ms, a.error "
