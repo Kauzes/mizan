@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Home } from "./pages/Home";
 import { PaymentDetail } from "./payments/PaymentDetail";
 import { Payments } from "./payments/Payments";
+import { Reviews } from "./reviews/Reviews";
 import { SignIn } from "./pages/SignIn";
 import { useSession } from "./session/SessionProvider";
 import { Shell } from "./shell/Shell";
@@ -35,6 +36,7 @@ export function App() {
         <Routes>
           <Route path="/payments" element={<Payments />} />
           <Route path="/payments/:paymentId" element={<PaymentDetail />} />
+          <Route path="/reviews" element={<Reviews />} />
           <Route path="/account" element={<Home />} />
           <Route path="/" element={<Navigate to="/payments" replace />} />
           {/* Anything else is a link somebody kept from a version that had more pages. */}

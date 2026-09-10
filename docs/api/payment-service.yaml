@@ -548,6 +548,48 @@ paths:
       summary: What is waiting for a person
       tags:
       - Reviews
+  /api/v1/merchants/{merchantId}/reviews/rulings:
+    get:
+      description: |-
+        Most recent first, with what the scorer had said at the time, so an analyst can see their colleagues' decisions rather than making the same one again differently.
+
+        Beside them, how far this merchant's line has drifted from where a person set it. What analysts decided and what the platform learned from it are the same question asked twice, so they are answered in one place.
+
+        `known` is false when the scorer could not be asked. The drift is then absent rather than zero: zero is a fact about a merchant whose line has not moved.
+
+        Requires the REVIEW_RULE permission, held by: OWNER, ADMIN, ANALYST. The caller must be acting for the merchant in the path.
+      operationId: ruled
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: limit
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: "The rulings, and the drift"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+      security:
+      - merchantJwt: []
+      summary: "What has already been ruled, and what the platform learned from it"
+      tags:
+      - Reviews
   /api/v1/merchants/{merchantId}/reviews/{paymentId}/refuse:
     post:
       description: |-

@@ -6,6 +6,7 @@ import dev.kauzes.mizan.common.identity.Caller;
 import dev.kauzes.mizan.common.error.UnprocessableException;
 import dev.kauzes.mizan.payment.PaymentRequests.PaymentResponse;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +49,29 @@ public class ReviewQueue {
                 .stream()
                 .map(PaymentResponse::of)
                 .toList();
+    }
+
+    /**
+     * What has already been ruled for this merchant, and what the platform learned from it.
+     *
+     * <p>Read through the queue rather than from risk directly. An analyst asking "what have
+     * we decided" and "how far has that moved our line" is asking one question twice, and risk
+     * has no route from the edge for it to be asked at: none of its paths names a merchant in
+     * a way the gateway could scope by.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> ruled(UUID merchantId, int limit) {
+        RiskClient.Learned learned = risk.learnedFor(merchantId, limit);
+
+        // A LinkedHashMap rather than Map.of, because the adjustment is genuinely absent
+        // when the scorer could not be asked and Map.of cannot hold a null. Null rather than
+        // zero on purpose: zero is a fact about a merchant whose line has not moved, and
+        // saying it when nothing is known would be inventing one.
+        Map<String, Object> answer = new java.util.LinkedHashMap<>();
+        answer.put("rulings", learned.rulings());
+        answer.put("learnedAdjustment", learned.learnedAdjustment());
+        answer.put("known", learned.known());
+        return answer;
     }
 
     /**

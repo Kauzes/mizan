@@ -5,6 +5,7 @@ import dev.kauzes.mizan.common.web.CircuitBreaker;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -169,6 +170,61 @@ public class RiskClient {
             String riskReasons,
             String ruledBy,
             String why) {
+    }
+
+    /**
+     * What has been ruled for this merchant, and how far the loop has moved their line.
+     *
+     * <p>Read through here rather than by the console asking risk directly, because risk has
+     * no route from the edge and should not have one: none of its paths names a merchant in a
+     * way the gateway could scope by, so a route would have been a way to read somebody
+     * else's rulings with nothing but a token of your own. The queue is where the payment is,
+     * and this is the same answer arriving by the same door.
+     *
+     * <p>Answers with nothing rather than failing when risk cannot be asked. A queue that
+     * cannot be worked because a scorer is down is the failure ADR 0033 exists to avoid, and
+     * the drift is the least important thing on the page.
+     */
+    public Learned learnedFor(UUID merchantId, int limit) {
+        try {
+            Learned learned = breaker.call(() -> http.get()
+                    .uri("/api/v1/risk/rulings/merchants/{merchantId}?limit={limit}",
+                            merchantId,
+                            limit)
+                    .retrieve()
+                    .body(Learned.class));
+
+            return learned == null ? Learned.nothingKnown() : learned;
+
+        } catch (RuntimeException couldNotAsk) {
+            log.warn(
+                    "what has been ruled for {} could not be read: {}",
+                    merchantId,
+                    couldNotAsk.getMessage());
+            return Learned.nothingKnown();
+        }
+    }
+
+    /**
+     * What analysts decided for a merchant, and what the platform learned from it.
+     *
+     * <p>One constructor, because two would be one for Jackson to choose between. Whether
+     * anything is known is derived rather than carried: risk always answers with a number,
+     * even when that number is zero, so an absent one means the question could not be asked.
+     */
+    public record Learned(List<Map<String, Object>> rulings, Integer learnedAdjustment) {
+
+        public Learned {
+            rulings = rulings == null ? List.of() : List.copyOf(rulings);
+        }
+
+        static Learned nothingKnown() {
+            return new Learned(List.of(), null);
+        }
+
+        public boolean known() {
+            return learnedAdjustment != null;
+        }
     }
 
     /** What state the breaker is in, for anything that wants to show it. */

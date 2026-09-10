@@ -133,6 +133,13 @@ printf '%s' "$listing" | grep -q "^\[" || fail "the body is no longer a plain li
 authed 422 GET "$GATEWAY/api/v1/merchants/$MERCHANT/payments?status=NEARLY" > /dev/null
 pass "payments page, say how many there are, and refuse a filter nobody understands"
 
+# Risk answers services, not merchants. None of its paths names a merchant the gateway could
+# scope by, so a route from the edge would have been a way to read another merchant's rulings
+# and to score against their baseline, with nothing but a token of your own.
+authed 404 GET "$GATEWAY/api/v1/risk/rulings/merchants/$MERCHANT" > /dev/null
+authed 404 POST "$GATEWAY/api/v1/risk/scores" '{}' > /dev/null
+pass "and risk is not reachable from the edge at all, by anybody"
+
 # ---------------------------------------------------------------------------------------
 step "7. A second payment is authorized and voided"
 
