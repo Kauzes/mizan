@@ -118,6 +118,13 @@ call 404 POST "$GATEWAY/internal/ledger-service/internal/entries" '{}' \
     -H "Authorization: Bearer $AUTH" > /dev/null
 pass "and the route that can move money between two merchants' books is not reachable here"
 
+# The review queue, reached the way an analyst would. Nothing is held on a clean run, so what
+# this asserts is the thing a test suite structurally cannot: that the gateway forwards the
+# route at all. A queue nobody can reach is a queue of customers waiting for nothing.
+queue=$(authed 200 GET "$GATEWAY/api/v1/merchants/$MERCHANT/reviews")
+[ "$queue" = "[]" ] || fail "a clean run should have held nothing, and this queue holds: $queue"
+pass "the review queue answers through the gateway, and has nothing waiting"
+
 # ---------------------------------------------------------------------------------------
 step "7. A second payment is authorized and voided"
 

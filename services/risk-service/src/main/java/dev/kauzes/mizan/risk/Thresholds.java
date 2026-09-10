@@ -29,14 +29,26 @@ public class Thresholds {
         this.defaultBlockAbove = defaultBlockAbove;
     }
 
-    /** This merchant's lines, or the platform's if they have not chosen. */
+    /**
+     * This merchant's lines, or the platform's if they have not chosen, moved by whatever the
+     * rulings have taught.
+     *
+     * <p>The adjustment is added here rather than written into the stored thresholds, so that
+     * what a person asked for and what the loop inferred stay separate. A person can then
+     * always see how far the platform has drifted from their instruction, and set it back
+     * without having to work out what it used to be.
+     */
     public int[] forMerchant(UUID merchantId) {
         return jdbc
                 .query(
-                        "select review_above, block_above from merchant_thresholds "
-                                + "where merchant_id = ?",
-                        (row, index) -> new int[] {
-                            row.getInt("review_above"), row.getInt("block_above")
+                        "select review_above, block_above, learned_adjustment "
+                                + "from merchant_thresholds where merchant_id = ?",
+                        (row, index) -> {
+                            int learned = row.getInt("learned_adjustment");
+                            return new int[] {
+                                Math.max(0, row.getInt("review_above") + learned),
+                                Math.max(1, row.getInt("block_above") + learned)
+                            };
                         },
                         merchantId)
                 .stream()

@@ -30,7 +30,7 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 | `identity-service` | 8081 | Merchants, users, roles, JWT tokens, merchant API keys |
 | `ledger-service` | 8082 | Double entry accounts, journal entries, postings, reconciliation |
 | `payment-service` | 8083 | Payment lifecycle and saga orchestration, idempotency |
-| `risk-service` | 8084 | Scores a payment and says why; review queue and feedback next |
+| `risk-service` | 8084 | Scores a payment and says why, and learns from what analysts rule |
 | `notification-service` | 8085 | Turns payment events into what a merchant is told; webhooks next |
 | `bank-simulator` | 8086 | Fake acquirer that approves, declines, times out and duplicates |
 | `common` | n/a | Shared money type, error codes, correlation context. No Spring |
@@ -219,6 +219,19 @@ other protected route.
 - A held payment charges nobody and is not a decline. If nobody rules on it, it expires
   refused rather than approved: letting a hold resolve to "take the money" makes the
   safe-looking answer the default and turns a review queue into a delay before approving.
+- A held payment is refused an authorization until somebody rules on it, including — especially
+  — when the merchant it was applied to simply asks again. The obvious implementation skips
+  scoring for a payment that is already held, which is a hole with a queue drawn around it.
+- Releasing does not authorize. An analyst says the scorer was wrong about this one; taking the
+  money stays something the merchant does, with the card this service does not keep. So a
+  released payment is still held and no longer waiting, and the queue and the expiry sweep both
+  ask whether anybody has ruled rather than what the status is.
+- The scorer learns from rulings, bounded four ways. Three consecutive rulings the same way
+  before anything moves and another three before it moves again, five points when it does,
+  twenty points of drift at the very most, and a check constraint that says so independently of
+  the code. What a person set and what the loop
+  inferred are stored separately, so the drift is always visible and always reversible. A loop
+  nobody bounded is a loop an attacker teaches, one released payment at a time.
 - What is normal is learned from payment events, not typed in. Risk is told what happened and
   never reads the payment database: a scorer that reached across would make the payment service
   unable to change a column without breaking fraud detection.
@@ -383,12 +396,18 @@ merchant exists or not.
 |---|---|
 | `OWNER` | Everything, within their own merchant. Adding and removing people, changing what they may do, and issuing API keys |
 | `ADMIN` | Read the merchant, see who acts for it, and open accounts |
-| `ANALYST` | Read the merchant and its books. The review queue in MIZ-6 is what this role is for |
+| `ANALYST` | Read the merchant and its books, and rule on payments the platform held |
 | `VIEWER` | Read the merchant and its books |
 
 An epic that adds endpoints adds the permissions they need and grants them in `Role`, which is
-the one place to look when asking what somebody can do. `ANALYST` is still thinner than it will
-be; the review queue in MIZ-6 is what that role is for.
+the one place to look when asking what somebody can do. `ANALYST` is deliberately thin:
+somebody deciding whether a payment is fraud has no reason to be able to add a user, rotate a
+secret or move money, and the point of a separate role is that they cannot.
+
+Beside the roles there is a second question, which only a handful of endpoints ask: whether a
+person sent the request, or a merchant's own server holding an API key. `Caller.isPerson()`
+answers it. Ruling on a held payment needs a person — a control a merchant can put in a cron
+job is not a control.
 
 A merchant always has an owner: the last one cannot be removed or demoted. An account nobody
 can administer is recoverable only by hand in the database.

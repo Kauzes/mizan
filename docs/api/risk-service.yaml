@@ -15,6 +15,65 @@ tags:
 - description: "What this platform thinks of a payment, and why"
   name: Risk
 paths:
+  /api/v1/risk/rulings:
+    post:
+      description: |-
+        Records the ruling and, if the last few went the same way, moves this merchant's line.
+
+        The movement is deliberately slow and bounded. It takes several consecutive rulings the same way before anything moves at all, it moves a few points when it does, and it can never drift more than twenty from where a person set it. A loop nobody bounded is a loop an attacker teaches, one released payment at a time.
+
+        What a person set and what the loop inferred are kept separately, so the drift is always visible and always reversible.
+      operationId: rule
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RulingRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: "The ruling, and what it moved"
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+        "409":
+          $ref: "#/components/responses/CONFLICT"
+      summary: Record what an analyst decided
+      tags:
+      - Risk
+  /api/v1/risk/rulings/merchants/{merchantId}:
+    get:
+      description: "Most recent first, with what the scorer had said at the time."
+      operationId: forMerchant
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: limit
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: The rulings
+      summary: What has been ruled for a merchant
+      tags:
+      - Risk
   /api/v1/risk/scores:
     post:
       description: |-
@@ -261,6 +320,47 @@ components:
       - timestamp
       - title
       - type
+    RulingRequest:
+      type: object
+      description: What an analyst decided about a held payment
+      properties:
+        merchantId:
+          type: string
+          format: uuid
+        paymentId:
+          type: string
+          format: uuid
+        riskReasons:
+          type: string
+          description: And why it said it
+          maxLength: 2000
+          minLength: 0
+        riskScore:
+          type: integer
+          format: int32
+          description: What the scorer had said at the time
+        ruledBy:
+          type: string
+          example: grace
+          maxLength: 200
+          minLength: 0
+        ruling:
+          type: string
+          description: RELEASED or REFUSED
+          example: RELEASED
+          minLength: 1
+          pattern: RELEASED|REFUSED
+        why:
+          type: string
+          example: "known customer, they called to confirm"
+          maxLength: 1000
+          minLength: 0
+      required:
+      - merchantId
+      - paymentId
+      - ruledBy
+      - ruling
+      - why
     ScoreRequest:
       type: object
       description: A payment to score
