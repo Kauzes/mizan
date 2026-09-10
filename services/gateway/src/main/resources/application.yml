@@ -27,7 +27,7 @@ spring:
               uri: http://identity-service:8081
               order: 0
               predicates:
-                - Path=/api/v1/merchants,/api/v1/merchants/**,/api/v1/tokens,/api/v1/tokens/**
+                - Path=/api/v1/merchants,/api/v1/merchants/**,/api/v1/tokens,/api/v1/tokens/**,/api/v1/roles
             - id: payment-service
               uri: http://payment-service:8083
               order: -100

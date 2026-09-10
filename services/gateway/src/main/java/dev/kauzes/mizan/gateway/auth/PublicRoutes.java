@@ -34,6 +34,16 @@ public class PublicRoutes {
             route(HttpMethod.POST, "/api/v1/tokens"),
             route(HttpMethod.POST, "/api/v1/tokens/refresh"),
 
+            // Ending a session is the refresh token's business, not the access token's. A
+            // caller whose access token has already expired still has to be able to sign out,
+            // and that is exactly the moment they are most likely to want to.
+            route(HttpMethod.POST, "/api/v1/tokens/sign-out"),
+
+            // What a role may do is the platform's own access model, not anybody's data: the
+            // same table the API documentation prints, identical for every merchant. A console
+            // needs it before it can decide what to show, which is before it has a token.
+            route(HttpMethod.GET, "/api/v1/roles"),
+
             // Registration opens the first account, so it cannot require an account. This is
             // the one genuinely open write on the platform; MIZ-13's rate limiting is what
             // keeps it from being abused.

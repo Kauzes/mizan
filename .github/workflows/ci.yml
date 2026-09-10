@@ -41,6 +41,38 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  console:
+    name: Console
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Its own job rather than a step in the Gradle build. Nothing in the console is a Gradle
+    # module, the two toolchains share nothing, and a broken component test should say so
+    # while the services are still being compiled rather than after.
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: console/package-lock.json
+
+      - name: Install
+        working-directory: console
+        # ci, not install: it builds from the lock file and fails if package.json and the
+        # lock file disagree, which is the failure that otherwise reaches production.
+        run: npm ci
+
+      - name: Types and build
+        working-directory: console
+        run: npm run build
+
+      - name: Test
+        working-directory: console
+        run: npm test
+
   smoke:
     name: Smoke check
     runs-on: ubuntu-latest

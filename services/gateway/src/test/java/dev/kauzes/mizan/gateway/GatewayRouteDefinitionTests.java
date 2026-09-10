@@ -57,7 +57,8 @@ class GatewayRouteDefinitionTests {
                                 "/api/v1/merchants",
                                 "/api/v1/merchants/**",
                                 "/api/v1/tokens",
-                                "/api/v1/tokens/**"));
+                                "/api/v1/tokens/**",
+                                "/api/v1/roles"));
 
         assertThat(byId.values())
                 .as("a caller should never have to name a service to reach a resource")

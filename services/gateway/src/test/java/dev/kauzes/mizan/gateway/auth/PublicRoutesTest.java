@@ -17,6 +17,8 @@ class PublicRoutesTest {
     void opensWhatCannotRequireAToken() {
         assertThat(isPublic(MockServerHttpRequest.post("/api/v1/tokens"))).isTrue();
         assertThat(isPublic(MockServerHttpRequest.post("/api/v1/tokens/refresh"))).isTrue();
+        assertThat(isPublic(MockServerHttpRequest.post("/api/v1/tokens/sign-out"))).isTrue();
+        assertThat(isPublic(MockServerHttpRequest.get("/api/v1/roles"))).isTrue();
         assertThat(isPublic(MockServerHttpRequest.post("/api/v1/merchants"))).isTrue();
         assertThat(isPublic(MockServerHttpRequest.get("/actuator/health"))).isTrue();
     }

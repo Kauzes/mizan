@@ -16,8 +16,8 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 | Milestone | Scope | State |
 |---|---|---|
 | M1 | Foundation, identity, ledger core, payment happy path | complete |
-| M2 | Kafka outbox, risk scoring, refunds and saga compensation | in progress |
-| M3 | Merchant webhooks, React merchant console | not started |
+| M2 | Kafka outbox, risk scoring, refunds and saga compensation | complete |
+| M3 | Merchant webhooks, React merchant console | in progress |
 | M4 | Settlement, reconciliation, observability | not started |
 | M5 | Kubernetes delivery, load and chaos testing | not started |
 | M6 | Android merchant app, documentation | not started |
@@ -33,6 +33,7 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 | `risk-service` | 8084 | Scores a payment and says why, and learns from what analysts rule |
 | `notification-service` | 8085 | Turns payment events into what a merchant is told; webhooks next |
 | `bank-simulator` | 8086 | Fake acquirer that approves, declines, times out and duplicates |
+| `console` | 5173 | The merchant console: React, TypeScript, Vite, served beside the API |
 | `common` | n/a | Shared money type, error codes, correlation context. No Spring |
 | `common-web` | n/a | Auto configured problem details and correlation id propagation |
 | `common-test` | n/a | Integration test harness: containers pinned to the compose images |
@@ -296,13 +297,15 @@ other protected route.
 
 ## Requirements
 
-Java 21, Docker, Node 20 or newer. Nothing else needs to be installed locally; the
-integration tests start Postgres and Kafka in containers through Testcontainers.
+Java 21, Docker, and Node 24 or newer for the console. Nothing else needs to be installed
+locally; the integration tests start Postgres and Kafka in containers through Testcontainers,
+and the console is built inside its own image when the Compose stack comes up.
 
 ## Testing
 
     ./gradlew build                 # everything, including container backed tests
     ./gradlew build -PfastTests     # skips anything tagged integration, no Docker needed
+    cd console && npm test          # the console, in jsdom, in about half a minute
 
 Integration tests run against real Postgres and real Kafka, never an in memory substitute,
 so a test cannot pass on something the deployment does not use. The containers start once
@@ -413,6 +416,32 @@ Beside the roles there is a second question, which only a handful of endpoints a
 person sent the request, or a merchant's own server holding an API key. `Caller.isPerson()`
 answers it. Ruling on a held payment needs a person — a control a merchant can put in a cron
 job is not a control.
+
+What each role may do is also served, at `GET /api/v1/roles`, generated from the same enum the
+services enforce. The console reads it rather than keeping a copy: a second table would be
+right on the day it was typed and wrong on the day somebody adds a permission.
+
+## The console
+
+A React and TypeScript application, built with Vite, served by nginx beside the API rather than
+on an origin of its own.
+
+- **A browser is the one client that cannot keep a secret.** The access token lives in a
+  closure for the fifteen minutes it is good for. The refresh token lives in a `HttpOnly`,
+  `Secure`, `SameSite=Strict` cookie scoped to `/api/v1/tokens`, which the page cannot read.
+  Script that reaches the page can use the session while it is open; it cannot copy the
+  credential and use it tomorrow. That is ADR 0035, and it is why the console and the API are
+  one origin: a cookie only goes back where it came from.
+- **One renewal at a time.** A refresh token is single use and replaying one revokes the whole
+  family, so two panels refreshing in parallel would look exactly like a stolen token being
+  replayed and would sign the person out. The single-flight is not an optimisation.
+- **A failed renewal signs the person out**, rather than leaving them holding a token that no
+  longer renews and a page that fails differently everywhere.
+- **Money is formatted in one place.** The platform transports minor units and never a decimal,
+  so nothing else is allowed arithmetic on an amount — including reading one back off a form,
+  where multiplying a parsed float by a hundred is how 8.29 becomes 828.
+- Run it with `npm run dev` in `console`, or reach the Compose stack's copy at
+  `http://localhost:5173`.
 
 A merchant always has an owner: the last one cannot be removed or demoted. An account nobody
 can administer is recoverable only by hand in the database.

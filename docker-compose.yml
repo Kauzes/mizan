@@ -82,6 +82,10 @@ services:
         MODULE: identity-service
     environment:
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/identity
+      # This stack speaks plain HTTP, and a Secure cookie is never sent over it — so the
+      # console's session would not survive a reload locally. Off here and nowhere else:
+      # a session cookie crossing a real network unencrypted is what the flag exists for.
+      MIZAN_SECURITY_SESSION_COOKIE_SECURE: "false"
       # Base64 of "mizan-local-development-only-key", which is what it is. A deployment sets
       # this from wherever it keeps secrets; the local stack pins it so that keys issued
       # before a restart still verify after one.
@@ -222,6 +226,28 @@ services:
       timeout: 5s
       retries: 30
       start_period: 30s
+
+  console:
+    build:
+      context: .
+      dockerfile: console/Dockerfile
+    # Same origin as the API, by proxying to the gateway. Not a convenience: the refresh
+    # token is a cookie the page cannot read, and a browser only returns a cookie to the
+    # origin that set it.
+    depends_on:
+      gateway:
+        condition: service_healthy
+    ports:
+      - "5173:80"
+    healthcheck:
+      # By address rather than by name: nginx listens on IPv4 here and "localhost" resolves
+      # to ::1 first inside this image, which is a health check that fails while the server
+      # is perfectly well.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
   bank-simulator:
     build:
