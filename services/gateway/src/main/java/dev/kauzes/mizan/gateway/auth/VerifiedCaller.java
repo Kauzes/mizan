@@ -1,5 +1,6 @@
 package dev.kauzes.mizan.gateway.auth;
 
+import dev.kauzes.mizan.common.identity.Principal;
 import java.util.List;
 
 /**
@@ -8,12 +9,6 @@ import java.util.List;
  */
 public record VerifiedCaller(
         String userId, String merchantId, List<String> roles, Principal principal) {
-
-    /** What kind of caller this is. A person signed in, or a merchant's own server. */
-    public enum Principal {
-        USER,
-        API_KEY
-    }
 
     public static VerifiedCaller user(String userId, String merchantId, List<String> roles) {
         return new VerifiedCaller(userId, merchantId, roles, Principal.USER);

@@ -56,5 +56,15 @@ public enum Permission {
      * the old one, and that is not something a person who only needed to look should be able
      * to do by clicking the wrong thing.
      */
-    WEBHOOK_MANAGE
+    WEBHOOK_MANAGE,
+
+    /**
+     * Rule on a payment risk held for review: release it, or refuse it.
+     *
+     * <p>The only permission that lets somebody overrule the platform's own judgement. It is
+     * deliberately not part of PAYMENT_WRITE: starting a payment and deciding that a suspicious
+     * one should go through are different jobs, and the person who does the second should not
+     * get it by being able to do the first.
+     */
+    REVIEW_RULE
 }

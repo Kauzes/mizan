@@ -38,12 +38,13 @@ public enum Role {
             Permission.PAYMENT_WRITE,
             Permission.NOTIFICATION_READ,
             Permission.WEBHOOK_READ,
-            Permission.WEBHOOK_MANAGE)),
+            Permission.WEBHOOK_MANAGE,
+            Permission.REVIEW_RULE)),
 
     /**
      * Reviews payments the risk engine held back. Holds nothing administrative on purpose:
      * somebody deciding whether a payment is fraud has no reason to be able to add a user.
-     * Reading the books is part of the job; the rest arrives with the review queue in MIZ-6.
+     * Reading the books is part of the job; ruling on what was held is the rest of it.
      */
     ANALYST(EnumSet.of(
             Permission.MERCHANT_READ,
@@ -51,7 +52,12 @@ public enum Role {
             Permission.ENTRY_READ,
             Permission.PAYMENT_READ,
             Permission.NOTIFICATION_READ,
-            Permission.WEBHOOK_READ)),
+            Permission.WEBHOOK_READ,
+            // The reason this role exists, arriving at last. Ruling on a held payment and
+            // nothing else: somebody deciding whether a payment is fraud has no reason to be
+            // able to add a user, rotate a secret or move money, and the whole point of a
+            // separate role is that they cannot.
+            Permission.REVIEW_RULE)),
 
     /** Reads, and changes nothing. */
     VIEWER(EnumSet.of(

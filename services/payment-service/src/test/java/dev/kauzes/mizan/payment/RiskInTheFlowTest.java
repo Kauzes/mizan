@@ -354,20 +354,20 @@ class RiskInTheFlowTest extends MizanIntegrationTest {
     }
 
     @Test
-    void aHeldPaymentThatIsReleasedIsNotScoredAgain() throws Exception {
+    void aHeldPaymentGoesNoFurtherUntilAPersonSaysSo() throws Exception {
         Merchant merchant = merchant();
         UUID payment = created(merchant);
         risk.verdict.set("REVIEW");
         authorize(merchant, payment).andExpect(status().isOk());
 
-        // Standing in for MIZ-59's analyst release: authorizing a payment that is already
-        // held. The scorer must not get a second say — a person has overruled it, and asking
-        // again would let it overrule them back, forever.
+        // The merchant whose payment was held, sending the authorization again. Being held
+        // has to mean stopped, including to whoever it was applied to; MIZ-59 covers what
+        // happens once somebody has actually looked at it.
         risk.asked.set(0);
-        authorize(merchant, payment)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("AUTHORIZED"));
+        authorize(merchant, payment).andExpect(status().isUnprocessableContent());
 
+        assertThat(statusOf(payment)).isEqualTo("HELD_FOR_REVIEW");
+        assertThat(acquirerReferenceOf(payment)).isNull();
         assertThat(risk.asked).hasValue(0);
     }
 

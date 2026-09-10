@@ -149,6 +149,22 @@ public class Payment {
     @Column(name = "held_at")
     private Instant heldAt;
 
+    /**
+     * What a person decided about a payment that was held.
+     *
+     * <p>Beside the payment rather than moving it, because releasing cannot authorize: this
+     * service keeps only four digits of the card, so the merchant has to present it again. The
+     * payment stays held until they do, and this is what says it is no longer waiting.
+     */
+    @Column(name = "review_ruling")
+    private String reviewRuling;
+
+    @Column(name = "review_ruled_by")
+    private String reviewRuledBy;
+
+    @Column(name = "review_ruled_at")
+    private Instant reviewRuledAt;
+
     @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @OrderBy("at asc")
     private List<PaymentTransition> history = new ArrayList<>();
@@ -226,6 +242,56 @@ public class Payment {
     /** Released by a person, or expired: either way it stops being held. */
     private void noLongerHeld() {
         this.heldAt = null;
+    }
+
+    /**
+     * A person has decided this one should go through.
+     *
+     * <p>Does not authorize it. Releasing says the scorer was wrong about this payment; taking
+     * the money is a separate act the merchant performs, with the card they still have and this
+     * service does not. Collapsing the two would mean an analyst's click charging a customer.
+     */
+    public void releasedForReview(String who, String why) {
+        this.reviewRuling = "RELEASED";
+        this.reviewRuledBy = who;
+        this.reviewRuledAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        this.history.add(new PaymentTransition(
+                this, status, PaymentStatus.HELD_FOR_REVIEW, who + " released it: " + why));
+        this.updatedAt = reviewRuledAt;
+    }
+
+    /** And this is where a refusal is recorded, before the payment is declined. */
+    public void refusedAtReview(String who) {
+        this.reviewRuling = "REFUSED";
+        this.reviewRuledBy = who;
+        this.reviewRuledAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+    }
+
+    public String reviewRuling() {
+        return reviewRuling;
+    }
+
+    public String reviewRuledBy() {
+        return reviewRuledBy;
+    }
+
+    public Instant reviewRuledAt() {
+        return reviewRuledAt;
+    }
+
+    /**
+     * Whether this payment is still waiting for a person.
+     *
+     * <p>Held and unruled. A released one is held and not waiting, which is why the queue and
+     * the expiry sweep both ask this rather than asking about the status.
+     */
+    public boolean isWaitingForAPerson() {
+        return status == PaymentStatus.HELD_FOR_REVIEW && reviewRuling == null;
+    }
+
+    /** Whether a person has said this one may go through. */
+    public boolean wasReleased() {
+        return "RELEASED".equals(reviewRuling);
     }
 
     public String riskVerdict() {

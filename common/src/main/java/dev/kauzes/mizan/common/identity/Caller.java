@@ -11,10 +11,21 @@ import java.util.UUID;
  * is the only answer to "whose data is this", so a query that does not consult it is a query
  * that can read another merchant's rows.
  */
-public record Caller(UUID userId, UUID merchantId, Set<Role> roles) {
+public record Caller(UUID userId, UUID merchantId, Set<Role> roles, Principal principal) {
 
     public Caller {
         roles = Set.copyOf(roles);
+    }
+
+    /**
+     * Whether a person sent this, as opposed to a merchant's own server.
+     *
+     * <p>Asked by the few endpoints that exist to record a judgement somebody formed. A
+     * merchant who could automate those could automate away their own controls, which is the
+     * one thing a control is for.
+     */
+    public boolean isPerson() {
+        return principal == Principal.USER;
     }
 
     public boolean can(Permission permission) {

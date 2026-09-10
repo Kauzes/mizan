@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.kauzes.mizan.common.correlation.CorrelationContext;
 import dev.kauzes.mizan.common.error.UnauthorizedException;
 import dev.kauzes.mizan.common.identity.CallerIdentity;
+import dev.kauzes.mizan.common.identity.Principal;
 import dev.kauzes.mizan.common.identity.RequestSigning;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -244,7 +245,7 @@ class SignedRequestFilterTest {
                         PRINCIPAL.toString(),
                         MERCHANT.toString(),
                         List.of("ADMIN"),
-                        VerifiedCaller.Principal.API_KEY));
+                        Principal.API_KEY));
             }
         };
     }

@@ -39,7 +39,11 @@ class GatewayRouteDefinitionTests {
                 .satisfies(predicate -> assertThat(predicate.getArgs().values())
                         .containsExactly(
                                 "/api/v1/merchants/*/payments",
-                                "/api/v1/merchants/*/payments/**"));
+                                "/api/v1/merchants/*/payments/**",
+                                // The review queue is a payment route: what is held is a
+                                // payment, and releasing one is something done to it.
+                                "/api/v1/merchants/*/reviews",
+                                "/api/v1/merchants/*/reviews/**"));
     }
 
     @Test
