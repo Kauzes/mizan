@@ -66,6 +66,16 @@ public class PaymentEvents {
             String currency,
             String reference,
             String acquirerReference,
+            /**
+             * All that is kept of the card, and enough for a consumer to recognise the same
+             * one across payments.
+             *
+             * <p>Added after the fact, because risk-service could only ever see a card on a
+             * declined payment and so could never learn that one had paid before — which is
+             * the rule that stops a scorer growing more suspicious of a customer the longer
+             * they stay. A field added is not a breaking change, so the version stays at one.
+             */
+            String cardLastFour,
             /** Where in the books this landed, so a consumer need not ask this service. */
             UUID ledgerEntryId,
             Instant at) {
@@ -176,6 +186,7 @@ public class PaymentEvents {
                     payment.money().currency().getCurrencyCode(),
                     payment.reference(),
                     payment.acquirerReference(),
+                    payment.cardLastFour(),
                     payment.ledgerEntryId(),
                     payment.updatedAt()));
 

@@ -167,10 +167,14 @@ services:
         MODULE: risk-service
     environment:
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/risk
+      # Baselines are learned from payment events. Risk never reads the payment database.
+      MIZAN_KAFKA: kafka:9092
       MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
       MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
     depends_on:
       postgres:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     ports:
       - "8084:8084"
