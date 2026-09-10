@@ -423,3 +423,43 @@ table.postings tr.sum td {
   width: 10rem;
   margin-right: 0.5rem;
 }
+
+/* -- the review queue ------------------------------------------------------------------- */
+
+.held {
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+}
+
+.held-what {
+  margin: 0 0 0.25rem;
+}
+
+.held-why {
+  margin: 0 0 0.6rem;
+  font-size: 0.9rem;
+}
+
+.held-rule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.held-rule label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.held-rule input {
+  font: inherit;
+  flex: 1 1 20rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.3rem;
+  background: transparent;
+  color: inherit;
+}

@@ -29,8 +29,16 @@ class GatewayRouteDefinitionTests {
                 "identity-service",
                 "ledger-service",
                 "payment-service",
-                "risk-service",
                 "notification-service");
+
+        // Risk is deliberately absent. Nothing it serves is asked for by a merchant: scoring
+        // happens inside an authorization, and what analysts ruled is read through the review
+        // queue. None of its paths names a merchant, so a route here would be a way to read
+        // another merchant's rulings with nothing but a token of your own.
+        assertThat(byId)
+                .as("risk answers services, not the edge")
+                .doesNotContainKey("risk-service");
+        assertThat(byId).containsKey("risk-service-internal");
 
         assertThat(byId.get("payment-service").getUri())
                 .hasToString("http://payment-service:8083");

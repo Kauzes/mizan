@@ -13,6 +13,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -57,6 +59,31 @@ public class ReviewController {
     @ApiResponse(responseCode = "200", description = "The payments waiting to be ruled on")
     public List<PaymentResponse> waiting(@PathVariable UUID merchantId) {
         return queue.waiting(merchantId);
+    }
+
+    @GetMapping("/rulings")
+    @RequiresPermission(Permission.REVIEW_RULE)
+    @Operation(
+            summary = "What has already been ruled, and what the platform learned from it",
+            description =
+                    """
+                    Most recent first, with what the scorer had said at the time, so an \
+                    analyst can see their colleagues' decisions rather than making the same \
+                    one again differently.
+
+                    Beside them, how far this merchant's line has drifted from where a person \
+                    set it. What analysts decided and what the platform learned from it are \
+                    the same question asked twice, so they are answered in one place.
+
+                    `known` is false when the scorer could not be asked. The drift is then \
+                    absent rather than zero: zero is a fact about a merchant whose line has \
+                    not moved.""")
+    @ApiResponse(responseCode = "200", description = "The rulings, and the drift")
+    public Map<String, Object> ruled(
+            @PathVariable UUID merchantId,
+            @RequestParam(defaultValue = "50") int limit) {
+
+        return queue.ruled(merchantId, Math.min(Math.max(limit, 1), 200));
     }
 
     @PostMapping("/{paymentId}/release")

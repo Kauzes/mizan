@@ -33,10 +33,13 @@ spring:
               order: -100
               predicates:
                 - Path=/api/v1/merchants/*/payments,/api/v1/merchants/*/payments/**,/api/v1/merchants/*/reviews,/api/v1/merchants/*/reviews/**
-            - id: risk-service
-              uri: http://risk-service:8084
-              predicates:
-                - Path=/api/v1/risk/**
+            # There is deliberately no route to risk-service. Everything it serves is
+            # asked for by another service on a merchant's behalf: scoring is asked for by
+            # payment-service during an authorization, and what analysts have ruled is read
+            # through the review queue, which is where the payment is. A route from the edge
+            # would have been a way for one merchant to score against another merchant's
+            # baseline and to read another merchant's rulings, because none of those paths
+            # names a merchant the gateway could scope by.
             - id: notification-service
               uri: http://notification-service:8085
               order: -100

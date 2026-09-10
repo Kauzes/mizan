@@ -12,6 +12,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <span className="brand">Mizan</span>
         <nav aria-label="Sections">
           {can("PAYMENT_READ") ? <NavLink to="/payments">Payments</NavLink> : null}
+          {can("REVIEW_RULE") ? <NavLink to="/reviews">Reviews</NavLink> : null}
           <NavLink to="/account">Account</NavLink>
         </nav>
         <div className="who">

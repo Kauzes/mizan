@@ -30,7 +30,7 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 | `identity-service` | 8081 | Merchants, users, roles, JWT tokens, merchant API keys |
 | `ledger-service` | 8082 | Double entry accounts, journal entries, postings, reconciliation |
 | `payment-service` | 8083 | Payment lifecycle and saga orchestration, idempotency |
-| `risk-service` | 8084 | Scores a payment and says why, and learns from what analysts rule |
+| `risk-service` | 8084 | Scores a payment and says why, and learns from what analysts rule. Not routed from the edge |
 | `notification-service` | 8085 | Turns payment events into what a merchant is told; webhooks next |
 | `bank-simulator` | 8086 | Fake acquirer that approves, declines, times out and duplicates |
 | `console` | 5173 | The merchant console: React, TypeScript, Vite, served beside the API |
@@ -454,6 +454,10 @@ on an origin of its own.
   three, breaking whenever any of them changed. ADR 0036 has the argument.
 - **A section nobody may read is not fetched.** A panel that renders a refusal is a panel that
   has told somebody the thing exists.
+- **The review queue is one page**: what is waiting and why, the two verbs with a reason
+  required before either does anything, what colleagues already decided, and how far the
+  platform's line has drifted as a result — in words, because "+5" says nothing to somebody
+  working a queue.
 - **Refunding is the first thing in the console that moves money**, so the amount that can
   still be given back is on screen before anything is typed, the confirmation says the amount
   and what will be left in words, and the idempotency key is chosen when the confirmation opens
