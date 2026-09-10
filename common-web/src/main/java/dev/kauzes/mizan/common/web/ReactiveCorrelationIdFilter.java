@@ -13,10 +13,21 @@ import reactor.core.publisher.Mono;
  */
 public class ReactiveCorrelationIdFilter implements WebFilter, Ordered {
 
+    /**
+     * Where the id is left for anything that has the exchange but not the mutated request.
+     *
+     * <p>An error handler runs outside the filter chain and is handed the original exchange,
+     * so the header this filter added is not on the request it sees. Attributes are shared
+     * between an exchange and its mutations, which makes this the one place both can read.
+     */
+    public static final String ATTRIBUTE = CorrelationContext.class.getName() + ".id";
+
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String correlationId = CorrelationContext.sanitiseOrGenerate(
                 exchange.getRequest().getHeaders().getFirst(CorrelationContext.HEADER));
+
+        exchange.getAttributes().put(ATTRIBUTE, correlationId);
 
         ServerWebExchange mutated = exchange.mutate()
                 .request(builder -> builder.header(CorrelationContext.HEADER, correlationId))

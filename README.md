@@ -285,6 +285,11 @@ other protected route.
   the HTTP status is derived from that code so the two cannot disagree.
 - Only deliberate errors carry detail. Anything else is an internal error with a fixed
   message, so no stack trace or class name reaches a caller.
+- A service being down is answered the same way: `UPSTREAM_UNAVAILABLE` when it cannot be
+  reached and `UPSTREAM_TIMEOUT` when it stops answering, both with a correlation id and
+  neither naming a host. The moment a caller most needs to tell "try again" from "do not"
+  is the moment the platform is least able to answer, so it is the moment the contract has
+  to hold rather than fall back to the framework's own error body.
 - One correlation id per request, generated at the edge if the caller sends none, echoed on
   the response, propagated on outbound calls and across Kafka, and printed on every log
   line. An inbound id is only trusted if it is short and alphanumeric.

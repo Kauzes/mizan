@@ -274,7 +274,39 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------
-step "13. The books balance"
+step "13. A service that is down is still answered in the platform's own shape"
+
+# Only visible with real processes: nothing in a test suite can stop a container. What is
+# being checked is that a caller who cannot be served is told so in the same error shape as
+# every refusal, with a code they can branch on and a correlation id they can quote --
+# because "this failed, try again" and "this was refused, do not" is the one distinction a
+# client most needs at exactly the moment the platform is least able to make it.
+if command -v docker > /dev/null 2>&1 && docker compose ps notification-service > /dev/null 2>&1; then
+    docker compose stop notification-service > /dev/null 2>&1
+    note "notification-service stopped on purpose"
+
+    down=$(authed 503 GET "$GATEWAY/api/v1/merchants/$MERCHANT/notifications")
+    code=$(printf '%s' "$down" | field code)
+    [ "$code" = "UPSTREAM_UNAVAILABLE" ] || fail "answered with $code, not UPSTREAM_UNAVAILABLE"
+    [ -n "$(printf '%s' "$down" | field correlationId)" ] || fail "no correlation id to quote"
+    pass "a problem detail carrying UPSTREAM_UNAVAILABLE and a correlation id"
+
+    # And nothing about the platform in it. A merchant cannot act on a host and a port, and
+    # somebody probing this should not be handed the shape of what is behind the gateway.
+    case "$down" in
+        *notification-service:*|*Connection*|*Exception*|*requestId*)
+            fail "the answer leaks something internal: $down" ;;
+    esac
+    pass "and it says nothing about what is behind the gateway"
+
+    docker compose up -d --wait notification-service > /dev/null 2>&1
+    note "notification-service started again"
+else
+    note "no Compose stack to stop, so this was not checked"
+fi
+
+# ---------------------------------------------------------------------------------------
+step "14. The books balance"
 
 integrity=$(call 200 GET "$LEDGER/actuator/ledgerintegrity")
 sound=$(printf '%s' "$integrity" | field sound)
