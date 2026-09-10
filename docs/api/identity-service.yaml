@@ -14,6 +14,8 @@ servers:
 tags:
 - description: Credentials a merchant's server signs requests with
   name: API keys
+- description: "What a role means, for anything that has to show it"
+  name: Roles
 - description: "Signing in, and staying signed in"
   name: Tokens
 - description: The public key access tokens are signed with
@@ -430,6 +432,22 @@ paths:
       summary: Replace a user's roles
       tags:
       - Users
+  /api/v1/roles:
+    get:
+      description: "Generated from the enum the services enforce, so a client reading\
+        \ this cannot disagree with the platform about what a role means."
+      operationId: roles
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: The roles and their permissions
+      summary: "Every role, and what it may do"
+      tags:
+      - Roles
   /api/v1/tokens:
     post:
       description: Exchanges an email and a password for an access and refresh token.
@@ -460,12 +478,17 @@ paths:
         \ one that was already spent revokes every token descended from that sign\
         \ in, so the session has to be started again."
       operationId: refresh
+      parameters:
+      - in: cookie
+        name: mizan_refresh
+        required: false
+        schema:
+          type: string
       requestBody:
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/RefreshRequest"
-        required: true
       responses:
         "200":
           content:
@@ -478,6 +501,30 @@ paths:
         "401":
           $ref: "#/components/responses/UNAUTHORIZED"
       summary: Refresh a token pair
+      tags:
+      - Tokens
+  /api/v1/tokens/sign-out:
+    post:
+      description: |-
+        Revokes every token descended from this sign in, and clears the cookie.
+
+        Answers the same way whether the token was real, expired or invented.                     Anything else would be a way to ask whether a token still works, which is                     the question somebody holding a stolen one most wants answered.
+      operationId: signOut
+      parameters:
+      - in: cookie
+        name: mizan_refresh
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "204":
+          description: The session is over
+      summary: Sign out
       tags:
       - Tokens
 components:
@@ -822,9 +869,8 @@ components:
       properties:
         refreshToken:
           type: string
-          minLength: 1
-      required:
-      - refreshToken
+          description: "Optional. Omit it in a browser, where the refresh token is\
+            \ in a cookie this page cannot read."
     RegisterMerchantRequest:
       type: object
       description: A new merchant and the owner account created with it

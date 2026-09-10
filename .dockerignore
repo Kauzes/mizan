@@ -7,3 +7,7 @@ docs
 scripts
 deploy
 *.md
+# The console installs its own dependencies inside its build. Copying a Windows or Linux
+# node_modules into a build context is both slow and wrong.
+**/node_modules
+console/dist

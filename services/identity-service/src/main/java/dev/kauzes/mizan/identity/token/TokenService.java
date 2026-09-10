@@ -144,6 +144,34 @@ public class TokenService {
         return issue(token.user(), token.familyId());
     }
 
+    /**
+     * Ends the session the presented token belongs to, and every token descended from it.
+     *
+     * <p>Says nothing about whether the token was real. A sign out that answered differently
+     * for an unknown token would be a way to ask whether a token is still good, which is the
+     * question a thief holding one most wants answered.
+     *
+     * <p>Revokes the family rather than the one token, because the point of signing out is
+     * that the session is over: leaving the rest of the family alive would mean a stolen
+     * earlier token could still be spent afterwards.
+     */
+    @Transactional
+    public void signOut(String presented) {
+        if (presented == null || presented.isBlank()) {
+            return;
+        }
+
+        refreshTokens.findByTokenHash(digestOf(presented)).ifPresent(token -> {
+            int revoked = families.revoke(token.familyId(), clock.instant());
+            log.info("signed out family {} ({} tokens)", token.familyId(), revoked);
+        });
+    }
+
+    /** How long a refresh token lives, for whatever has to say so out loud. */
+    public java.time.Duration refreshTokenLifetime() {
+        return properties.refreshTokenTtl();
+    }
+
     private TokenPair issue(UserAccount user, UUID familyId) {
         Instant now = clock.instant();
         String refreshToken = randomSecret();

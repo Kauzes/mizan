@@ -306,7 +306,33 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------
-step "14. The books balance"
+step "14. A browser can hold a session without holding a secret"
+
+# The console keeps its refresh token in a cookie it cannot read, which is only true if the
+# platform actually sets one with the right flags. A unit test can assert the header; only
+# this can assert that it survives the gateway, which is the hop where a Set-Cookie is most
+# easily lost.
+JAR="$(mktemp)"
+browser=$(curl -s -c "$JAR" -X POST "$GATEWAY/api/v1/tokens"     -H 'Content-Type: application/json'     -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}")
+[ -n "$(printf '%s' "$browser" | field accessToken)" ] || fail "signing in did not answer"
+
+grep -q "mizan_refresh" "$JAR" || fail "no session cookie survived the gateway"
+grep -qi "^#HttpOnly_" "$JAR" || fail "the session cookie is readable by script"
+grep -q "/api/v1/tokens" "$JAR" || fail "the session cookie is not scoped to the token routes"
+pass "the refresh token came back HttpOnly and scoped to /api/v1/tokens"
+
+renewed=$(curl -s -b "$JAR" -c "$JAR" -X POST "$GATEWAY/api/v1/tokens/refresh")
+[ -n "$(printf '%s' "$renewed" | field accessToken)" ] || fail "the cookie did not renew: $renewed"
+pass "and renews the session with no body at all, which is what a reload is"
+
+curl -s -o /dev/null -b "$JAR" -c "$JAR" -X POST "$GATEWAY/api/v1/tokens/sign-out"
+after=$(curl -s -o /dev/null -w '%{http_code}' -b "$JAR" -X POST "$GATEWAY/api/v1/tokens/refresh")
+[ "$after" = "401" ] || fail "the refresh token still works after signing out ($after)"
+rm -f "$JAR"
+pass "signing out revokes it rather than only forgetting it here"
+
+# ---------------------------------------------------------------------------------------
+step "15. The books balance"
 
 integrity=$(call 200 GET "$LEDGER/actuator/ledgerintegrity")
 sound=$(printf '%s' "$integrity" | field sound)
