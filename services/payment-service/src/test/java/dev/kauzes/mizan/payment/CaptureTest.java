@@ -240,7 +240,7 @@ class CaptureTest extends MizanIntegrationTest {
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.detail")
                         .value("A payment that is CREATED cannot be captured. It can only "
-                                + "become [AUTHORIZATION_UNKNOWN, AUTHORIZED, DECLINED]."));
+                                + "become [AUTHORIZATION_UNKNOWN, HELD_FOR_REVIEW, AUTHORIZED, DECLINED]."));
 
         // Refused before the acquirer is troubled, so nothing outside the platform did work
         // on our behalf for a request that was never going to be allowed.

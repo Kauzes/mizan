@@ -102,7 +102,19 @@ public final class MizanContainers {
                 new PostgreSQLContainer(DockerImageName.parse(PlatformImages.postgres()))
                         .withDatabaseName("mizan")
                         .withUsername("mizan")
-                        .withPassword("mizan");
+                        .withPassword("mizan")
+                        // More than Postgres allows by default.
+                        //
+                        // One JVM now runs several services at once — a test of the payment
+                        // service starts the ledger and the acquirer beside it, and Spring
+                        // keeps a context per distinct configuration — so the connections add
+                        // up faster than the hundred a default Postgres offers. The suite
+                        // started failing with "sorry, too many clients already", which reads
+                        // like a leak and is arithmetic.
+                        //
+                        // The pools those peer services use are also small (see the test
+                        // configuration files); this is the other half of the same fix.
+                        .withCommand("postgres", "-c", "max_connections=300");
 
         static {
             INSTANCE.start();

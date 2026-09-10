@@ -127,6 +127,28 @@ public class Payment {
     @Column(name = "attention_handled_at")
     private Instant attentionHandledAt;
 
+    /**
+     * What risk thought, kept on the payment rather than asked for again.
+     *
+     * <p>"Why was this held" is asked long after the scorer's view of the world has moved on,
+     * and a scorer is a function of what was known at the time — which is exactly what nobody
+     * can reconstruct later.
+     */
+    @Column(name = "risk_verdict")
+    private String riskVerdict;
+
+    @Column(name = "risk_score")
+    private Integer riskScore;
+
+    @Column(name = "risk_reasons")
+    private String riskReasons;
+
+    @Column(name = "risk_checked_at")
+    private Instant riskCheckedAt;
+
+    @Column(name = "held_at")
+    private Instant heldAt;
+
     @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @OrderBy("at asc")
     private List<PaymentTransition> history = new ArrayList<>();
@@ -180,10 +202,57 @@ public class Payment {
         moveTo(PaymentStatus.AUTHORIZATION_UNKNOWN, because);
     }
 
+    /** Records what risk thought, whatever it was, including that it could not be asked. */
+    public void scored(String verdict, Integer score, String reasons, Instant at) {
+        this.riskVerdict = verdict;
+        this.riskScore = score;
+        this.riskReasons = reasons;
+        this.riskCheckedAt = at;
+        this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+    }
+
+    /**
+     * Holds the payment for a person, without charging anybody.
+     *
+     * <p>Not a failure. The customer's money is untouched and the platform has not made its
+     * mind up, which is a different thing from having decided against them and has to stay
+     * legible as one.
+     */
+    public void heldForReview(String because) {
+        this.heldAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        moveTo(PaymentStatus.HELD_FOR_REVIEW, because);
+    }
+
+    /** Released by a person, or expired: either way it stops being held. */
+    private void noLongerHeld() {
+        this.heldAt = null;
+    }
+
+    public String riskVerdict() {
+        return riskVerdict;
+    }
+
+    public Integer riskScore() {
+        return riskScore;
+    }
+
+    public String riskReasons() {
+        return riskReasons;
+    }
+
+    public Instant riskCheckedAt() {
+        return riskCheckedAt;
+    }
+
+    public Instant heldAt() {
+        return heldAt;
+    }
+
     /** Records an approval. The money is reserved; nothing has moved and nothing is posted. */
     public void authorized(String acquirerReference, String cardLastFour) {
         this.acquirerReference = acquirerReference;
         this.cardLastFour = cardLastFour;
+        noLongerHeld();
         moveTo(PaymentStatus.AUTHORIZED, null);
     }
 
@@ -192,6 +261,20 @@ public class Payment {
         this.acquirerReference = acquirerReference;
         this.cardLastFour = cardLastFour;
         this.declineReason = reason;
+        noLongerHeld();
+        moveTo(PaymentStatus.DECLINED, reason);
+    }
+
+    /**
+     * Refused by this platform rather than by the acquirer.
+     *
+     * <p>No acquirer reference, because nobody was contacted. The reason is kept in the same
+     * field a decline reason goes in, so a merchant reading "why was this refused" has one
+     * place to look — and it says plainly that it was us.
+     */
+    public void refusedByRisk(String reason) {
+        this.declineReason = reason;
+        noLongerHeld();
         moveTo(PaymentStatus.DECLINED, reason);
     }
 

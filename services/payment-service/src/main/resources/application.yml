@@ -54,6 +54,19 @@ mizan:
     # default: a blank one would make the internal endpoints open, and this service refuses
     # to start without it rather than discovering it at the first capture.
     service-token: ${MIZAN_INTERNAL_SERVICE_TOKEN:}
+  risk:
+    # The scorer, asked before every authorization.
+    base-url: ${MIZAN_RISK_URL:http://localhost:8084}
+    # Shorter than the acquirer's, deliberately. A guard that takes as long as the thing it
+    # guards has stopped being a guard and started being a second acquirer.
+    timeout: ${MIZAN_RISK_TIMEOUT:500ms}
+    # After this many failures in a row, stop asking for a while. Risk being down must cost a
+    # few timeouts in total rather than one per payment.
+    failures-before-giving-up: ${MIZAN_RISK_FAILURES:5}
+    leave-alone-for: ${MIZAN_RISK_LEAVE_ALONE:30s}
+    # How long a held payment waits for a person before it expires, refused.
+    hold-for: ${MIZAN_RISK_HOLD_FOR:24h}
+    expire-every: ${MIZAN_RISK_EXPIRE_EVERY:5m}
   refunds:
     # How often unfinished refunds are looked for. A refund that stopped between the acquirer
     # and the ledger is money the books do not know about, so this is not a slow sweep.

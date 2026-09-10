@@ -28,6 +28,16 @@ public enum PaymentStatus {
      */
     AUTHORIZATION_UNKNOWN,
 
+    /**
+     * Risk wants a person to look, so nobody has been charged.
+     *
+     * <p>Not a failure, and the difference has to be legible to a merchant: a held payment is
+     * one the platform has not made its mind up about, and the customer's money is untouched.
+     * An analyst releases it or refuses it, and if nobody does either it expires — because a
+     * payment held forever is a customer who was neither charged nor told why.
+     */
+    HELD_FOR_REVIEW,
+
     /** The acquirer has approved and reserved the money. Nothing has moved yet. */
     AUTHORIZED,
 
@@ -45,7 +55,11 @@ public enum PaymentStatus {
     /** Where this payment may go from here. Empty means it is finished. */
     public Set<PaymentStatus> next() {
         return switch (this) {
-            case CREATED -> EnumSet.of(AUTHORIZED, DECLINED, AUTHORIZATION_UNKNOWN);
+            case CREATED ->
+                    EnumSet.of(AUTHORIZED, DECLINED, AUTHORIZATION_UNKNOWN, HELD_FOR_REVIEW);
+            // A person decides, or nobody does and it expires. Never straight to captured:
+            // being released for review means being authorized like any other payment.
+            case HELD_FOR_REVIEW -> EnumSet.of(AUTHORIZED, DECLINED);
             // Resolution turns not knowing into knowing. A payment the acquirer has no
             // record of stays here and may simply be attempted again, which is why
             // AUTHORIZED is reachable from here as well.
