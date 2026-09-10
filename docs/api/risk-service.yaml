@@ -11,7 +11,37 @@ info:
 servers:
 - description: The local gateway. Services are not addressed directly.
   url: http://localhost:8080
-paths: {}
+tags:
+- description: "What this platform thinks of a payment, and why"
+  name: Risk
+paths:
+  /api/v1/risk/scores:
+    post:
+      description: |-
+        Returns approve, review or block, with everything that fired and what each was worth. The reasons are the point: a score with no reasons is a number nobody can argue with, and a decision nobody can argue with is one nobody can fix.
+
+        Scoring is a pure function of the request. The same request scores the same way twice, including the timestamp, which is an input rather than a clock read inside.
+
+        No card number is sent or accepted. The caller supplies a fingerprint, so that the same card is recognisable across payments without this service ever holding one.
+      operationId: score
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScoreRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScoreResponse"
+          description: "What it decided, and why"
+        "400":
+          $ref: "#/components/responses/VALIDATION_FAILED"
+      summary: Score a payment
+      tags:
+      - Risk
 components:
   headers:
     X-Correlation-Id:
@@ -231,6 +261,106 @@ components:
       - timestamp
       - title
       - type
+    ScoreRequest:
+      type: object
+      description: A payment to score
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: Minor units
+          example: 125000
+          minimum: 0
+        at:
+          type: string
+          format: date-time
+          description: "When this is being scored. An input rather than a clock read\
+            \ inside, so that the same request scores the same way twice and a test\
+            \ can place a payment in time without waiting."
+        cardCountry:
+          type: string
+          description: Where the card was issued
+          example: TR
+          pattern: "[A-Z]{2}"
+        cardFingerprint:
+          type: string
+          description: "A stable identifier for the card, not the card. A fingerprint\
+            \ the caller computes, so that the same card is recognisable across payments\
+            \ without this service ever holding a card number."
+          example: card_9f2b1c
+          maxLength: 100
+          minLength: 0
+        currency:
+          type: string
+          example: TRY
+          minLength: 1
+          pattern: "[A-Z]{3}"
+        merchantId:
+          type: string
+          format: uuid
+        paymentId:
+          type: string
+          format: uuid
+          description: The payment being scored
+      required:
+      - at
+      - cardFingerprint
+      - currency
+      - merchantId
+      - paymentId
+    ScoreResponse:
+      type: object
+      description: "What the scorer decided, and why"
+      properties:
+        at:
+          type: string
+          format: date-time
+          description: When it was scored
+        blockAbove:
+          type: integer
+          format: int32
+        paymentId:
+          type: string
+          format: uuid
+        reviewAbove:
+          type: integer
+          format: int32
+          description: "Where this merchant's line between approve and review sits,\
+            \ and between review and block"
+        score:
+          type: integer
+          format: int32
+          description: What it added up to. Higher is riskier.
+          example: 55
+        signals:
+          type: array
+          description: "Everything that fired, and what each was worth"
+          items:
+            $ref: "#/components/schemas/Signal"
+        verdict:
+          type: string
+          description: "APPROVE, REVIEW or BLOCK"
+          enum:
+          - APPROVE
+          - REVIEW
+          - BLOCK
+    Signal:
+      type: object
+      properties:
+        because:
+          type: string
+        contribution:
+          type: integer
+          format: int32
+        rule:
+          type: string
+          enum:
+          - UNUSUAL_AMOUNT
+          - RAPID_ATTEMPTS
+          - RECENTLY_DECLINED
+          - SUSPICIOUSLY_ROUND
+          - UNFAMILIAR_COUNTRY
+          - KNOWN_GOOD_CARD
   securitySchemes:
     merchantApiKey:
       description: "The merchant's API key, naming which key signed the request. Public,\
