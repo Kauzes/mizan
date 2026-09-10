@@ -14,6 +14,24 @@ spring:
       # should fail the service on startup rather than quietly reshape a live database.
       ddl-auto: validate
     open-in-view: false
+  kafka:
+    bootstrap-servers: ${MIZAN_KAFKA:localhost:29092}
+    consumer:
+      group-id: ${MIZAN_KAFKA_GROUP:risk-service}
+      # Earliest, because a scorer that only knows what happened since it last restarted is a
+      # scorer whose baselines reset every deploy.
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      # This service produces one thing and it is not a domain event: a message it could not
+      # learn from, set aside for a person.
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    listener:
+      ack-mode: record
   flyway:
     # Namespaced by service rather than the plain db/migration every service used to share.
     # One classpath is enough to make that ambiguous: a test that runs two services in one
@@ -22,6 +40,12 @@ spring:
     locations: classpath:db/migration/risk
 
 mizan:
+  events:
+    # Bounded, because retrying an unreadable event forever is a busy loop, and Spring's
+    # default of nine immediate retries then moving on silently is the other wrong answer.
+    retries: ${MIZAN_EVENT_RETRIES:3}
+    first-retry: ${MIZAN_EVENT_FIRST_RETRY:500ms}
+    longest-retry: ${MIZAN_EVENT_LONGEST_RETRY:10s}
   risk:
     # Where the platform's line sits for a merchant who has not chosen their own. A starting
     # point rather than an answer: a marketplace and a car dealer have different ideas of

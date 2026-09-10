@@ -2,7 +2,6 @@ package dev.kauzes.mizan.risk;
 
 import dev.kauzes.mizan.risk.RiskRequests.ScoreRequest;
 import dev.kauzes.mizan.risk.RiskRequests.ScoreResponse;
-import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -23,10 +22,12 @@ public class RiskService {
 
     private final Scorer scorer;
     private final Thresholds thresholds;
+    private final ObservedBehaviour observed;
 
-    public RiskService(Scorer scorer, Thresholds thresholds) {
+    public RiskService(Scorer scorer, Thresholds thresholds, ObservedBehaviour observed) {
         this.scorer = scorer;
         this.thresholds = thresholds;
+        this.observed = observed;
     }
 
     public ScoreResponse score(ScoreRequest request) {
@@ -59,12 +60,18 @@ public class RiskService {
     /**
      * What this service can say about the merchant and the card.
      *
-     * <p>Almost nothing, in this story: the merchant's own thresholds and no history at all.
-     * That is deliberate — a scorer with no baseline still catches the things that need none,
-     * and MIZ-57 fills this in from observed behaviour without the rules changing.
+     * <p>Built from what has actually happened, which is the whole point of MIZ-57: "unusual"
+     * now means unusual for this merchant rather than unusual against a number somebody chose.
+     * The rules did not change when this did, which was the reason for keeping them a pure
+     * function of what they are given.
      */
     private WhatWeKnow whatWeKnowAbout(ScoreRequest request) {
         int[] lines = thresholds.forMerchant(request.merchantId());
-        return new WhatWeKnow(0, 0, false, false, List.of(), lines[0], lines[1]);
+        return observed.about(
+                request.merchantId(),
+                request.cardFingerprint(),
+                request.at(),
+                lines[0],
+                lines[1]);
     }
 }

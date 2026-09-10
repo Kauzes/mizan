@@ -206,6 +206,16 @@ other protected route.
 - Scoring is a pure function of its request, including the timestamp. The same request scores
   the same way twice, so a disagreement about a decision can be reproduced by somebody who was
   not there.
+- What is normal is learned from payment events, not typed in. Risk is told what happened and
+  never reads the payment database: a scorer that reached across would make the payment service
+  unable to change a column without breaking fraud detection.
+- The typical amount is a median, not a mean. One car sold by a coffee shop should not redefine
+  what a coffee costs, and the outlier a mean would chase is often the fraud itself.
+- Only captured payments build a baseline. Declines are remembered, because they say a great
+  deal about a card, and kept out of what counts as normal — otherwise a burst of fraud
+  attempts teaches the platform that large refused amounts are ordinary here.
+- Observations are kept rather than folded into a running total, so a baseline can be rebuilt
+  from them. A projection that cannot be rebuilt is a cache with better manners.
 - A merchant with no history is not treated as suspicious. Cold start is the common case, and a
   scorer that blocks every merchant's first payment is one nobody switches on.
 - A webhook endpoint has to be https and has to resolve to an address on the public internet,
