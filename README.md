@@ -440,8 +440,22 @@ on an origin of its own.
 - **Money is formatted in one place.** The platform transports minor units and never a decimal,
   so nothing else is allowed arithmetic on an amount — including reading one back off a form,
   where multiplying a parsed float by a hundred is how 8.29 becomes 828.
+- **The URL is the state.** What a merchant is filtering on lives in the address bar, so a
+  search can be sent to somebody and the back button works. Any change to the question returns
+  to the first page: staying on page four of a different search shows a blank table to somebody
+  who has just narrowed to five results, and reads as "nothing found".
+- **An empty answer says which filter emptied it.** A merchant who filtered themselves into
+  nothing and one who has never taken a payment otherwise see the same blank table, and only
+  one of them has something they can fix.
 - Run it with `npm run dev` in `console`, or reach the Compose stack's copy at
   `http://localhost:5173`.
+
+Listing payments takes filters — status, risk verdict, amount range, date range, and the
+merchant's own reference — and pages server side. The paging is in headers (`X-Total-Count`,
+`X-Page`, `X-Page-Size`, `Link`) rather than an envelope, so the body is the same array it
+always was and a client written against the earlier contract is unaffected. A page holds 50 by
+default and 200 at most, and paging runs 10,000 deep: an offset is read by counting past every
+row before it, so past that the answer is to narrow the search rather than to turn pages.
 
 A merchant always has an owner: the last one cannot be removed or demoted. An account nobody
 can administer is recoverable only by hand in the database.

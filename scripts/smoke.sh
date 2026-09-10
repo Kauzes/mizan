@@ -125,6 +125,14 @@ queue=$(authed 200 GET "$GATEWAY/api/v1/merchants/$MERCHANT/reviews")
 [ "$queue" = "[]" ] || fail "a clean run should have held nothing, and this queue holds: $queue"
 pass "the review queue answers through the gateway, and has nothing waiting"
 
+# Paging, which is only observable from outside: a body that is still a plain array, and the
+# answer's shape in headers. An envelope here would have broken every client parsing a list.
+listing=$(curl -s -D - -H "Authorization: Bearer $AUTH"     "$GATEWAY/api/v1/merchants/$MERCHANT/payments?size=1")
+printf '%s' "$listing" | grep -qi "^x-total-count:" || fail "no count came back: $listing"
+printf '%s' "$listing" | grep -q "^\[" || fail "the body is no longer a plain list"
+authed 422 GET "$GATEWAY/api/v1/merchants/$MERCHANT/payments?status=NEARLY" > /dev/null
+pass "payments page, say how many there are, and refuse a filter nobody understands"
+
 # ---------------------------------------------------------------------------------------
 step "7. A second payment is authorized and voided"
 

@@ -10,12 +10,17 @@ import dev.kauzes.mizan.payment.PaymentRequests.RefundRequest;
 import dev.kauzes.mizan.payment.PaymentRequests.RefundResponse;
 import dev.kauzes.mizan.payment.PaymentRequests.VoidRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,7 +28,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * A merchant's payments.
@@ -48,10 +55,112 @@ public class PaymentController {
 
     @GetMapping
     @RequiresPermission(Permission.PAYMENT_READ)
-    @Operation(summary = "List a merchant's payments", description = "Most recent first.")
-    @ApiResponse(responseCode = "200", description = "The merchant's payments")
-    public List<PaymentResponse> list(@PathVariable UUID merchantId) {
-        return payments.list(merchantId);
+    @Operation(
+            summary = "Search a merchant's payments",
+            description =
+                    """
+                    Most recent first, a page at a time. Every filter is optional and they \
+                    narrow together: asking for two statuses and an amount range means \
+                    payments in either status *and* inside that range.
+
+                    Where in the answer this page sits comes back in headers rather than in \
+                    the body, so the body is the same list of payments it has always been and \
+                    a client written against the earlier contract is unaffected: \
+                    `X-Total-Count`, `X-Page`, `X-Page-Size`, and a `Link` header carrying the \
+                    next and previous pages when there are any.
+
+                    A page holds 50 by default and 200 at most, and paging runs 10,000 \
+                    payments deep. Further in than that, narrow the search: an offset is read \
+                    by counting past every row before it, so a page number is the wrong tool \
+                    for finding one payment among a year of them.""")
+    @ApiResponse(responseCode = "200", description = "The page of payments")
+    @ApiResponse(
+            responseCode = "422",
+            ref = "#/components/responses/UNPROCESSABLE",
+            description = "A filter that cannot be answered, or a page beyond where this pages")
+    public ResponseEntity<List<PaymentResponse>> list(
+            @PathVariable UUID merchantId,
+            @Parameter(description = "Any of the payment statuses. Repeat for more than one.")
+                    @RequestParam(required = false)
+                    List<String> status,
+            @Parameter(description = "APPROVE, REVIEW, BLOCK or UNAVAILABLE")
+                    @RequestParam(required = false)
+                    List<String> riskVerdict,
+            @Parameter(
+                            description =
+                                    "What an amount range is denominated in. Without it a "
+                                            + "range compares minor units across currencies.")
+                    @RequestParam(required = false)
+                    String currency,
+            @Parameter(description = "Inclusive, in minor units") @RequestParam(required = false)
+                    Long minAmount,
+            @Parameter(description = "Inclusive, in minor units") @RequestParam(required = false)
+                    Long maxAmount,
+            @Parameter(description = "Inclusive, against when the payment was created")
+                    @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+                    Instant from,
+            @Parameter(description = "Exclusive, so a day does not overlap the next")
+                    @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+                    Instant to,
+            @Parameter(description = "The merchant's own reference, matched exactly")
+                    @RequestParam(required = false)
+                    String reference,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            UriComponentsBuilder uris) {
+
+        PaymentQuery query = PaymentQuery.from(
+                status,
+                riskVerdict,
+                currency,
+                minAmount,
+                maxAmount,
+                from,
+                to,
+                reference,
+                page,
+                size);
+        PaymentSearch.Found found = payments.search(merchantId, query);
+
+        return ResponseEntity.ok()
+                .headers(headers -> whereThisPageSits(headers, found, uris))
+                .body(found.payments());
+    }
+
+    /**
+     * Where the page sits, in headers rather than in the body.
+     *
+     * <p>The body stays the list of payments it has always been. Wrapping it in an envelope
+     * would have been tidier to write and would have broken every client parsing an array,
+     * for a contract this platform publishes and asks people to build against.
+     */
+    private static void whereThisPageSits(
+            HttpHeaders headers, PaymentSearch.Found found, UriComponentsBuilder uris) {
+
+        headers.set("X-Total-Count", String.valueOf(found.total()));
+        headers.set("X-Page", String.valueOf(found.page()));
+        headers.set("X-Page-Size", String.valueOf(found.size()));
+
+        List<String> links = new ArrayList<>();
+        if (found.hasMore()) {
+            links.add(link(uris, found.page() + 1, found.size(), "next"));
+        }
+        if (found.page() > 0) {
+            links.add(link(uris, found.page() - 1, found.size(), "prev"));
+        }
+        if (!links.isEmpty()) {
+            headers.set(HttpHeaders.LINK, String.join(", ", links));
+        }
+    }
+
+    private static String link(UriComponentsBuilder uris, int page, int size, String relation) {
+        String url = uris.replaceQueryParam("page", page)
+                .replaceQueryParam("size", size)
+                .build()
+                .toUriString();
+        return "<" + url + ">; rel=\"" + relation + "\"";
     }
 
     @PostMapping

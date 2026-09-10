@@ -5,8 +5,17 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-public interface PaymentRepository extends JpaRepository<Payment, UUID> {
+/**
+ * Named lookups for the things this service does to a payment, and one composed one.
+ *
+ * <p>The specification executor is there for a merchant searching their own payments, where
+ * the conditions are chosen by whoever is looking. Everything else stays a named method: a
+ * query the code can name is a query somebody can find, and one built at runtime is not.
+ */
+public interface PaymentRepository
+        extends JpaRepository<Payment, UUID>, JpaSpecificationExecutor<Payment> {
 
     /**
      * The same lookup, holding the row until the transaction ends.
@@ -23,8 +32,6 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     Optional<Payment> findByIdAndMerchantId(UUID id, UUID merchantId);
 
     Optional<Payment> findByMerchantIdAndReference(UUID merchantId, String reference);
-
-    List<Payment> findByMerchantIdOrderByCreatedAtDesc(UUID merchantId);
 
     /** What the resolver sweeps: payments nobody knows the outcome of, that have settled. */
     List<Payment> findByStatusAndUpdatedAtBefore(PaymentStatus status, Instant before);
