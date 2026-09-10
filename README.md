@@ -454,6 +454,12 @@ on an origin of its own.
   three, breaking whenever any of them changed. ADR 0036 has the argument.
 - **A section nobody may read is not fetched.** A panel that renders a refusal is a panel that
   has told somebody the thing exists.
+- **Refunding is the first thing in the console that moves money**, so the amount that can
+  still be given back is on screen before anything is typed, the confirmation says the amount
+  and what will be left in words, and the idempotency key is chosen when the confirmation opens
+  rather than when the request is sent. A double click and a retry after a lost answer are then
+  the same request. Going back to change the amount chooses a new one, because a different
+  amount is a different refund.
 - Run it with `npm run dev` in `console`, or reach the Compose stack's copy at
   `http://localhost:5173`.
 

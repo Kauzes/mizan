@@ -392,3 +392,34 @@ table.postings tr.sum td {
   border-top: 2px solid var(--line);
   color: var(--muted);
 }
+
+/* -- giving money back ------------------------------------------------------------------ */
+
+.refunding {
+  margin: 1.25rem 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+}
+
+.refunding h2 {
+  margin-top: 0;
+}
+
+.refunding label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.refunding input {
+  font: inherit;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.3rem;
+  background: transparent;
+  color: inherit;
+  width: 10rem;
+  margin-right: 0.5rem;
+}

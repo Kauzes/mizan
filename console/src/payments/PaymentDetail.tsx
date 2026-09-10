@@ -4,6 +4,7 @@ import { PlatformError } from "../api/problems";
 import { formatMoney } from "../money/money";
 import { useSession } from "../session/SessionProvider";
 import { readable } from "./filters";
+import { Refunding } from "./Refunding";
 import type { Attempt, Delivery, Entry, Payment, Refund } from "./types";
 
 /**
@@ -28,6 +29,9 @@ export function PaymentDetail() {
   const [entries, setEntries] = useState<readonly Entry[]>([]);
   const [deliveries, setDeliveries] = useState<readonly Delivery[]>([]);
   const [refusal, setRefusal] = useState<string | null>(null);
+  // Bumped when something on this page changes the payment, so everything is read again from
+  // the platform rather than patched here. What the platform says is the answer.
+  const [reread, setReread] = useState(0);
 
   useEffect(() => {
     if (!merchantId || !paymentId) {
@@ -89,7 +93,7 @@ export function PaymentDetail() {
     return () => {
       current = false;
     };
-  }, [session, merchantId, paymentId, can]);
+  }, [session, merchantId, paymentId, can, reread]);
 
   if (refusal) {
     return (
@@ -145,6 +149,12 @@ export function PaymentDetail() {
           ) : null}
         </dd>
       </dl>
+
+      <Refunding
+        payment={payment}
+        refunds={refunds}
+        onRefunded={() => setReread((count) => count + 1)}
+      />
 
       <WhatRiskThought payment={payment} />
 
