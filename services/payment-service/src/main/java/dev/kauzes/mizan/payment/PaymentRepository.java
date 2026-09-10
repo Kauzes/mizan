@@ -39,6 +39,9 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     List<Payment> findByStatusAndUpdatedAtBeforeAndNeedsAttentionSinceIsNull(
             PaymentStatus status, Instant before);
 
+    /** Payments held for review since before a moment, for the expiry sweep. */
+    List<Payment> findByStatusAndHeldAtBefore(PaymentStatus status, Instant heldBefore);
+
     /** What needs a person and nobody has dealt with, oldest first. */
     List<Payment> findByNeedsAttentionSinceIsNotNullAndAttentionHandledAtIsNullOrderByNeedsAttentionSinceAsc();
 }

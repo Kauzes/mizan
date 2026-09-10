@@ -167,6 +167,20 @@ final class PaymentRequests {
                                             + "on one that was voided, because a released "
                                             + "reservation moved nothing.")
                     UUID ledgerEntryId,
+            @Schema(
+                            description =
+                                    "What this platform thought of the payment: APPROVE, "
+                                            + "REVIEW, BLOCK, or UNAVAILABLE when the scorer "
+                                            + "could not be asked. Null on a payment that was "
+                                            + "never scored.",
+                            example = "REVIEW")
+                    String riskVerdict,
+            @Schema(description = "What it added up to. Higher is riskier.") Integer riskScore,
+            @Schema(
+                            description =
+                                    "What the scorer objected to, in words. A merchant asking "
+                                            + "why a payment was held is asking for this.")
+                    String riskReasons,
             @Schema(description = "What has been given back so far") long refundedAmount,
             @Schema(
                             description =
@@ -191,6 +205,9 @@ final class PaymentRequests {
                     payment.cardLastFour(),
                     payment.declineReason(),
                     payment.ledgerEntryId(),
+                    payment.riskVerdict(),
+                    payment.riskScore(),
+                    payment.riskReasons(),
                     payment.refundedAmount(),
                     payment.refundableAmount(),
                     payment.createdAt(),

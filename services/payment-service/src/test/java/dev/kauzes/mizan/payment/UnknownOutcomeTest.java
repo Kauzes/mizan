@@ -41,10 +41,17 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(
         properties = {
             "mizan.acquirer.timeout=1s",
-            // The sweep runs quickly here so a test can watch it work, and waits almost no
-            // time first, because nothing else is competing for these payments.
+            // The sweep runs quickly here so a test can watch it work, and leaves a payment
+            // alone for a moment first — which is what it does in production, and what stops
+            // it racing a request that is still in flight. It used to wait no time at all,
+            // which was survivable until MIZ-53 gave the sweep something to write on every
+            // pass and MIZ-58 made authorizing slower; then it started losing the race with
+            // its own tests.
             "mizan.acquirer.resolve-every=300ms",
-            "mizan.acquirer.resolve-after=0s"
+            "mizan.acquirer.resolve-after=2s",
+            // Nothing is listening on the default risk port in this JVM, and these tests are
+            // not about risk. A short timeout keeps the fail-open path quick.
+            "mizan.risk.timeout=100ms"
         })
 class UnknownOutcomeTest extends MizanIntegrationTest {
 

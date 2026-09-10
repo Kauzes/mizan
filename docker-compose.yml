@@ -138,6 +138,10 @@ services:
       # The books, reached directly rather than through the edge. This is not a merchant's
       # request being forwarded; it is the platform recording what it did.
       MIZAN_LEDGER_URL: http://ledger-service:8082
+      # The scorer, asked before every authorization. Deliberately not a depends_on: risk
+      # being down must not stop this service starting, for the same reason it must not stop
+      # it taking payments.
+      MIZAN_RISK_URL: http://risk-service:8084
       # Where events go once they are written. The relay is what drains the outbox; until
       # this points somewhere, events are recorded and nobody is told.
       MIZAN_KAFKA: kafka:9092

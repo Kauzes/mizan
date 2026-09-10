@@ -27,6 +27,7 @@ public class PaymentService {
     private final PaymentRepository payments;
     private final AcquirerClient acquirer;
     private final LedgerClient ledger;
+    private final RiskClient risk;
     private final UnknownOutcomes unknownOutcomes;
     private final PaymentEvents events;
 
@@ -34,12 +35,14 @@ public class PaymentService {
             PaymentRepository payments,
             AcquirerClient acquirer,
             LedgerClient ledger,
+            RiskClient risk,
             UnknownOutcomes unknownOutcomes,
             PaymentEvents events) {
 
         this.payments = payments;
         this.acquirer = acquirer;
         this.ledger = ledger;
+        this.risk = risk;
         this.unknownOutcomes = unknownOutcomes;
         this.events = events;
     }
@@ -142,6 +145,35 @@ public class PaymentService {
         // refused in terms of where it already is rather than after somebody else's system
         // has done work for us.
         refuseUnless(payment, PaymentStatus.AUTHORIZED, "authorized");
+
+        // Risk first, because a payment cannot be scored after it has been authorized: the
+        // point of scoring is to not authorize it. A payment already held and released by an
+        // analyst is not scored again — they have overruled the scorer, and asking it a second
+        // time would let it overrule them back.
+        if (payment.status() != PaymentStatus.HELD_FOR_REVIEW) {
+            RiskClient.Assessment assessment = risk.assess(payment, request.card());
+            payment.scored(
+                    assessment.verdict(),
+                    assessment.score(),
+                    String.join("; ", assessment.reasons()),
+                    assessment.at());
+
+            if (assessment.isBlock()) {
+                // Refused without troubling the acquirer. Nobody is contacted and no money is
+                // reserved, which is the entire point of scoring before rather than after.
+                payment.refusedByRisk(
+                        "This payment was refused: " + String.join("; ", assessment.reasons()));
+                events.record(payment, payment.declineReason());
+                log.info("payment {} was refused by risk: {}", paymentId, assessment.reasons());
+                return PaymentResponse.of(payment);
+            }
+            if (assessment.isReview()) {
+                payment.heldForReview(String.join("; ", assessment.reasons()));
+                events.record(payment, payment.riskReasons());
+                log.info("payment {} is held for review: {}", paymentId, assessment.reasons());
+                return PaymentResponse.of(payment);
+            }
+        }
 
         AcquirerClient.AcquirerDecision decision;
         try {

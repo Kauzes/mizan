@@ -13,14 +13,27 @@ import org.junit.jupiter.api.Test;
 class PaymentStatusTest {
 
     @Test
-    void aPaymentStartsByBeingAuthorizedRefusedOrLeftInDoubt() {
-        // The third one is not a failure mode of the payment but of the answer: the acquirer
-        // was asked and did not say. MIZ-44 resolves it by asking again rather than guessing.
+    void aPaymentStartsByBeingAuthorizedRefusedHeldOrLeftInDoubt() {
+        // Two of these are not failure modes of the payment. AUTHORIZATION_UNKNOWN is a
+        // failure of the answer — the acquirer was asked and did not say, which MIZ-44
+        // resolves by asking again. HELD_FOR_REVIEW is the platform not having made its mind
+        // up, with nobody charged, which MIZ-58 added and an analyst resolves.
         assertThat(PaymentStatus.CREATED.next())
                 .containsExactlyInAnyOrder(
                         PaymentStatus.AUTHORIZED,
                         PaymentStatus.DECLINED,
-                        PaymentStatus.AUTHORIZATION_UNKNOWN);
+                        PaymentStatus.AUTHORIZATION_UNKNOWN,
+                        PaymentStatus.HELD_FOR_REVIEW);
+    }
+
+    @Test
+    void aHeldPaymentIsDecidedByAPersonAndIsNotAnEnd() {
+        assertThat(PaymentStatus.HELD_FOR_REVIEW.isFinal())
+                .as("a payment held forever is a customer neither charged nor told why")
+                .isFalse();
+        assertThat(PaymentStatus.HELD_FOR_REVIEW.next())
+                .as("released to be authorized like any other payment, or refused")
+                .containsExactlyInAnyOrder(PaymentStatus.AUTHORIZED, PaymentStatus.DECLINED);
     }
 
     @Test

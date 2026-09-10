@@ -17,6 +17,12 @@ server:
 spring:
   main:
     banner-mode: off
+  datasource:
+    hikari:
+      # Small, because this service is started beside two or three others in one JVM and
+      # needs a handful of connections rather than the default ten. Several suites doing that
+      # at once is how a shared Postgres runs out of clients.
+      maximum-pool-size: 4
   jpa:
     hibernate:
       ddl-auto: validate

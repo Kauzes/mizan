@@ -206,6 +206,19 @@ other protected route.
 - Scoring is a pure function of its request, including the timestamp. The same request scores
   the same way twice, so a disagreement about a decision can be reproduced by somebody who was
   not there.
+- Authorizing asks risk first, because a payment cannot be scored after it has been
+  authorized: the point of scoring is to not authorize it. A block never reaches the acquirer,
+  so nobody is contacted and no money is reserved.
+- When risk cannot be asked, the payment goes through and is recorded as unscored. Risk is a
+  judgement, not a correctness invariant: fraud let through during an outage is bounded and
+  recoverable, and refusing every payment for every merchant is neither. UNAVAILABLE is a real
+  verdict rather than a null, so a day of them can be reviewed afterwards.
+- The risk timeout is shorter than the acquirer's, and there is a circuit breaker in front of
+  it. A guard that takes as long as the thing it guards has stopped being a guard, and one
+  that costs a timeout per payment while it is down has become the outage.
+- A held payment charges nobody and is not a decline. If nobody rules on it, it expires
+  refused rather than approved: letting a hold resolve to "take the money" makes the
+  safe-looking answer the default and turns a review queue into a delay before approving.
 - What is normal is learned from payment events, not typed in. Risk is told what happened and
   never reads the payment database: a scorer that reached across would make the payment service
   unable to change a column without breaking fraud detection.

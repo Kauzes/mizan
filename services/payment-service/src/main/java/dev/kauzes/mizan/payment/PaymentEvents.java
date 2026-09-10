@@ -111,12 +111,25 @@ public class PaymentEvents {
             Instant at) {
     }
 
+    public record HeldForReview(
+            UUID paymentId,
+            UUID merchantId,
+            long amount,
+            String currency,
+            String reference,
+            /** What the scorer objected to, so a consumer need not ask why. */
+            String reasons,
+            Integer riskScore,
+            Instant at) {
+    }
+
     /** The closed set. */
     public enum Type implements EventType {
         AUTHORIZED("payment.authorized"),
         DECLINED("payment.declined"),
         CAPTURED("payment.captured"),
         VOIDED("payment.voided"),
+        HELD_FOR_REVIEW("payment.held_for_review"),
         REFUNDED("payment.refunded");
 
         private final String type;
@@ -198,6 +211,16 @@ public class PaymentEvents {
                     payment.reference(),
                     payment.acquirerReference(),
                     reason,
+                    payment.updatedAt()));
+
+            case HELD_FOR_REVIEW -> write(Type.HELD_FOR_REVIEW, payment, new HeldForReview(
+                    payment.id(),
+                    payment.merchantId(),
+                    payment.money().amount(),
+                    payment.money().currency().getCurrencyCode(),
+                    payment.reference(),
+                    payment.riskReasons(),
+                    payment.riskScore(),
                     payment.updatedAt()));
 
             // Announcing an intent would be this service narrating its own database, and

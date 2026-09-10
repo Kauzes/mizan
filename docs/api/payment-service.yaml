@@ -645,6 +645,7 @@ components:
             enum:
             - CREATED
             - AUTHORIZATION_UNKNOWN
+            - HELD_FOR_REVIEW
             - AUTHORIZED
             - DECLINED
             - CAPTURED
@@ -694,11 +695,26 @@ components:
           type: integer
           format: int64
           description: What has been given back so far
+        riskReasons:
+          type: string
+          description: "What the scorer objected to, in words. A merchant asking why\
+            \ a payment was held is asking for this."
+        riskScore:
+          type: integer
+          format: int32
+          description: What it added up to. Higher is riskier.
+        riskVerdict:
+          type: string
+          description: "What this platform thought of the payment: APPROVE, REVIEW,\
+            \ BLOCK, or UNAVAILABLE when the scorer could not be asked. Null on a\
+            \ payment that was never scored."
+          example: REVIEW
         status:
           type: string
           enum:
           - CREATED
           - AUTHORIZATION_UNKNOWN
+          - HELD_FOR_REVIEW
           - AUTHORIZED
           - DECLINED
           - CAPTURED
@@ -857,6 +873,7 @@ components:
           enum:
           - CREATED
           - AUTHORIZATION_UNKNOWN
+          - HELD_FOR_REVIEW
           - AUTHORIZED
           - DECLINED
           - CAPTURED
@@ -868,6 +885,7 @@ components:
           enum:
           - CREATED
           - AUTHORIZATION_UNKNOWN
+          - HELD_FOR_REVIEW
           - AUTHORIZED
           - DECLINED
           - CAPTURED
