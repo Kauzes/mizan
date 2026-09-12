@@ -508,7 +508,62 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------
-step "17. The books balance"
+step "17. A difference reaches a person, and a person's decision is on the record"
+
+# A reconciliation nobody reads is a reconciliation that was not run. Only visible from here:
+# the ruling is checked against the ledger over HTTP, so a correction is refused by a service
+# that was never told what settlement believes.
+if command -v docker > /dev/null 2>&1 && docker compose ps settlement-service > /dev/null 2>&1; then
+    queue=$(call 200 GET "$SETTLEMENT/actuator/reconciliation")
+    [ "$(printf '%s' "$queue" | field outstanding)" -ge 1 ]         || fail "nothing is waiting for anybody, which cannot be after step 16: $queue"
+
+    difference=$(printf '%s' "$queue" | "$PYTHON" -c '
+import json, sys
+print(json.load(sys.stdin)["differences"][0]["id"])')
+    ruling="$SETTLEMENT/actuator/reconciliation/differences/$difference"
+
+    # A decision nobody owns and nobody explained is not an audit trail, and the platform says
+    # so in those words rather than answering with a sentence about a missing form field.
+    anonymous=$(call 422 POST "$ruling" '{"ruling":"ACKNOWLEDGED","ruledBy":"ada@mizan.local"}')
+    printf '%s' "$anonymous" | grep -q "not an audit trail"         || fail "a decision with no reason was not refused for the right reason: $anonymous"
+
+    # And there is no writing one off. An automatic write-off is the feature that makes a
+    # ledger untrustworthy, and a manual one by another name is the same feature.
+    refused=$(call 422 POST "$ruling"         '{"ruling":"WRITTEN_OFF","ruledBy":"ada@mizan.local","why":"it is only a kurus"}')
+    printf '%s' "$refused" | grep -q "ACKNOWLEDGED" || fail "a write-off was not refused: $refused"
+
+    # A correction is checked against the books rather than believed.
+    invented=$(call 422 POST "$ruling"         "{\"ruling\":\"CORRECTED\",\"ruledBy\":\"ada@mizan.local\",\"why\":\"posted it\",
+          \"correctedBy\":\"$(key)\"}")
+    printf '%s' "$invented" | grep -q "cannot be found is not a correction"         || fail "a correction naming an entry nobody posted was accepted: $invented"
+    pass "a ruling has to be owned, explained, and true, or it is refused"
+
+    decided=$(call 200 POST "$ruling"         '{"ruling":"ACKNOWLEDGED","ruledBy":"ada@mizan.local",
+          "why":"the bank invented this one; asked them to withdraw it"}')
+    printf '%s' "$decided" | grep -q "ACKNOWLEDGED" || fail "the ruling was not recorded: $decided"
+
+    after=$(call 200 GET "$SETTLEMENT/actuator/reconciliation")
+    printf '%s' "$after" | "$PYTHON" -c '
+import json, sys
+waiting = json.load(sys.stdin)["differences"]
+sys.exit(0 if not any(d["id"] == "'"$difference"'" for d in waiting) else 1)'         || fail "a difference somebody has ruled on is still waiting for somebody"
+    pass "deciding about it takes it out of the queue, and nothing else does"
+
+    history=$(call 200 GET "$ruling")
+    printf '%s' "$history" | grep -q "ada@mizan.local" || fail "the ruling is not on the record"
+    printf '%s' "$history" | grep -q "asked them to withdraw it"         || fail "the reason is not on the record: $history"
+    pass "and who decided it, and why, is on the record afterwards"
+
+    # The whole point of the two verbs. Acknowledging explains a difference; it never undoes
+    # one, and a correction is an entry in the ledger like any other.
+    [ "$(printf '%s' "$(call 200 GET "$LEDGER/actuator/ledgerintegrity")" | field sound)"         != "False" ] || fail "ruling on a difference moved money"
+    pass "and the books are exactly where they were: a ruling explains, it does not move money"
+else
+    note "no Compose stack, so nothing was ruled on"
+fi
+
+# ---------------------------------------------------------------------------------------
+step "18. The books balance"
 
 integrity=$(call 200 GET "$LEDGER/actuator/ledgerintegrity")
 sound=$(printf '%s' "$integrity" | field sound)

@@ -18,6 +18,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -97,6 +99,25 @@ public class InternalEntryController {
                 JournalService.Books.THE_MERCHANTS_AND_THE_PLATFORMS);
 
         return org.springframework.http.ResponseEntity.status(201).body(posted);
+    }
+
+    @GetMapping("/{entryId}")
+    @Operation(
+            summary = "Read one entry, for a service that has been handed its id",
+            description =
+                    """
+                    Settlement uses this to check that a correction an operator says they                     posted was in fact posted: a decision recorded as evidence has to be                     evidence. Not scoped to a merchant, because a difference between this                     platform and a bank does not always have one — the entry says whose it                     is. One entry by id, and no way to list or search them.""")
+    @ApiResponse(responseCode = "200", description = "The entry and its postings")
+    @ApiResponse(
+            responseCode = "401",
+            ref = "#/components/responses/UNAUTHORIZED",
+            description = "No service credential")
+    @ApiResponse(
+            responseCode = "404",
+            ref = "#/components/responses/NOT_FOUND",
+            description = "No entry with that id")
+    public EntryResponse find(@PathVariable UUID entryId) {
+        return journal.find(entryId);
     }
 
     /**
