@@ -146,6 +146,124 @@ class LedgerIntegrityTest extends MizanIntegrationTest {
     }
 
     @Test
+    void catchesTwoBrokenEntriesThatCancelEachOtherOut() {
+        Books books = books();
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+
+        // The reason the entry level question exists at all. Two entries that are each wrong,
+        // in opposite directions, leave every currency summing to zero and every account
+        // agreeing with its postings. The platform wide check would call this ledger sound,
+        // and every kurus of it would be in the wrong place.
+        withoutTheJournalsGuards(() -> {
+            brokenEntry(first, books, 600, -500);
+            brokenEntry(second, books, -500, 400);
+            // Balances kept honest against the postings, so the account question passes too.
+            jdbc.update("update account set balance = balance + 100 where id = ?", books.cash);
+            jdbc.update("update account set balance = balance - 100 where id = ?", books.owed);
+        });
+
+        try {
+            IntegrityReport report = integrity.check();
+
+            assertThat(report.totals())
+                    .as("every currency still sums to zero, which is the trap")
+                    .allSatisfy(total -> assertThat(total.balances()).isTrue());
+            assertThat(report.drifted()).as("and every balance still agrees").isEmpty();
+
+            assertThat(report.sound()).isFalse();
+            assertThat(report.entries())
+                    .as("and yet both entries are wrong, which only this question finds")
+                    .hasSize(2)
+                    .allSatisfy(entry -> assertThat(entry.currency()).isEqualTo("TRY"))
+                    .extracting(IntegrityReport.Unbalanced::outBy)
+                    .containsExactlyInAnyOrder(100L, -100L);
+            assertThat(report.summary()).contains("2 entry/entries do not balance");
+        } finally {
+            withoutTheJournalsGuards(() -> {
+                jdbc.update("delete from posting where entry_id in (?, ?)", first, second);
+                jdbc.update("delete from journal_entry where id in (?, ?)", first, second);
+                jdbc.update("update account set balance = balance - 100 where id = ?", books.cash);
+                jdbc.update("update account set balance = balance + 100 where id = ?", books.owed);
+            });
+        }
+
+        assertThat(integrity.check().sound()).as("and sound again once repaired").isTrue();
+    }
+
+    @Test
+    void anEntryWithOnlyOnePostingIsNotAnEntry() {
+        Books books = books();
+        UUID entry = UUID.randomUUID();
+
+        withoutTheJournalsGuards(() -> {
+            jdbc.update(
+                    "insert into journal_entry (id, merchant_id, external_reference, "
+                            + "request_fingerprint, description, occurred_at, recorded_at) "
+                            + "values (?, ?, ?, 'half', 'Half an entry', now(), now())",
+                    entry,
+                    books.merchantId,
+                    "half:" + entry);
+            jdbc.update(
+                    "insert into posting (id, entry_id, account_id, amount) values (?, ?, ?, 500)",
+                    UUID.randomUUID(),
+                    entry,
+                    books.cash);
+        });
+
+        try {
+            // Money moves from somewhere to somewhere. One posting is a statement that it
+            // came from nowhere, and it is named as an entry problem rather than only showing
+            // up as a currency that does not add up.
+            assertThat(integrity.check().entries())
+                    .filteredOn(unbalanced -> entry.equals(unbalanced.entryId()))
+                    .singleElement()
+                    .satisfies(unbalanced -> {
+                        assertThat(unbalanced.postings()).isEqualTo(1L);
+                        assertThat(unbalanced.outBy()).isEqualTo(500L);
+                        assertThat(unbalanced.reference()).isEqualTo("half:" + entry);
+                    });
+        } finally {
+            withoutTheJournalsGuards(() -> {
+                jdbc.update("delete from posting where entry_id = ?", entry);
+                jdbc.update("delete from journal_entry where id = ?", entry);
+            });
+        }
+    }
+
+    @Test
+    void saysWhatItLookedAtSoSoundIsNeverAStatementAboutNothing() throws Exception {
+        Books books = books();
+        postEntry(books, 125000);
+
+        IntegrityReport report = integrity.check();
+
+        // Every question here passes trivially over empty tables, so an answer that did not
+        // say what it read would be worth nothing to a caller who wants to know the ledger is
+        // sound. This is what CI asserts against the data a real run produced.
+        assertThat(report.examined().entries()).isPositive();
+        assertThat(report.examined().postings()).isGreaterThanOrEqualTo(2);
+        assertThat(report.examined().accounts()).isPositive();
+        assertThat(report.examined().anything()).isTrue();
+        assertThat(report.summary()).contains("over " + report.examined().entries() + " entries");
+
+        // And how long it took, because a check whose cost nobody watches is a check that is
+        // switched off the first time somebody notices it.
+        assertThat(report.tookMillis()).isNotNegative();
+    }
+
+    @Test
+    void anEmptyLedgerIsNotEvidenceOfAnything() {
+        // Not a database state this test can produce — the tables are shared — so the claim is
+        // made where it lives: nothing was examined, so nothing has been proven, whatever the
+        // three questions answered.
+        assertThat(new IntegrityReport.Examined(0, 0, 0, 0).anything()).isFalse();
+        assertThat(new IntegrityReport.Examined(3, 0, 2, 1).anything())
+                .as("entries with no postings behind them are not evidence either")
+                .isFalse();
+    }
+
+    @Test
     void theCheckIsReachableAsAnOperation() throws Exception {
         Books books = books();
         postEntry(books, 1000);
@@ -224,6 +342,30 @@ class LedgerIntegrityTest extends MizanIntegrationTest {
 
         assertThat(writing.isAlive()).as("writes should not have been held up").isFalse();
         assertThat(integrity.check().sound()).isTrue();
+    }
+
+    /** An entry the database's own guards would never have allowed, written past them. */
+    private void brokenEntry(UUID entry, Books books, long debit, long credit) {
+        jdbc.update(
+                "insert into journal_entry (id, merchant_id, external_reference, "
+                        + "request_fingerprint, description, occurred_at, recorded_at) "
+                        + "values (?, ?, ?, 'broken', 'An entry that does not balance', "
+                        + "now(), now())",
+                entry,
+                books.merchantId,
+                "broken:" + entry);
+        jdbc.update(
+                "insert into posting (id, entry_id, account_id, amount) values (?, ?, ?, ?)",
+                UUID.randomUUID(),
+                entry,
+                books.cash,
+                debit);
+        jdbc.update(
+                "insert into posting (id, entry_id, account_id, amount) values (?, ?, ?, ?)",
+                UUID.randomUUID(),
+                entry,
+                books.owed,
+                credit);
     }
 
     /** Stands the append only and balance triggers down, and always puts them back. */
