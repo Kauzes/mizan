@@ -140,6 +140,13 @@ authed 404 GET "$GATEWAY/api/v1/risk/rulings/merchants/$MERCHANT" > /dev/null
 authed 404 POST "$GATEWAY/api/v1/risk/scores" '{}' > /dev/null
 pass "and risk is not reachable from the edge at all, by anybody"
 
+# The books page the same way payments do, and narrow to one account. Only visible from
+# outside: the body stays a plain array and the shape of the answer is in headers.
+books=$(curl -s -D - -H "Authorization: Bearer $AUTH"     "$GATEWAY/api/v1/merchants/$MERCHANT/entries?size=1")
+printf '%s' "$books" | grep -qi "^x-total-count:" || fail "the entries do not say how many: $books"
+authed 422 GET "$GATEWAY/api/v1/merchants/$MERCHANT/entries?page=900&size=50" > /dev/null
+pass "the entries page too, and refuse to be read ten thousand deep"
+
 # ---------------------------------------------------------------------------------------
 step "7. A second payment is authorized and voided"
 

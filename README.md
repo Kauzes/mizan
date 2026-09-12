@@ -454,6 +454,12 @@ on an origin of its own.
   three, breaking whenever any of them changed. ADR 0036 has the argument.
 - **A section nobody may read is not fetched.** A panel that renders a refusal is a panel that
   has told somebody the thing exists.
+- **The books are visible, and read only.** Account balances are the ledger's own figures,
+  never added up in the browser: a second implementation of the arithmetic is a second thing
+  that can be wrong, silently, about money. The one sum the page does compute is each entry's
+  postings, precisely so that a wrong one would show. Entries page and narrow to one account,
+  and each one links back to the payment or refund that caused it through the external
+  reference it already carries.
 - **The review queue is one page**: what is waiting and why, the two verbs with a reason
   required before either does anything, what colleagues already decided, and how far the
   platform's line has drifted as a result — in words, because "+5" says nothing to somebody

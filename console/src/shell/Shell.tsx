@@ -13,6 +13,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <nav aria-label="Sections">
           {can("PAYMENT_READ") ? <NavLink to="/payments">Payments</NavLink> : null}
           {can("REVIEW_RULE") ? <NavLink to="/reviews">Reviews</NavLink> : null}
+          {can("ENTRY_READ") ? <NavLink to="/books">Books</NavLink> : null}
           <NavLink to="/account">Account</NavLink>
         </nav>
         <div className="who">

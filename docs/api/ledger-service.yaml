@@ -181,7 +181,9 @@ paths:
   /api/v1/merchants/{merchantId}/entries:
     get:
       description: |-
-        Most recent movement first.
+        Most recent movement first, a page at a time. Narrowed to one account with `accountId`, which is what somebody following a balance back to what made it is asking for.
+
+        Where the page sits comes back in headers — `X-Total-Count`, `X-Page`, `X-Page-Size` and `Link` — so the body is the same list of entries it has always been.
 
         Requires the ENTRY_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
       operationId: list
@@ -192,6 +194,25 @@ paths:
         schema:
           type: string
           format: uuid
+      - description: Only entries that touched this account
+        in: query
+        name: accountId
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
       responses:
         "200":
           content:
@@ -200,11 +221,13 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/EntryResponse"
-          description: The merchant's entries
+          description: The page of entries
         "401":
           $ref: "#/components/responses/UNAUTHORIZED"
         "403":
           $ref: "#/components/responses/FORBIDDEN"
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
       security:
       - merchantJwt: []
       summary: List a merchant's entries
