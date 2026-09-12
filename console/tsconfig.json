@@ -5,7 +5,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
-    "types": ["vitest/globals", "@testing-library/jest-dom"],
+    "types": ["vitest/globals", "@testing-library/jest-dom", "node"],
 
     // Every one of these is here because the alternative is a runtime surprise in a console
     // that shows people money. Nothing in this project is worth the time saved by turning
@@ -23,5 +23,7 @@
     "isolatedModules": true,
     "noEmit": true
   },
-  "include": ["src", "vite.config.ts"]
+  // The browser journey is typechecked with everything else. A test that does not compile is
+  // a test that fails in CI for a reason nobody can see from the diff.
+  "include": ["src", "e2e", "vite.config.ts", "playwright.config.ts"]
 }

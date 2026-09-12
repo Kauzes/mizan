@@ -74,7 +74,7 @@ jobs:
         run: npm test
 
   smoke:
-    name: Smoke check
+    name: Smoke and browser
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # Deliberately not needing the build job. This checks something the test suite
@@ -93,6 +93,39 @@ jobs:
 
       - name: Smoke check
         run: ./scripts/smoke.sh
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: console/package-lock.json
+
+      - name: Install the console's tooling
+        working-directory: console
+        run: npm ci
+
+      - name: Install a browser
+        working-directory: console
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser journey
+        # In this job rather than its own, because it needs exactly what this job already
+        # has: the platform running as real processes, in the images it is deployed as, with
+        # the console served beside the API on one origin.
+        working-directory: console
+        run: npm run e2e
+
+      - name: What the browser saw
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-journey
+          path: |
+            console/playwright-report
+            console/test-results
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Seed demo data
         # Not an assertion, but it exercises paths the smoke check does not — a payment left
