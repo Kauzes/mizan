@@ -1,0 +1,13 @@
+# Test-only overrides, the same as payment-service's and for the same reason.
+#
+# The token is here rather than in each test because this service refuses to start without
+# one: money must not move on this platform without an entry that says it did, and a service
+# that quietly started with no credential to write entries would be able to settle a day and
+# record nothing.
+#
+# The ledger's address is not here. The tests that need one start a ledger of their own and
+# point at the port it was given.
+
+mizan:
+  internal:
+    service-token: a-service-token-for-tests
