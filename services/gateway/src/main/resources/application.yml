@@ -32,7 +32,7 @@ spring:
               uri: http://payment-service:8083
               order: -100
               predicates:
-                - Path=/api/v1/merchants/*/payments,/api/v1/merchants/*/payments/**,/api/v1/merchants/*/reviews,/api/v1/merchants/*/reviews/**
+                - Path=/api/v1/merchants/*/payments,/api/v1/merchants/*/payments/**,/api/v1/merchants/*/reviews,/api/v1/merchants/*/reviews/**,/api/v1/merchants/*/summary
             # There is deliberately no route to risk-service. Everything it serves is
             # asked for by another service on a merchant's behalf: scoring is asked for by
             # payment-service during an authorization, and what analysts have ruled is read

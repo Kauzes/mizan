@@ -702,6 +702,65 @@ paths:
       summary: Release a held payment
       tags:
       - Reviews
+  /api/v1/merchants/{merchantId}/summary:
+    get:
+      description: |-
+        Counted by the database, never by the caller. What was attempted, what went through, what money moved per currency, a row per day with the volume behind each rate, why payments were refused split between the acquirer and this platform, and what is outstanding right now.
+
+        The authorization rate is null rather than zero when nothing was attempted: a rate of zero says every payment failed, and no payments at all says something else entirely.
+
+        What needs somebody is not scoped to the range. A payment held three weeks ago is still held, and nobody should have to widen a date filter to find out that a customer is waiting.
+
+        Requires the PAYMENT_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
+      operationId: summary
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: Inclusive. Defaults to thirty days ago.
+        in: query
+        name: from
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - description: Exclusive. Defaults to now.
+        in: query
+        name: to
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - description: "Which days these are, as an IANA zone. A merchant in Istanbul\
+          \ asking about Tuesday means their Tuesday."
+        example: Europe/Istanbul
+        in: query
+        name: zone
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: The summary
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+        "422":
+          $ref: "#/components/responses/UNPROCESSABLE"
+      security:
+      - merchantJwt: []
+      summary: How business is
+      tags:
+      - Payments
 components:
   headers:
     X-Correlation-Id:
