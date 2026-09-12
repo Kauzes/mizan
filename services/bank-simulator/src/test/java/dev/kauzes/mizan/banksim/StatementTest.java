@@ -7,6 +7,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,9 +32,22 @@ import tools.jackson.databind.json.JsonMapper;
  * twice produces the same file — because a reconciliation test that depends on chance is a
  * test that fails on Tuesdays.
  */
-@SpringBootTest
+@SpringBootTest(properties = "mizan.acquirer.statement-zone=UTC")
 @AutoConfigureMockMvc
 class StatementTest {
+
+    /**
+     * The acquirer's cut-off, pinned for this class, and the zone every "today" here is read
+     * in.
+     *
+     * <p>A real acquirer's day ends in its own zone and this one's is Istanbul, which is the
+     * behaviour worth having and not the behaviour worth testing here. Left alone, these tests
+     * ask for today in whichever zone the JVM happens to be in, and for three hours either
+     * side of midnight that is a different day from the one the acquirer settled on: the file
+     * comes back empty and the failure looks like a broken statement rather than a test that
+     * asked the wrong question. CI found exactly that, at ten to one in the morning.
+     */
+    private static final ZoneId ACQUIRERS_DAY_ENDS_IN = ZoneOffset.UTC;
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final String GOOD_CARD = "4000000000000000";
@@ -46,11 +61,11 @@ class StatementTest {
         captured(100_00);
         captured(200_00);
 
-        List<String> lines = statement(LocalDate.now(), true);
+        List<String> lines = statement(today(), true);
 
         assertThat(lines.getFirst())
                 .as("a header naming the acquirer, the day and the currency")
-                .startsWith("H|MIZANBANK|" + LocalDate.now() + "|TRY");
+                .startsWith("H|MIZANBANK|" + today() + "|TRY");
 
         List<String> details = lines.stream().filter(line -> line.startsWith("D|")).toList();
         assertThat(details).isNotEmpty();
@@ -71,8 +86,8 @@ class StatementTest {
         captured(200_00);
         captured(300_00);
 
-        Map<String, Long> faithful = amountsBy(details(statement(LocalDate.now(), true)));
-        Map<String, Long> sent = amountsBy(details(statement(LocalDate.now(), false)));
+        Map<String, Long> faithful = amountsBy(details(statement(today(), true)));
+        Map<String, Long> sent = amountsBy(details(statement(today(), false)));
 
         // Compared as two sets rather than by naming particular transactions: this acquirer
         // keeps what it has decided for as long as it is running, so every test in this class
@@ -109,8 +124,8 @@ class StatementTest {
 
         // A statement that changed under a reader would make every reconciliation a race,
         // and a re-run after an incident would find differences that were never there.
-        assertThat(statement(LocalDate.now(), false))
-                .isEqualTo(statement(LocalDate.now(), false));
+        assertThat(statement(today(), false))
+                .isEqualTo(statement(today(), false));
     }
 
     @Test
@@ -134,7 +149,7 @@ class StatementTest {
         //
         // By reference rather than by counting: this acquirer keeps what it has decided for
         // as long as it is running, so every test in this class shares a today.
-        List<String> sent = references(details(statement(LocalDate.now(), true)));
+        List<String> sent = references(details(statement(today(), true)));
         assertThat(sent).contains(taken).doesNotContain(held);
     }
 
@@ -148,7 +163,7 @@ class StatementTest {
 
         // What an acquirer actually sent on. A refund it processed is money it did not send,
         // and a statement that ignored that would disagree with the bank's own books.
-        String row = details(statement(LocalDate.now(), true)).stream()
+        String row = details(statement(today(), true)).stream()
                 .filter(line -> line.contains(reference))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError(reference + " is not on the statement"));
@@ -183,6 +198,11 @@ class StatementTest {
             amounts.put(detail.split("\\|")[1], amountIn(detail));
         }
         return amounts;
+    }
+
+    /** The day the acquirer is settling, which is the only "today" this class knows. */
+    private static LocalDate today() {
+        return LocalDate.now(ACQUIRERS_DAY_ENDS_IN);
     }
 
     private static long amountIn(String detail) {
