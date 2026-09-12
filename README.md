@@ -454,6 +454,14 @@ on an origin of its own.
   three, breaking whenever any of them changed. ADR 0036 has the argument.
 - **A section nobody may read is not fetched.** A panel that renders a refusal is a panel that
   has told somebody the thing exists.
+- **A secret is shown once, and the console is careful about it.** Both the API key secret
+  and a webhook signing secret are issued once and never returned, so the page says so before
+  one is generated as well as after, dismissing it takes a deliberate confirmation, and it is
+  never written to storage, a URL or a log. A click on whatever was nearest should not lose
+  something unrecoverable.
+- **A destructive action names what it will break.** Revoking a key says which key and what
+  it was for, because it is somebody's production integration. Removing an endpoint says that
+  its history goes with it and that disabling does not.
 - **The books are visible, and read only.** Account balances are the ledger's own figures,
   never added up in the browser: a second implementation of the arithmetic is a second thing
   that can be wrong, silently, about money. The one sum the page does compute is each entry's

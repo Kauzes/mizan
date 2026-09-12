@@ -4,6 +4,7 @@ import { Home } from "./pages/Home";
 import { PaymentDetail } from "./payments/PaymentDetail";
 import { Payments } from "./payments/Payments";
 import { Reviews } from "./reviews/Reviews";
+import { Settings } from "./settings/Settings";
 import { SignIn } from "./pages/SignIn";
 import { useSession } from "./session/SessionProvider";
 import { Shell } from "./shell/Shell";
@@ -39,6 +40,7 @@ export function App() {
           <Route path="/payments/:paymentId" element={<PaymentDetail />} />
           <Route path="/reviews" element={<Reviews />} />
           <Route path="/books" element={<Books />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/account" element={<Home />} />
           <Route path="/" element={<Navigate to="/payments" replace />} />
           {/* Anything else is a link somebody kept from a version that had more pages. */}

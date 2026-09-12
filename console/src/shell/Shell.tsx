@@ -14,6 +14,9 @@ export function Shell({ children }: { children: ReactNode }) {
           {can("PAYMENT_READ") ? <NavLink to="/payments">Payments</NavLink> : null}
           {can("REVIEW_RULE") ? <NavLink to="/reviews">Reviews</NavLink> : null}
           {can("ENTRY_READ") ? <NavLink to="/books">Books</NavLink> : null}
+          {can("WEBHOOK_READ") || can("API_KEY_MANAGE") ? (
+            <NavLink to="/settings">Settings</NavLink>
+          ) : null}
           <NavLink to="/account">Account</NavLink>
         </nav>
         <div className="who">

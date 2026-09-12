@@ -506,3 +506,138 @@ button.as-link {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* -- settings: keys and endpoints ------------------------------------------------------- */
+
+.secret {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 2px solid var(--accent);
+  border-radius: 0.5rem;
+}
+
+.secret p {
+  margin: 0 0 0.5rem;
+}
+
+.secret-value {
+  display: inline-block;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 0.3rem;
+  word-break: break-all;
+  user-select: all;
+}
+
+.issue {
+  display: grid;
+  grid-template-columns: 10rem 1fr;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  font-size: 0.92rem;
+}
+
+.issue label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.issue input,
+.issue select {
+  font: inherit;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.3rem;
+  background: transparent;
+  color: inherit;
+}
+
+.issue button,
+.issue > span,
+.issue fieldset {
+  grid-column: 1 / -1;
+}
+
+.issue button {
+  justify-self: start;
+}
+
+.issue fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.issue fieldset legend {
+  float: left;
+  width: 10rem;
+  color: var(--muted);
+  padding: 0;
+}
+
+.issue fieldset label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+table.keys {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+table.keys th,
+table.keys td {
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+table.keys th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+table.keys tr.revoked {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.endpoint {
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  font-size: 0.92rem;
+}
+
+.endpoint.off {
+  opacity: 0.65;
+}
+
+.endpoint p {
+  margin: 0 0 0.4rem;
+}
+
+.confirm {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--refusal);
+  border-radius: 0.5rem;
+  font-size: 0.92rem;
+}
+
+ul.deliveries {
+  margin-top: 0.5rem;
+}
