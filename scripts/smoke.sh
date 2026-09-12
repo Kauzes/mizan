@@ -440,7 +440,75 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------
-step "16. The books balance"
+step "16. What the bank says it settled is compared with what this platform believes"
+
+# Only visible from here. The statement is somebody else's file, fetched over HTTP from a
+# process that was never told what this platform thinks happened — and the bank simulator
+# disagrees on purpose, three ways. A suite can check the comparison; nothing but this can
+# check that the comparison is being made against a real file from a real other service.
+if command -v docker > /dev/null 2>&1 && docker compose ps settlement-service > /dev/null 2>&1; then
+    day=$("$PYTHON" -c '
+import datetime, zoneinfo
+print(datetime.datetime.now(zoneinfo.ZoneInfo("Europe/Istanbul")).date())')
+
+    found=$(call 200 POST "$SETTLEMENT/actuator/reconciliation/$day" '{}')
+    matched=$(printf '%s' "$found" | field matched)
+    missing=$(printf '%s' "$found" | field missingFromStatement)
+    extra=$(printf '%s' "$found" | field extraOnStatement)
+    differing=$(printf '%s' "$found" | field amountsDiffer)
+
+    # The phantom is invented out of nothing, so it is there on every day of every run, and
+    # it is asserted by name: an extra that turned up for some other reason would pass a
+    # count and prove nothing.
+    phantom="acq_never_issued_$(printf '%s' "$day" | tr -d '-')"
+    [ "$extra" -ge 1 ] || fail "the phantom transaction was not noticed: $found"
+
+    # And the two sides must part company somewhere on this side too. Which of the two it is
+    # depends on how much the acquirer settled that day and is not asserted here — the
+    # simulator only drops a transaction when it has two to choose from, and a fresh stack
+    # may not. Both kinds are covered by ReconciliationTest against data it controls.
+    [ "$((missing + differing))" -ge 1 ]         || fail "the statement and this platform agreed completely, which cannot be: $found"
+    pass "$matched matched, $missing missing, $extra extra, $differing differing"
+
+    # Named differences rather than a count, and both figures on the one that disagrees, so
+    # the person who picks this up is told what to go and ask about.
+    outstanding=$(call 200 GET "$SETTLEMENT/actuator/reconciliation")
+    printf '%s' "$outstanding" | grep -q "$phantom"         || fail "the extra is not the phantom the bank invented: $outstanding"
+    both=$(printf '%s' "$outstanding" | "$PYTHON" -c '
+import json, sys
+rows = json.load(sys.stdin)["differences"]
+differing = [r for r in rows if r["outcome"] == "AMOUNTS_DIFFER"]
+extra = [r for r in rows if r["outcome"] == "EXTRA_ON_STATEMENT"]
+print(len(extra) > 0
+      and all(r["statement_amount"] is not None for r in extra)
+      and all(r["platform_amount"] is not None and r["statement_amount"] is not None
+              for r in differing))')
+    [ "$both" = "True" ] || fail "a difference does not say the figures it has: $outstanding"
+    pass "and each difference says what this platform has and what the bank says"
+
+    # The only time anybody reconciles twice is after an incident, which is the worst moment
+    # to be handed the same page of problems again as if they were all new.
+    before=$(printf '%s' "$outstanding" | "$PYTHON" -c '
+import json, sys; print(len(json.load(sys.stdin)["differences"]))')
+    again=$(call 200 POST "$SETTLEMENT/actuator/reconciliation/$day" '{}')
+    for figure in matched missingFromStatement extraOnStatement amountsDiffer; do
+        [ "$(printf '%s' "$again" | field $figure)" = "$(printf '%s' "$found" | field $figure)" ]             || fail "$figure changed between two runs of the same day"
+    done
+    after=$(call 200 GET "$SETTLEMENT/actuator/reconciliation" | "$PYTHON" -c '
+import json, sys; print(len(json.load(sys.stdin)["differences"]))')
+    [ "$before" = "$after" ] || fail "a second run reported $after differences, not $before"
+    pass "reconciling the day again says the same thing, and not twice as many problems"
+
+    # Nothing above adjusted anything. A job that could quietly make the books agree with the
+    # bank is a job that could quietly make them wrong, so the books must be untouched.
+    [ "$(printf '%s' "$(call 200 GET "$LEDGER/actuator/ledgerintegrity")" | field sound)"         != "False" ] || fail "reconciliation moved money"
+    pass "and it changed nothing: a difference is reported, never written off"
+else
+    note "no Compose stack, so the bank's statement was not read"
+fi
+
+# ---------------------------------------------------------------------------------------
+step "17. The books balance"
 
 integrity=$(call 200 GET "$LEDGER/actuator/ledgerintegrity")
 sound=$(printf '%s' "$integrity" | field sound)

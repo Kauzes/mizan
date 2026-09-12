@@ -250,10 +250,17 @@ class SettlementTest extends MizanIntegrationTest {
 
         Map<String, Object> answer = closing.close(TUESDAY.toString());
 
+        // This merchant's batch out of whatever else that day holds. The database outlives a
+        // single run, so a test that counted every batch for a day would be counting other
+        // tests' merchants and last week's.
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> closed = (List<Map<String, Object>>) answer.get("closed");
-        assertThat(closed).hasSize(1);
-        assertThat(closed.getFirst().get("net")).isEqualTo(100_00L - (290L + 30L));
+        List<Map<String, Object>> mine = closed.stream()
+                .filter(batch -> merchant.equals(batch.get("merchantId")))
+                .toList();
+
+        assertThat(mine).hasSize(1);
+        assertThat(mine.getFirst().get("net")).isEqualTo(100_00L - (290L + 30L));
 
         // And asking again is not an error: the batches that exist are the answer.
         closing.close(TUESDAY.toString());
