@@ -10,5 +10,6 @@ include(
     "services:payment-service",
     "services:risk-service",
     "services:notification-service",
+    "services:settlement-service",
     "services:bank-simulator",
 )

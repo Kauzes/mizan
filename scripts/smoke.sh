@@ -367,7 +367,57 @@ rm -f "$JAR"
 pass "signing out revokes it rather than only forgetting it here"
 
 # ---------------------------------------------------------------------------------------
-step "15. The books balance"
+step "15. A day of captures becomes a batch, and the fee adds up twice"
+
+# Only visible from here: the capture crosses a topic to another service, which groups it,
+# charges for it and has to agree with itself about the fee. A unit test can check the
+# arithmetic; nothing but this can check that the event carried what the arithmetic needs.
+if command -v docker > /dev/null 2>&1 && docker compose ps settlement-service > /dev/null 2>&1; then
+    for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+        waiting=$(call 200 GET "$SETTLEMENT/actuator/settlements")
+        heard=$(printf '%s' "$waiting" | "$PYTHON" -c '
+import json, sys
+print(sum(w["payments"] for w in json.load(sys.stdin)["waiting"]))')
+        [ "$heard" != "0" ] && break
+        sleep 2
+    done
+    [ "$heard" != "0" ] || fail "settlement never heard about the capture"
+
+    today=$("$PYTHON" -c '
+import datetime, zoneinfo
+print(datetime.datetime.now(zoneinfo.ZoneInfo("Europe/Istanbul")).date())')
+    call 200 POST "$SETTLEMENT/actuator/settlements/$today" '{}' > /dev/null
+
+    batches=$(authed 200 GET "$GATEWAY/api/v1/merchants/$MERCHANT/settlements")
+    captured=$(printf '%s' "$batches" | field batches.0.captured)
+    fee=$(printf '%s' "$batches" | field batches.0.fee)
+    net=$(printf '%s' "$batches" | field batches.0.net)
+    [ "$((captured - fee))" = "$net" ] || fail "$captured minus $fee is not $net"
+    pass "captured $captured, charged $fee, owed $net"
+
+    # The property the fee arithmetic exists for: a merchant adding up their own statement
+    # gets the number they were charged.
+    batch=$(printf '%s' "$batches" | field batches.0.id)
+    items=$(authed 200 GET "$GATEWAY/api/v1/merchants/$MERCHANT/settlements/$batch/items")
+    attributed=$(printf '%s' "$items" | "$PYTHON" -c '
+import json, sys
+print(sum(i["fee"] for i in json.load(sys.stdin)))')
+    [ "$attributed" = "$fee" ]         || fail "the payments come to $attributed but the batch was charged $fee"
+    pass "and the fees on its payments come to exactly that"
+
+    # Repeatable, which is what makes it safe to hand to a person during an incident.
+    call 200 POST "$SETTLEMENT/actuator/settlements/$today" '{}' > /dev/null
+    howMany=$(authed 200 GET "$GATEWAY/api/v1/merchants/$MERCHANT/settlements" | "$PYTHON" -c '
+import json, sys
+print(len(json.load(sys.stdin)["batches"]))')
+    [ "$howMany" = "1" ] || fail "closing twice made $howMany batches"
+    pass "closing the same day again answers with the same batch"
+else
+    note "no Compose stack to settle, so this was not checked"
+fi
+
+# ---------------------------------------------------------------------------------------
+step "16. The books balance"
 
 integrity=$(call 200 GET "$LEDGER/actuator/ledgerintegrity")
 sound=$(printf '%s' "$integrity" | field sound)

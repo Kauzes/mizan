@@ -17,8 +17,8 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 |---|---|---|
 | M1 | Foundation, identity, ledger core, payment happy path | complete |
 | M2 | Kafka outbox, risk scoring, refunds and saga compensation | complete |
-| M3 | Merchant webhooks, React merchant console | in progress |
-| M4 | Settlement, reconciliation, observability | not started |
+| M3 | Merchant webhooks, React merchant console | complete |
+| M4 | Settlement, reconciliation, observability | in progress |
 | M5 | Kubernetes delivery, load and chaos testing | not started |
 | M6 | Android merchant app, documentation | not started |
 
@@ -31,7 +31,8 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 | `ledger-service` | 8082 | Double entry accounts, journal entries, postings, reconciliation |
 | `payment-service` | 8083 | Payment lifecycle and saga orchestration, idempotency |
 | `risk-service` | 8084 | Scores a payment and says why, and learns from what analysts rule. Not routed from the edge |
-| `notification-service` | 8085 | Turns payment events into what a merchant is told; webhooks next |
+| `notification-service` | 8085 | Turns payment events into what a merchant is told, and signs webhooks |
+| `settlement-service` | 8087 | Groups a day's captures into batches, takes the fee, and is where reconciliation will live |
 | `bank-simulator` | 8086 | Fake acquirer that approves, declines, times out and duplicates |
 | `console` | 5173 | The merchant console: React, TypeScript, Vite, served beside the API |
 | `common` | n/a | Shared money type, error codes, correlation context. No Spring |
@@ -421,6 +422,32 @@ job is not a control.
 What each role may do is also served, at `GET /api/v1/roles`, generated from the same enum the
 services enforce. The console reads it rather than keeping a copy: a second table would be
 right on the day it was typed and wrong on the day somebody adds a permission.
+
+## Settlement
+
+Authorizing and capturing is not the same as being paid. Settlement is the difference, and it
+is its own service for the reasons in ADR 0037: its subject is a day rather than a payment,
+everything it needs already crosses the wire as an event, and its failure is a different
+failure from payments being down.
+
+- **One batch per merchant per day per currency.** A total in two currencies is not a total,
+  and somebody would be paid it.
+- **The fee adds up twice.** The percentage is worked out once on the batch total and then
+  allocated across the payments by amount, so the fees on the payments come to exactly the fee
+  on the batch. Charging 2.9% of each payment and summing loses a fraction at every rounding,
+  nothing notices, and a merchant adding up their own statement gets a different number from
+  the one they were charged.
+- **All three figures are stored**, along with the fee rule as it was applied. A figure derived
+  at read time moves when the rule changes, and a settlement a merchant has been shown must
+  not move.
+- **Closing a day is repeatable.** A batch claims its payments in the same transaction that
+  creates it, and closing again answers with the batch that exists. A close nobody can repeat
+  is a close nobody can recover, and this is the one an operator runs by hand during an
+  incident.
+- **A capture that arrives late is paid in the next batch**, keeping its own capture date. It
+  must not be stranded, and the batch a merchant has already seen must not change.
+- **Refunds are not netted in.** Money going back has its own timing and its own movement in
+  the books, and hiding it inside a settlement total is how a merchant loses sight of both.
 
 ## The console
 

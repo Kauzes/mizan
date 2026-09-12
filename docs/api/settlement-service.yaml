@@ -1,0 +1,356 @@
+openapi: 3.1.0
+info:
+  description: |-
+    Part of the Mizan payments platform. Every service is reached through the gateway under /api/v1.
+
+    Errors are RFC 9457 problem details. The code field is the contract: it comes from a closed set, never changes meaning, and the HTTP status is derived from it. Branch on the code rather than on the status or the message. The responses under components.responses are named after those codes.
+
+    Every request carries a correlation id. Send one in X-Correlation-Id and it is echoed back and printed on every log line the request touches; send none and one is generated at the edge. Quote it when reporting a problem.
+  title: settlement-service
+  version: 0.1.0
+servers:
+- description: The local gateway. Services are not addressed directly.
+  url: http://localhost:8080
+tags:
+- description: The difference between taking money and being paid
+  name: Settlements
+paths:
+  /api/v1/merchants/{merchantId}/settlements:
+    get:
+      description: |-
+        One batch per day per currency: what was captured, what this platform charged for taking it, and what the merchant is therefore owed. Most recently settled first.
+
+        All three figures are stored rather than worked out on the way out, along with the fee rule as it was applied. A settlement a merchant has already been shown must not move when the rule changes.
+
+        Refunds are not netted in. Money going back has its own timing and its own movement in the books, and hiding it inside a settlement total is how a merchant loses the ability to see either.
+
+        Requires the ACCOUNT_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
+      operationId: batches
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: limit
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 60
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: "The batches, and the totals across them"
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+      security:
+      - merchantJwt: []
+      summary: A merchant's settlement batches
+      tags:
+      - Settlements
+  /api/v1/merchants/{merchantId}/settlements/{batchId}/items:
+    get:
+      description: |-
+        Each with what it contributed to the fee. Those contributions add up to exactly the fee on the batch: the percentage is worked out once on the total and then allocated across the payments, so a merchant adding up their own statement gets the number they were charged.
+
+        Requires the ACCOUNT_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
+      operationId: items
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: batchId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: {}
+          description: The payments in the batch
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "403":
+          $ref: "#/components/responses/FORBIDDEN"
+      security:
+      - merchantJwt: []
+      summary: The payments that made up a batch
+      tags:
+      - Settlements
+components:
+  headers:
+    X-Correlation-Id:
+      description: "The correlation id this request was handled under. Echoed from\
+        \ the request when it sent one, generated at the edge otherwise."
+      schema:
+        type: string
+  responses:
+    CONFLICT:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: 409 conflict. The body carries code CONFLICT.
+      headers:
+        X-Correlation-Id:
+          $ref: "#/components/headers/X-Correlation-Id"
+    CONTENDED:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: 409 contended. The body carries code CONTENDED.
+      headers:
+        X-Correlation-Id:
+          $ref: "#/components/headers/X-Correlation-Id"
+    FORBIDDEN:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: 403 forbidden. The body carries code FORBIDDEN.
+      headers:
+        X-Correlation-Id:
+          $ref: "#/components/headers/X-Correlation-Id"
+    IDEMPOTENCY_KEY_REUSED:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: 409 idempotency-key-reused. The body carries code IDEMPOTENCY_KEY_REUSED.
+      headers:
+        X-Correlation-Id:
+          $ref: "#/components/headers/X-Correlation-Id"
+    INTERNAL_ERROR:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: 500 internal-error. The body carries code INTERNAL_ERROR.
+      headers:
+        X-Correlation-Id:
+          $ref: "#/components/headers/X-Correlation-Id"
+    MALFORMED_REQUEST:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: 400 malformed-request. The body carries code MALFORMED_REQUEST.
+      headers:
+        X-Correlation-Id:
+          $ref: "#/components/headers/X-Correlation-Id"
+    METHOD_NOT_ALLOWED:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: 405 method-not-allowed. The body carries code METHOD_NOT_ALLOWED.
+      headers:
+        X-Correlation-Id:
+          $ref: "#/components/headers/X-Correlation-Id"
+    NOT_FOUND:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: 404 not-found. The body carries code NOT_FOUND.
+      headers:
+        X-Correlation-Id:
+          $ref: "#/components/headers/X-Correlation-Id"
+    RATE_LIMITED:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: 429 rate-limited. The body carries code RATE_LIMITED.
+      headers:
+        X-Correlation-Id:
+          $ref: "#/components/headers/X-Correlation-Id"
+    UNAUTHORIZED:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: 401 unauthorized. The body carries code UNAUTHORIZED.
+      headers:
+        X-Correlation-Id:
+          $ref: "#/components/headers/X-Correlation-Id"
+    UNPROCESSABLE:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: 422 unprocessable. The body carries code UNPROCESSABLE.
+      headers:
+        X-Correlation-Id:
+          $ref: "#/components/headers/X-Correlation-Id"
+    UPSTREAM_TIMEOUT:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: 504 upstream-timeout. The body carries code UPSTREAM_TIMEOUT.
+      headers:
+        X-Correlation-Id:
+          $ref: "#/components/headers/X-Correlation-Id"
+    UPSTREAM_UNAVAILABLE:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: 503 upstream-unavailable. The body carries code UPSTREAM_UNAVAILABLE.
+      headers:
+        X-Correlation-Id:
+          $ref: "#/components/headers/X-Correlation-Id"
+    VALIDATION_FAILED:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: 400 validation-failed. The body carries code VALIDATION_FAILED.
+      headers:
+        X-Correlation-Id:
+          $ref: "#/components/headers/X-Correlation-Id"
+  schemas:
+    FieldViolation:
+      description: "One rejected field, in the shape a form can render beside the\
+        \ input."
+      properties:
+        field:
+          type: string
+          description: The field that was rejected.
+        message:
+          type: string
+          description: Why it was rejected.
+      required:
+      - field
+      - message
+    Problem:
+      description: An RFC 9457 problem detail. The body of every failing request.
+      example:
+        code: VALIDATION_FAILED
+        correlationId: 9f1c4e2a7b3d4f10
+        detail: The request failed validation.
+        errors:
+        - field: amount.minorUnits
+          message: must be greater than 0
+        instance: /api/v1/payments
+        status: 400
+        timestamp: 2026-08-27T09:15:00Z
+        title: validation-failed
+        type: https://mizan.kauzes.dev/errors/validation-failed
+      properties:
+        code:
+          type: string
+          description: The stable machine readable error. Branch on this.
+          enum:
+          - VALIDATION_FAILED
+          - MALFORMED_REQUEST
+          - UNAUTHORIZED
+          - FORBIDDEN
+          - NOT_FOUND
+          - METHOD_NOT_ALLOWED
+          - CONFLICT
+          - IDEMPOTENCY_KEY_REUSED
+          - CONTENDED
+          - UNPROCESSABLE
+          - RATE_LIMITED
+          - INTERNAL_ERROR
+          - UPSTREAM_UNAVAILABLE
+          - UPSTREAM_TIMEOUT
+        correlationId:
+          type: string
+          description: "The id this request was handled under, for finding it in the\
+            \ logs."
+        detail:
+          type: string
+          description: "What went wrong, when the error was raised deliberately. An\
+            \ unexpected failure carries a fixed message and no internals."
+        errors:
+          type: array
+          description: "Present only on a validation failure, one entry per field."
+          items:
+            $ref: "#/components/schemas/FieldViolation"
+        instance:
+          type: string
+          format: uri
+          description: The path of the request that failed.
+        status:
+          format: int32
+          description: "The HTTP status, derived from the code."
+        timestamp:
+          type: string
+          format: date-time
+          description: When the error was produced.
+        title:
+          type: string
+          description: The code in readable form.
+        type:
+          type: string
+          format: uri
+          description: Identifies the error. It is not required to resolve.
+      required:
+      - code
+      - correlationId
+      - status
+      - timestamp
+      - title
+      - type
+  securitySchemes:
+    merchantApiKey:
+      description: "The merchant's API key, naming which key signed the request. Public,\
+        \ and not a secret. Issued at POST /api/v1/merchants/{merchantId}/api-keys,\
+        \ which returns the signing secret once. Paired with merchantSignature and\
+        \ merchantTimestamp; a key on its own is not enough."
+      in: header
+      name: X-Mizan-Key
+      type: apiKey
+    merchantJwt:
+      bearerFormat: JWT
+      description: "A short lived access token issued by identity-service, sent as\
+        \ an Authorization bearer header. Obtained from POST /api/v1/tokens and renewed\
+        \ at /api/v1/tokens/refresh. The gateway verifies it and passes the established\
+        \ identity on; a service never sees the token itself."
+      scheme: bearer
+      type: http
+    merchantSignature:
+      description: |-
+        HMAC-SHA256 of the canonical request under the key's secret, in lowercase hex.
+
+        The canonical request is four lines joined with a newline: the uppercase method, the path, the value of X-Mizan-Timestamp, and the SHA-256 of the body in lowercase hex, which for a request with no body is the digest of the empty string.
+
+            POST
+            /api/v1/payments
+            1788100000
+            e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+        Method and path are covered so a captured signature cannot be aimed at another endpoint, the body so it cannot be replayed with different numbers in it, and the timestamp so it cannot be replayed at all.
+      in: header
+      name: X-Mizan-Signature
+      type: apiKey
+    merchantTimestamp:
+      description: "Unix seconds at which the request was signed. A request whose\
+        \ timestamp is further from the platform's clock than the accepted window,\
+        \ five minutes by default, is refused whatever its signature says."
+      in: header
+      name: X-Mizan-Timestamp
+      type: apiKey
