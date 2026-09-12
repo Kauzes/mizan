@@ -19,6 +19,9 @@ export default defineConfig({
     },
   },
   test: {
+    // Only the component and unit tests. The browser journey in e2e is Playwright's, and
+    // vitest trying to collect it fails in a way that says nothing about either.
+    include: ["src/**/*.test.{ts,tsx}"],
     globals: true,
     environment: "jsdom",
     setupFiles: ["./src/test-setup.ts"],

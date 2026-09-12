@@ -306,6 +306,7 @@ and the console is built inside its own image when the Compose stack comes up.
     ./gradlew build                 # everything, including container backed tests
     ./gradlew build -PfastTests     # skips anything tagged integration, no Docker needed
     cd console && npm test          # the console, in jsdom, in about half a minute
+    cd console && npm run e2e       # a browser, against the running Compose stack
 
 Integration tests run against real Postgres and real Kafka, never an in memory substitute,
 so a test cannot pass on something the deployment does not use. The containers start once
@@ -454,6 +455,12 @@ on an origin of its own.
   three, breaking whenever any of them changed. ADR 0036 has the argument.
 - **A section nobody may read is not fetched.** A panel that renders a refusal is a panel that
   has told somebody the thing exists.
+- **A browser drives the whole platform in CI.** One journey: sign in, find a payment, refund
+  part of it, and see that reflected in the payment, in the overview and in the books — three
+  services answering, no stubs and no fixtures. Taking the payment is done with real API calls
+  because that is a merchant's server's job and a card never touches the console. A reload in
+  the middle asserts the thing no unit test can: the access token went with the page and the
+  session came back from a cookie the page cannot read.
 - **The first screen answers how business is**, and every figure on it is worked out by the
   database. A dashboard that fetched a thousand payments to count them is a dashboard that
   stops working exactly when a merchant becomes worth having. It is computed on demand rather
