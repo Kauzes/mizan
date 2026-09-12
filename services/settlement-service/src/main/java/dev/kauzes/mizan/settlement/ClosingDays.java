@@ -37,17 +37,20 @@ public class ClosingDays {
     private static final Logger log = LoggerFactory.getLogger(ClosingDays.class);
 
     private final Settlement settlement;
+    private final Payouts payouts;
     private final JdbcTemplate jdbc;
     private final ZoneId zone;
     private final Duration closeAfter;
 
     public ClosingDays(
             Settlement settlement,
+            Payouts payouts,
             JdbcTemplate jdbc,
             @Value("${mizan.settlement.zone:Europe/Istanbul}") String zone,
             @Value("${mizan.settlement.close-after:1h}") Duration closeAfter) {
 
         this.settlement = settlement;
+        this.payouts = payouts;
         this.jdbc = jdbc;
         this.zone = ZoneId.of(zone);
         this.closeAfter = closeAfter;
@@ -79,6 +82,12 @@ public class ClosingDays {
         for (LocalDate day : days) {
             settlement.closeDay(day);
         }
+
+        // After closing, not during it. A ledger that is briefly unreachable must not stop a
+        // day being settled — the batch is a decision about payments and the fee is a
+        // movement of money — and this finishes every batch that is still waiting for one,
+        // not only the ones this pass just made.
+        payouts.recordWhatIsNotYetInTheBooks();
     }
 
     @ReadOperation
@@ -109,14 +118,16 @@ public class ClosingDays {
     public Map<String, Object> close(@Selector String day) {
         LocalDate settling = LocalDate.parse(day);
         List<Settlement.Closed> closed = settlement.closeDay(settling);
+        int recorded = payouts.recordWhatIsNotYetInTheBooks();
 
-        if (closed.isEmpty()) {
+        if (closed.isEmpty() && recorded == 0) {
             log.info("nothing was waiting to be settled for {}", settling);
         }
 
         return Map.of(
                 "day", settling.toString(),
-                "closed", closed.stream().map(Settlement.Closed::asAnswer).toList());
+                "closed", closed.stream().map(Settlement.Closed::asAnswer).toList(),
+                "feesRecorded", recorded);
     }
 
     /** What a merchant has waiting, for an operator answering a question about one. */

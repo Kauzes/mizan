@@ -235,16 +235,23 @@ services:
     environment:
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/settlement
       MIZAN_KAFKA: kafka:9092
+      MIZAN_LEDGER_URL: http://ledger-service:8082
+      MIZAN_INTERNAL_SERVICE_TOKEN: ${MIZAN_INTERNAL_SERVICE_TOKEN:-a-shared-secret-for-local-runs}
       MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
       MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
-      # A minute rather than an hour, so a demo or a smoke check can close today's day
-      # without waiting for tomorrow. A deployment leaves it at the default: captures arrive
-      # asynchronously, and a close that runs too soon strands them in the wrong day.
-      MIZAN_SETTLEMENT_CLOSE_AFTER: ${MIZAN_SETTLEMENT_CLOSE_AFTER:-1m}
+      # Left at the default hour on purpose, even locally. Shortening it so that a demo
+      # could see a day close was tried and was worse: the sweep would close today while
+      # captures were still arriving, and the ones that came afterwards waited for the next
+      # day — which is correct behaviour and a confusing demo. Closing a day on purpose is
+      # what the operator endpoint is for, and it ignores this setting.
+      MIZAN_SETTLEMENT_CLOSE_AFTER: ${MIZAN_SETTLEMENT_CLOSE_AFTER:-1h}
     depends_on:
       postgres:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+      # The ledger, because a fee that cannot be recorded is revenue nobody can reconcile.
+      ledger-service:
         condition: service_healthy
     ports:
       - "8087:8087"

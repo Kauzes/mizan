@@ -448,6 +448,19 @@ failure from payments being down.
   must not be stranded, and the batch a merchant has already seen must not change.
 - **Refunds are not netted in.** Money going back has its own timing and its own movement in
   the books, and hiding it inside a settlement total is how a merchant loses sight of both.
+- **The fee lands in the platform's own account**, and a payout moves the balance rather than
+  adjusting it. Two entries, each summing to zero: taking the fee when the batch closes, and
+  paying the merchant when the money is sent. A balance that can be adjusted is a balance
+  nobody can audit, which is the whole reason this platform has a ledger rather than a column.
+- **A payout is idempotent against its batch**, and says whether it paid or had already paid.
+  An operator who is not sure their click landed should not have to find out by looking at a
+  merchant's bank account.
+- **A payout is refused when it would exceed what the books say is owed.** Because refunds are
+  not netted in, a refund after the day closed moves what is owed without moving the batch, and
+  paying the batch in full would be paying a merchant money that has gone back to a customer.
+  Said plainly in the code: this is a guard rather than an invariant, and two payouts racing
+  could still overpay — what that leaves is an overpayment written down as entries that
+  balance, rather than a hidden one.
 
 ## The console
 

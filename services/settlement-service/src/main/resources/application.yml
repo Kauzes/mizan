@@ -34,6 +34,13 @@ spring:
     locations: classpath:db/migration/settlement
 
 mizan:
+  ledger:
+    base-url: ${MIZAN_LEDGER_URL:http://localhost:8082}
+    timeout: ${MIZAN_LEDGER_TIMEOUT:5s}
+  internal:
+    # The credential the ledger's internal routes need. No merchant has it, because an entry
+    # that names the platform's own accounts is not a merchant's to write.
+    service-token: ${MIZAN_INTERNAL_SERVICE_TOKEN:}
   events:
     retries: ${MIZAN_EVENT_RETRIES:3}
     first-retry: ${MIZAN_EVENT_FIRST_RETRY:500ms}
@@ -62,7 +69,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info, settlements
+        include: health, info, settlements, payouts
   endpoint:
     health:
       probes:

@@ -20,6 +20,14 @@ DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # A run of its own each time. The platform refuses a merchant whose email is taken and a
 # payment whose reference is reused, and both refusals are correct, so a script that reran
 # into them would be reporting its own laziness as a failure.
+# What the books say the platform owes this merchant, which is not the same as what a
+# settlement batch came to once money has gone back to a customer.
+settlementBalance() {
+    authed 200 GET "$GATEWAY/api/v1/merchants/$MERCHANT/accounts" | "$PYTHON" -c '
+import json, sys
+print(next(a["balance"] for a in json.load(sys.stdin) if a["code"] == "settlement.try"))'
+}
+
 RUN="$(date +%s)-$RANDOM"
 EMAIL="smoke-$RUN@mizan.local"
 PASSWORD="correct-horse-battery-staple"
@@ -412,6 +420,21 @@ import json, sys
 print(len(json.load(sys.stdin)["batches"]))')
     [ "$howMany" = "1" ] || fail "closing twice made $howMany batches"
     pass "closing the same day again answers with the same batch"
+
+    # The fee reached the platform's own account, so this merchant is owed the fee less than
+    # the books said before. Revenue that is not written down is revenue nobody can reconcile.
+    owed=$(settlementBalance)
+    [ "$owed" != "0" ] || fail "the fee seems to have taken everything that was owed"
+    pass "and the fee left the merchant's balance: $owed is owed now"
+
+    # This merchant refunded part of that day after it was captured, which is exactly the case
+    # the payout guard exists for. The batch still says what the day's captures came to —
+    # refunds are not netted in — and what is owed has moved, so paying the batch in full
+    # would be paying them money that has already gone back to a customer.
+    refused=$(call 422 POST "$SETTLEMENT/actuator/payouts/$batch" '{}')
+    printf '%s' "$refused" | grep -q "is owed to this merchant"         || fail "the payout was not refused for the right reason: $refused"
+    [ "$(settlementBalance)" = "$owed" ] || fail "a refused payout moved the balance"
+    pass "and paying it is refused, because a refund has moved what is owed"
 else
     note "no Compose stack to settle, so this was not checked"
 fi

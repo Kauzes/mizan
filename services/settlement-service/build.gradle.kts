@@ -6,6 +6,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    // Boot 4 keeps RestClient's autoconfiguration in its own module. The ledger is reached
+    // over HTTP, because settlement writes entries and does not own the books.
+    implementation("org.springframework.boot:spring-boot-restclient")
     implementation(libs.springdoc.webmvc.ui)
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-flyway")

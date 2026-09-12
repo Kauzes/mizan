@@ -12,6 +12,9 @@ servers:
 - description: The local gateway. Services are not addressed directly.
   url: http://localhost:8080
 tags:
+- description: "What an account holds, for a service that must not move money without\
+    \ knowing. Not reachable from the edge."
+  name: Accounts (internal)
 - description: "Movements of money, as entries that sum to zero"
   name: Journal
 - description: The chart of accounts a merchant's money moves through
@@ -146,7 +149,7 @@ paths:
         Read from the account rather than summed from its history, so it costs the same whatever the account has been through. The number is the signed sum of the account's postings, debit positive, and is true as at the moment given.
 
         Requires the ACCOUNT_READ permission, held by: OWNER, ADMIN, ANALYST, VIEWER. The caller must be acting for the merchant in the path.
-      operationId: balance
+      operationId: balance_1
       parameters:
       - in: path
         name: merchantId
@@ -313,6 +316,40 @@ paths:
       summary: Read an entry and its postings
       tags:
       - Journal
+  /internal/balances/{merchantId}/{code}:
+    get:
+      description: "The signed sum of its postings, debit positive, in minor units.\
+        \ Not flipped to read naturally for a liability: the type says which way to\
+        \ read it, and a caller that wants to know what the platform owes a merchant\
+        \ is asking for a negative number."
+      operationId: balance
+      parameters:
+      - in: path
+        name: merchantId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: code
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: The account and its balance
+        "401":
+          $ref: "#/components/responses/UNAUTHORIZED"
+        "404":
+          $ref: "#/components/responses/NOT_FOUND"
+      summary: What one of a merchant's accounts holds
+      tags:
+      - Accounts (internal)
   /internal/entries:
     post:
       description: "Idempotent on externalReference, exactly as the merchant-facing\
