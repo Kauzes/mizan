@@ -34,6 +34,11 @@ spring:
     locations: classpath:db/migration/settlement
 
 mizan:
+  acquirer:
+    # The bank, for its daily statement. Read rather than written to: this service never asks
+    # the acquirer to move money, which is the payment service's business.
+    base-url: ${MIZAN_ACQUIRER_URL:http://localhost:8086}
+    timeout: ${MIZAN_ACQUIRER_TIMEOUT:10s}
   ledger:
     base-url: ${MIZAN_LEDGER_URL:http://localhost:8082}
     timeout: ${MIZAN_LEDGER_TIMEOUT:5s}
@@ -61,6 +66,9 @@ mizan:
     # that closed too early would leave payments to be settled in a day they did not happen.
     close-after: ${MIZAN_SETTLEMENT_CLOSE_AFTER:1h}
     close-every: ${MIZAN_SETTLEMENT_CLOSE_EVERY:15m}
+    # Statements are per currency, as a real acquirer's are. One here for now, because the
+    # simulator settles in one; a second acquirer or a second currency makes this a list.
+    reconcile-currency: ${MIZAN_SETTLEMENT_CURRENCY:TRY}
 
 springdoc:
   writer-with-order-by-keys: true
@@ -69,7 +77,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info, settlements, payouts
+        include: health, info, settlements, payouts, reconciliation
   endpoint:
     health:
       probes:

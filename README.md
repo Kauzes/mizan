@@ -32,7 +32,7 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 | `payment-service` | 8083 | Payment lifecycle and saga orchestration, idempotency |
 | `risk-service` | 8084 | Scores a payment and says why, and learns from what analysts rule. Not routed from the edge |
 | `notification-service` | 8085 | Turns payment events into what a merchant is told, and signs webhooks |
-| `settlement-service` | 8087 | Groups a day's captures into batches, takes the fee, and is where reconciliation will live |
+| `settlement-service` | 8087 | Groups a day's captures into batches, takes the fee, pays merchants, and reconciles the day against the bank |
 | `bank-simulator` | 8086 | Fake acquirer that approves, declines, times out, duplicates, and sends a statement that disagrees |
 | `console` | 5173 | The merchant console: React, TypeScript, Vite, served beside the API |
 | `common` | n/a | Shared money type, error codes, correlation context. No Spring |
@@ -477,6 +477,38 @@ Deterministically, because a reconciliation test that depends on chance is a tes
 Tuesdays. Ask with `faithful=true` for a statement with none of them, which is how a caller
 proves reconciliation finds nothing when there is nothing to find. A day that has ended answers
 the same way every time.
+
+### Reconciliation
+
+Comparing a day's statement with what this platform believes, and saying where the two part
+company. `POST /actuator/reconciliation/{day}` on the settlement service runs one;
+`GET /actuator/reconciliation` is the queue of what is still outstanding.
+
+- **Four answers, named.** Matched; missing from the statement; extra on the statement; and
+  present on both for amounts that differ. A single "failed" count would hide the only
+  information worth having, because a transaction the bank never saw and one it saw for the
+  wrong amount are different problems with different fixes and different people to ask.
+- **And a fifth the four do not cover:** a capture with no acquirer reference at all. Nothing
+  can be said about it. Calling it missing would send somebody looking for it in a file where
+  it could never appear; calling it matched would be a lie.
+- **The trailer is checked against the rows, and a file that disagrees with itself is refused**
+  rather than reconciled. This is the check that matters most: a statement truncated in transit
+  looks exactly like a day on which the bank settled less, and reconciling it would produce a
+  page of differences that are not differences at all — and somebody would start chasing them.
+  A bank may be wrong about this platform; it is not wrong about itself. An unknown record type
+  is refused for the same reason, because a format that has quietly gained one is a format this
+  reader has quietly stopped understanding.
+- **Nothing is written off and nothing is adjusted.** Reconciliation reports. A job that could
+  silently make the books agree with the bank is a job that could silently make them wrong, and
+  what to do about a difference is a person's decision. That is ADR 0038, along with why there
+  is no threshold below which a difference corrects itself.
+- **Captures are compared, not batches.** A batch is this platform's own grouping and the bank
+  has never heard of it, so the comparison is on the reference the acquirer named the
+  transaction by.
+- **Running it twice says the same thing.** Each run is its own record, because it happened;
+  the differences are keyed by what they are about, so a second run finds the rows the first
+  one made rather than reporting every problem again as new. The only time anybody reconciles
+  twice is after an incident, which is the worst moment to be handed a page of duplicates.
 
 ## The console
 

@@ -236,6 +236,7 @@ services:
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/settlement
       MIZAN_KAFKA: kafka:9092
       MIZAN_LEDGER_URL: http://ledger-service:8082
+      MIZAN_ACQUIRER_URL: http://bank-simulator:8086
       MIZAN_INTERNAL_SERVICE_TOKEN: ${MIZAN_INTERNAL_SERVICE_TOKEN:-a-shared-secret-for-local-runs}
       MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
       MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
