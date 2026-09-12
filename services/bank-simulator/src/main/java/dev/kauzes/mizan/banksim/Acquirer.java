@@ -139,6 +139,30 @@ public class Acquirer {
         return Optional.ofNullable(byRequest.get(requestId)).map(Acquirer::responseFor);
     }
 
+    /**
+     * What this acquirer settled on a day, in one currency.
+     *
+     * <p>Captured, not merely authorized: a statement lists money that moved. And by the day
+     * it was captured rather than the day it was authorized, because an authorization held
+     * overnight settles the next day and a platform that assumed otherwise would reconcile
+     * the wrong day.
+     *
+     * <p>A refunded transaction is listed for what is left of it. An acquirer's statement is
+     * what it actually sent on, and a refund it processed is money it did not send.
+     */
+    java.util.List<Authorization> settledOn(
+            java.time.LocalDate day, String currency, java.time.ZoneId zone) {
+
+        return byReference.values().stream()
+                .filter(authorization -> authorization.state() == AuthorizationState.CAPTURED)
+                .filter(authorization -> currency.equalsIgnoreCase(authorization.currency()))
+                .filter(authorization -> authorization.capturedAt() != null
+                        && day.equals(java.time.LocalDate.ofInstant(
+                                authorization.capturedAt(), zone)))
+                .filter(authorization -> authorization.remaining() > 0)
+                .toList();
+    }
+
     private Authorization record(AuthorizeRequest request, Behaviour behaviour) {
         Authorization authorization = new Authorization(
                 "auth_" + reference(),

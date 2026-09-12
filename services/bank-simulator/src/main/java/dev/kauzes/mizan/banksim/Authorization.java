@@ -24,6 +24,17 @@ final class Authorization {
     private AuthorizationState state;
 
     /**
+     * When the money was actually taken, or null if it has not been.
+     *
+     * <p>Kept because a statement is a list of what settled on a day, and the day a
+     * transaction settles is the day it was captured rather than the day it was authorized.
+     * An authorization held on Monday and captured on Tuesday belongs to Tuesday's
+     * statement, and getting that wrong is one of the differences reconciliation exists to
+     * find.
+     */
+    private Instant capturedAt;
+
+    /**
      * What has been given back, by the caller's own reference for each refund.
      *
      * <p>Keyed rather than summed, because a caller that did not hear the answer will ask
@@ -86,6 +97,10 @@ final class Authorization {
         return decidedAt;
     }
 
+    synchronized Instant capturedAt() {
+        return capturedAt;
+    }
+
     synchronized AuthorizationState state() {
         return state;
     }
@@ -104,6 +119,10 @@ final class Authorization {
         }
         requireHeld("captured");
         state = AuthorizationState.CAPTURED;
+        // The first capture's moment, kept. A repeat must not move it: a statement that
+        // changed because somebody retried a capture would be a statement nobody could
+        // reconcile twice.
+        capturedAt = Instant.now();
     }
 
     synchronized void voidIt() {
