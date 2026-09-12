@@ -69,7 +69,7 @@ services:
     ports:
       - "8080:8080"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -100,7 +100,7 @@ services:
     ports:
       - "8081:8081"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8081/actuator/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -125,7 +125,7 @@ services:
     ports:
       - "8082:8082"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8082/actuator/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8082/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -162,7 +162,7 @@ services:
     ports:
       - "8083:8083"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8083/actuator/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8083/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -187,7 +187,7 @@ services:
     ports:
       - "8084:8084"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8084/actuator/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8084/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -221,7 +221,7 @@ services:
     ports:
       - "8085:8085"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8085/actuator/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8085/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -257,7 +257,7 @@ services:
     ports:
       - "8087:8087"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8087/actuator/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8087/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -293,13 +293,35 @@ services:
     ports:
       - "8086:8086"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8086/actuator/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8086/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 30
       start_period: 30s
 
+  prometheus:
+    # What collects what every service already measures. Its configuration is a file in this
+    # repository rather than something set up in a running instance, for the same reason the
+    # migrations are: a monitoring setup that only exists in a container is one nobody can
+    # review and nobody can bring back.
+    image: ${PROMETHEUS_IMAGE}
+    volumes:
+      - ./deploy/local/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheusdata:/prometheus
+    ports:
+      - "9090:9090"
+    # Deliberately depending on nothing. A service that is down is a thing Prometheus is
+    # there to show, and a monitoring stack that waits for the platform to be healthy is one
+    # that is never up when it is needed.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
 volumes:
   pgdata:
   kafkadata:
   redisdata:
+  prometheusdata:

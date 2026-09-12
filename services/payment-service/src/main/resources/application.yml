@@ -97,11 +97,21 @@ management:
         # stuck is how an operator finds out what no amount of retrying will move, and records
         # what they decided about it. Reachable only through the gateway's internal route,
         # which needs a token.
-        include: health, info, stuck
+        include: health, info, stuck, prometheus
   endpoint:
     health:
       probes:
         enabled: true
+      group:
+        # Ready means able to do the work, which for this service means reaching its
+        # database. The default readiness group says only that the application context
+        # started, and a service that started perfectly and cannot reach Postgres is not a
+        # service anything should be routed to.
+        readiness:
+          include: readinessState, db
+  metrics:
+    tags:
+      service: ${spring.application.name}
 
 logging:
   pattern:

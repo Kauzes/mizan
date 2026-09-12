@@ -26,7 +26,7 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 
 | Module | Port | Responsibility |
 |---|---|---|
-| `gateway` | 8080 | Routing, JWT validation, rate limiting, correlation id propagation |
+| `gateway` | 8080 | Routing, JWT validation, rate limiting, correlation id propagation. Its actuator is on 8090, which the edge does not serve |
 | `identity-service` | 8081 | Merchants, users, roles, JWT tokens, merchant API keys |
 | `ledger-service` | 8082 | Double entry accounts, journal entries, postings, reconciliation |
 | `payment-service` | 8083 | Payment lifecycle and saga orchestration, idempotency |
@@ -35,6 +35,7 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 | `settlement-service` | 8087 | Groups a day's captures into batches, takes the fee, pays merchants, and reconciles the day against the bank |
 | `bank-simulator` | 8086 | Fake acquirer that approves, declines, times out, duplicates, and sends a statement that disagrees |
 | `console` | 5173 | The merchant console: React, TypeScript, Vite, served beside the API |
+| `prometheus` | 9090 | Collects what every service measures. Configured from `deploy/local/prometheus.yml` |
 | `common` | n/a | Shared money type, error codes, correlation context. No Spring |
 | `common-web` | n/a | Auto configured problem details and correlation id propagation |
 | `common-test` | n/a | Integration test harness: containers pinned to the compose images |
@@ -70,6 +71,14 @@ other protected route.
   disagreed and by how much rather than repairing anything, because a balance that disagrees
   with its postings is evidence. `scripts/books-balance.sh` asks it and fails loudly, and CI
   runs that over the data the smoke check, the browser journey and the demo seed produced.
+- Every service measures itself, and a Prometheus in the stack collects it. The scrape
+  configuration is a file in this repository rather than something set up once in a running
+  container, and a test reads it against the services that exist: monitoring that has quietly
+  stopped covering a service looks exactly like a service with nothing wrong. The gateway's own
+  actuator sits on a port the edge does not serve, which is ADR 0040.
+- Ready means able to do the work. A service that owns a database is not ready until it can
+  reach it, and the container probes ask for readiness rather than for a live port, so a
+  service that started perfectly and cannot reach Postgres is never routed to.
 - A balance is kept on the account and written in the same transaction as the postings that
   move it, so reading one is a single row however long the history is. A version column
   refuses a lost update, and the write is retried rather than handed back.

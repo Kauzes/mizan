@@ -62,11 +62,21 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info
+        include: health, info, prometheus
   endpoint:
     health:
       probes:
         enabled: true
+      group:
+        # Ready means able to do the work, which for this service means reaching its
+        # database. The default readiness group says only that the application context
+        # started, and a service that started perfectly and cannot reach Postgres is not a
+        # service anything should be routed to.
+        readiness:
+          include: readinessState, db
+  metrics:
+    tags:
+      service: ${spring.application.name}
 
 logging:
   pattern:

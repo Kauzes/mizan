@@ -14,11 +14,20 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info
+        include: health, info, prometheus
   endpoint:
     health:
       probes:
         enabled: true
+      group:
+        # A stand-in for an acquirer, with nothing behind it. Said explicitly rather than
+        # left to the default, so the next service to be added has to answer the question
+        # rather than inherit an answer.
+        readiness:
+          include: readinessState
+  metrics:
+    tags:
+      service: ${spring.application.name}
 
 logging:
   pattern:

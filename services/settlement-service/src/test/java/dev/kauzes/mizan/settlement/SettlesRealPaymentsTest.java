@@ -8,6 +8,7 @@ import dev.kauzes.mizan.test.MizanContainers;
 import dev.kauzes.mizan.test.MizanIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -114,7 +115,12 @@ class SettlesRealPaymentsTest extends MizanIntegrationTest {
 
         // Nothing here built an event. The payment service published them, this service read
         // them off the topic, and this batch is what it made of them.
-        Settlement.Closed closed = settlement.close(merchant, LocalDate.now().plusDays(1), "TRY");
+        // Tomorrow, by any zone: closing a day claims everything settled on or before it,
+        // and which day a capture belongs to is decided in the platform's zone rather than
+        // in this JVM's. A day ahead of the furthest either of them could be is the way to
+        // say "everything so far" without asking what day it is twice.
+        Settlement.Closed closed =
+                settlement.close(merchant, LocalDate.now(ZoneOffset.UTC).plusDays(2), "TRY");
 
         assertThat(closed.captured().amount()).isEqualTo(300_00L);
         assertThat(closed.captured().currency().getCurrencyCode()).isEqualTo("TRY");

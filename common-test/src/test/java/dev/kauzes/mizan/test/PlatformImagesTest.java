@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -27,17 +29,26 @@ class PlatformImagesTest {
     @Test
     void theFileNamesEveryImageThePlatformRuns() throws IOException {
         assertThat(readDotEnv())
-                .containsKeys("POSTGRES_IMAGE", "KAFKA_IMAGE", "REDIS_IMAGE");
+                .containsKeys("POSTGRES_IMAGE", "KAFKA_IMAGE", "REDIS_IMAGE", "PROMETHEUS_IMAGE");
     }
 
     @Test
     void composeReferencesTheVariablesRatherThanHardCodedTags() throws IOException {
-        String compose = RepositoryRoot.read("docker-compose.yml");
+        // Read out of Compose rather than listed here, so an image added later is covered the
+        // day it is added. A hard coded tag in Compose is how the platform comes to run one
+        // version while the tests run another.
+        Matcher images = Pattern.compile("image: ([^\n]+)").matcher(
+                RepositoryRoot.read("docker-compose.yml"));
 
-        assertThat(compose)
-                .contains("image: ${POSTGRES_IMAGE}")
-                .contains("image: ${KAFKA_IMAGE}")
-                .contains("image: ${REDIS_IMAGE}");
+        Map<String, String> env = readDotEnv();
+        while (images.find()) {
+            String image = images.group(1).trim();
+            assertThat(image)
+                    .as("every image should come from .env, and %s does not", image)
+                    .matches("[$][{][A-Z_]+[}]");
+            assertThat(env)
+                    .containsKey(image.substring(2, image.length() - 1));
+        }
     }
 
     private static Map<String, String> readDotEnv() throws IOException {
