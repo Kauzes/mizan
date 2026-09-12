@@ -33,7 +33,7 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 | `risk-service` | 8084 | Scores a payment and says why, and learns from what analysts rule. Not routed from the edge |
 | `notification-service` | 8085 | Turns payment events into what a merchant is told, and signs webhooks |
 | `settlement-service` | 8087 | Groups a day's captures into batches, takes the fee, and is where reconciliation will live |
-| `bank-simulator` | 8086 | Fake acquirer that approves, declines, times out and duplicates |
+| `bank-simulator` | 8086 | Fake acquirer that approves, declines, times out, duplicates, and sends a statement that disagrees |
 | `console` | 5173 | The merchant console: React, TypeScript, Vite, served beside the API |
 | `common` | n/a | Shared money type, error codes, correlation context. No Spring |
 | `common-web` | n/a | Auto configured problem details and correlation id propagation |
@@ -461,6 +461,22 @@ failure from payments being down.
   Said plainly in the code: this is a guard rather than an invariant, and two payouts racing
   could still overpay — what that leaves is an overpayment written down as entries that
   balance, rather than a hidden one.
+
+### The bank does not always agree
+
+Reconciliation cannot be written against a bank that always agrees, and a fixture that always
+agrees proves nothing. So the simulator publishes a daily statement in the format an acquirer
+would actually send — a pipe delimited file with a header, detail rows and a trailer whose
+count and total agree with the rows above it — and it disagrees with this platform on purpose:
+
+- one transaction the platform has and the statement does not,
+- one the statement has that the platform never issued,
+- and one both have, for amounts that differ by a minor unit.
+
+Deterministically, because a reconciliation test that depends on chance is a test that fails on
+Tuesdays. Ask with `faithful=true` for a statement with none of them, which is how a caller
+proves reconciliation finds nothing when there is nothing to find. A day that has ended answers
+the same way every time.
 
 ## The console
 

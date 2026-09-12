@@ -14,6 +14,8 @@ servers:
 tags:
 - description: "A bank, for the purposes of not needing one"
   name: Acquirer
+- description: "A bank that approves, declines, times out, duplicates and disagrees"
+  name: Acquirer
 paths:
   /acquirer/authorizations:
     get:
@@ -150,6 +152,47 @@ paths:
         "422":
           $ref: "#/components/responses/UNPROCESSABLE"
       summary: Release an authorized amount without taking it
+      tags:
+      - Acquirer
+  /statements/{day}:
+    get:
+      description: |-
+        A pipe delimited file: one `H` header naming the day and currency, a `D` row per transaction with its reference and amount in minor units, and a `T` trailer with the count and the total. The trailer agrees with the rows above it, so a truncated file is detectable.
+
+        Deliberately not a copy of what the platform believes. Three disagreements are introduced, deterministically: one transaction the platform has and this does not, one this has that the platform never issued, and one both have for amounts that differ by a minor unit. Ask with `faithful=true` for a statement with none of them, which is how a caller proves reconciliation finds nothing when there is nothing to find.
+
+        A day that has ended answers the same way every time. A day still running will not, because more transactions keep settling into it.
+      operationId: forDay
+      parameters:
+      - description: "The settlement date, as YYYY-MM-DD"
+        in: path
+        name: day
+        required: true
+        schema:
+          type: string
+          format: date
+      - description: "Statements are per currency, as a real acquirer's are"
+        in: query
+        name: currency
+        required: false
+        schema:
+          type: string
+          default: TRY
+      - description: No deliberate disagreements
+        in: query
+        name: faithful
+        required: false
+        schema:
+          type: boolean
+          default: false
+      responses:
+        "200":
+          content:
+            text/plain:
+              schema:
+                type: string
+          description: The statement file
+      summary: What this acquirer settled on a day
       tags:
       - Acquirer
 components:
