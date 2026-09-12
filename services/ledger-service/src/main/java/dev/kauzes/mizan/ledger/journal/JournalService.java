@@ -216,10 +216,24 @@ public class JournalService {
     }
 
     @Transactional(readOnly = true)
-    public List<EntryResponse> list(UUID merchantId) {
-        return entries.findByMerchantIdOrderByOccurredAtDescRecordedAtDesc(merchantId).stream()
-                .map(EntryResponse::of)
-                .toList();
+    public Found list(UUID merchantId, UUID accountId, int page, int size) {
+        var found = accountId == null
+                ? entries.findByMerchantIdOrderByOccurredAtDescRecordedAtDesc(
+                        merchantId, org.springframework.data.domain.PageRequest.of(page, size))
+                : entries.touchingAccount(
+                        merchantId,
+                        accountId,
+                        org.springframework.data.domain.PageRequest.of(page, size));
+
+        return new Found(
+                found.getContent().stream().map(EntryResponse::of).toList(),
+                found.getTotalElements(),
+                page,
+                size);
+    }
+
+    /** A page of entries, and enough to know where in the answer it sits. */
+    public record Found(List<EntryResponse> entries, long total, int page, int size) {
     }
 
     @Transactional(readOnly = true)

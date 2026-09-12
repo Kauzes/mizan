@@ -463,3 +463,46 @@ table.postings tr.sum td {
   background: transparent;
   color: inherit;
 }
+
+/* -- the books -------------------------------------------------------------------------- */
+
+table.accounts {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+  margin-bottom: 1rem;
+}
+
+table.accounts th,
+table.accounts td {
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+table.accounts th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+table.accounts .right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+table.accounts tr.chosen {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+button.as-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

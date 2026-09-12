@@ -1,11 +1,14 @@
 package dev.kauzes.mizan.ledger.journal;
 
+import dev.kauzes.mizan.common.error.UnprocessableException;
 import dev.kauzes.mizan.common.identity.Permission;
 import dev.kauzes.mizan.common.web.NotIdempotent;
+import dev.kauzes.mizan.common.web.Pages;
 import dev.kauzes.mizan.common.web.RequiresPermission;
 import dev.kauzes.mizan.ledger.journal.JournalRequests.EntryResponse;
 import dev.kauzes.mizan.ledger.journal.JournalRequests.PostEntryRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -14,12 +17,15 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * The journal: what has moved, and where it moved between.
@@ -43,10 +49,49 @@ public class JournalController {
 
     @GetMapping
     @RequiresPermission(Permission.ENTRY_READ)
-    @Operation(summary = "List a merchant's entries", description = "Most recent movement first.")
-    @ApiResponse(responseCode = "200", description = "The merchant's entries")
-    public List<EntryResponse> list(@PathVariable UUID merchantId) {
-        return journal.list(merchantId);
+    @Operation(
+            summary = "List a merchant's entries",
+            description =
+                    """
+                    Most recent movement first, a page at a time. Narrowed to one account with \
+                    `accountId`, which is what somebody following a balance back to what made \
+                    it is asking for.
+
+                    Where the page sits comes back in headers — `X-Total-Count`, `X-Page`, \
+                    `X-Page-Size` and `Link` — so the body is the same list of entries it has \
+                    always been.""")
+    @ApiResponse(responseCode = "200", description = "The page of entries")
+    @ApiResponse(
+            responseCode = "422",
+            ref = "#/components/responses/UNPROCESSABLE",
+            description = "A page beyond where this pages")
+    public ResponseEntity<List<EntryResponse>> list(
+            @PathVariable UUID merchantId,
+            @Parameter(description = "Only entries that touched this account")
+                    @RequestParam(required = false)
+                    UUID accountId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            UriComponentsBuilder uris) {
+
+        int wantedSize = size == null ? 50 : size;
+        int wantedPage = page == null ? 0 : page;
+        if (wantedSize < 1 || wantedSize > 200) {
+            throw new UnprocessableException("A page holds between 1 and 200 entries.");
+        }
+        if (wantedPage < 0 || (long) wantedPage * wantedSize > 10_000) {
+            // The same bound as payments, for the same reason: an offset is read by counting
+            // past every row before it. Somebody looking that far back wants a date range.
+            throw new UnprocessableException(
+                    "This platform pages 10,000 entries deep. Further back than that, ask "
+                            + "about an account rather than turning pages.");
+        }
+
+        JournalService.Found found = journal.list(merchantId, accountId, wantedPage, wantedSize);
+        return ResponseEntity.ok()
+                .headers(headers ->
+                        Pages.describe(headers, uris, found.total(), found.page(), found.size()))
+                .body(found.entries());
     }
 
     @PostMapping

@@ -2,6 +2,7 @@ package dev.kauzes.mizan.payment;
 
 import dev.kauzes.mizan.common.identity.Permission;
 import dev.kauzes.mizan.common.web.Idempotent;
+import dev.kauzes.mizan.common.web.Pages;
 import dev.kauzes.mizan.common.web.RequiresPermission;
 import dev.kauzes.mizan.payment.PaymentRequests.AuthorizeRequest;
 import dev.kauzes.mizan.payment.PaymentRequests.CreatePaymentRequest;
@@ -125,43 +126,11 @@ public class PaymentController {
         PaymentSearch.Found found = payments.search(merchantId, query);
 
         return ResponseEntity.ok()
-                .headers(headers -> whereThisPageSits(headers, found, uris))
+                .headers(headers ->
+                        Pages.describe(headers, uris, found.total(), found.page(), found.size()))
                 .body(found.payments());
     }
 
-    /**
-     * Where the page sits, in headers rather than in the body.
-     *
-     * <p>The body stays the list of payments it has always been. Wrapping it in an envelope
-     * would have been tidier to write and would have broken every client parsing an array,
-     * for a contract this platform publishes and asks people to build against.
-     */
-    private static void whereThisPageSits(
-            HttpHeaders headers, PaymentSearch.Found found, UriComponentsBuilder uris) {
-
-        headers.set("X-Total-Count", String.valueOf(found.total()));
-        headers.set("X-Page", String.valueOf(found.page()));
-        headers.set("X-Page-Size", String.valueOf(found.size()));
-
-        List<String> links = new ArrayList<>();
-        if (found.hasMore()) {
-            links.add(link(uris, found.page() + 1, found.size(), "next"));
-        }
-        if (found.page() > 0) {
-            links.add(link(uris, found.page() - 1, found.size(), "prev"));
-        }
-        if (!links.isEmpty()) {
-            headers.set(HttpHeaders.LINK, String.join(", ", links));
-        }
-    }
-
-    private static String link(UriComponentsBuilder uris, int page, int size, String relation) {
-        String url = uris.replaceQueryParam("page", page)
-                .replaceQueryParam("size", size)
-                .build()
-                .toUriString();
-        return "<" + url + ">; rel=\"" + relation + "\"";
-    }
 
     @PostMapping
     @RequiresPermission(Permission.PAYMENT_WRITE)
