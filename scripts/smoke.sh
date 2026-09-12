@@ -147,6 +147,19 @@ printf '%s' "$books" | grep -qi "^x-total-count:" || fail "the entries do not sa
 authed 422 GET "$GATEWAY/api/v1/merchants/$MERCHANT/entries?page=900&size=50" > /dev/null
 pass "the entries page too, and refuse to be read ten thousand deep"
 
+# How business is, counted by the database rather than by whoever asked. An intent nobody
+# ever authorized is the figure a naive count gets wrong, so one is created on purpose: it
+# must show up as created and not as attempted.
+authed 201 POST "$GATEWAY/api/v1/merchants/$MERCHANT/payments"     "{\"amount\":1000,\"currency\":\"TRY\",\"reference\":\"order-$RUN-intent\"}" > /dev/null
+
+overview=$(authed 200 GET "$GATEWAY/api/v1/merchants/$MERCHANT/summary?zone=Europe/Istanbul")
+created=$(printf '%s' "$overview" | field totals.created)
+attempted=$(printf '%s' "$overview" | field totals.attempted)
+[ "$(printf '%s' "$overview" | field totals.captured)" != "0" ] || fail "nothing was captured?"
+[ "$created" -gt "$attempted" ]     || fail "an intent nobody authorized is being counted as an attempt ($created, $attempted)"
+authed 422 GET "$GATEWAY/api/v1/merchants/$MERCHANT/summary?zone=Middle/Earth" > /dev/null
+pass "the overview counts what happened, and refuses a time zone nobody lives in"
+
 # ---------------------------------------------------------------------------------------
 step "7. A second payment is authorized and voided"
 

@@ -641,3 +641,149 @@ table.keys tr.revoked {
 ul.deliveries {
   margin-top: 0.5rem;
 }
+
+/* -- how business is -------------------------------------------------------------------- */
+
+.ranges {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1.25rem;
+  font-size: 0.9rem;
+}
+
+.ranges button.chosen {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.needs {
+  margin: 0 0 1.25rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.needs p {
+  margin: 0 0 0.35rem;
+}
+
+.needs p:last-child {
+  margin-bottom: 0;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.tile {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+}
+
+.tile p {
+  margin: 0;
+}
+
+.tile .figure {
+  font-size: 1.9rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.tile .label {
+  font-size: 0.9rem;
+}
+
+.tile .muted {
+  font-size: 0.82rem;
+  margin-top: 0.2rem;
+}
+
+/*
+ * The charts. One hue, one series each, and the axes recessive enough that the data is the
+ * only thing with any weight on the page.
+ */
+figure.chart {
+  margin: 0 0 1.25rem;
+}
+
+figure.chart svg {
+  width: 100%;
+  height: 120px;
+  overflow: visible;
+}
+
+figure.chart .grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+figure.chart .tick {
+  fill: var(--muted);
+  font-size: 10px;
+}
+
+figure.chart .rate-line {
+  stroke: var(--accent);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+figure.chart .rate-point {
+  fill: var(--accent);
+  /* A ring of surface, so two points that overlap still read as two. */
+  stroke: var(--paper);
+  stroke-width: 2;
+}
+
+figure.chart .volume-bar {
+  fill: var(--accent);
+}
+
+.refusals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1.5rem;
+}
+
+.refusals h3 {
+  font-size: 0.9rem;
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.5rem;
+}
+
+table.figures {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+table.figures th,
+table.figures td {
+  padding: 0.3rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+table.figures th {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+table.figures .right {
+  text-align: right;
+}

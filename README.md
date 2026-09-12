@@ -454,6 +454,19 @@ on an origin of its own.
   three, breaking whenever any of them changed. ADR 0036 has the argument.
 - **A section nobody may read is not fetched.** A panel that renders a refusal is a panel that
   has told somebody the thing exists.
+- **The first screen answers how business is**, and every figure on it is worked out by the
+  database. A dashboard that fetched a thousand payments to count them is a dashboard that
+  stops working exactly when a merchant becomes worth having. It is computed on demand rather
+  than maintained as events arrive: a projection would be faster and would be a second copy of
+  the truth, needing backfill when a rule changes and reconciliation when a message is lost.
+- **A rate always has its volume beside it**, and the two are two charts rather than one with
+  two scales. Choosing where two axes line up invents a correlation the data does not contain.
+  An authorization rate is null rather than zero when nothing was attempted, because a rate of
+  zero says every payment failed and no payments says something else entirely.
+- **Refusals are split between the acquirer and this platform.** Different problems with
+  different fixes, and a single failed count hides both. The acquirer's own words are repeated
+  rather than paraphrased: a merchant asking their customer's bank needs the reason that bank
+  gave.
 - **A secret is shown once, and the console is careful about it.** Both the API key secret
   and a webhook signing secret are issued once and never returned, so the page says so before
   one is generated as well as after, dismissing it takes a deliberate confirmation, and it is

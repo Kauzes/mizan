@@ -47,6 +47,27 @@ function platform(options: { session: boolean; roles?: string[] }) {
         refreshExpiresIn: 2592000,
       });
     }
+    if (path.includes("/summary")) {
+      return Response.json({
+        from: "2026-03-01T00:00:00Z",
+        to: "2026-03-02T00:00:00Z",
+        totals: {
+          created: 0,
+          attempted: 0,
+          authorized: 0,
+          captured: 0,
+          declinedByAcquirer: 0,
+          refusedByPlatform: 0,
+          held: 0,
+          unknown: 0,
+        },
+        authorizationRate: null,
+        volume: [],
+        byDay: [],
+        refusals: [],
+        needsSomebody: { waitingForAPerson: 0, needingAnOperator: 0 },
+      });
+    }
     if (path.includes("/payments")) {
       return new Response("[]", {
         status: 200,
@@ -72,12 +93,12 @@ describe("opening the console", () => {
     expect(await screen.findByRole("button", { name: "Sign in" })).toBeInTheDocument();
   });
 
-  it("lands somebody straight on their payments when the browser still has a session", async () => {
+  it("lands somebody straight on the overview when the browser still has a session", async () => {
     show(platform({ session: true }));
 
     // The reason the console has a third state on its first paint: without one, somebody who
     // is already signed in gets a login screen flashed at them on every reload.
-    expect(await screen.findByRole("heading", { name: "Payments" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "How business is" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Sign in" })).not.toBeInTheDocument();
   });
 
@@ -110,12 +131,12 @@ describe("opening the console", () => {
     await userEvent.type(screen.getByLabelText("Password"), "a-long-enough-password");
     await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
-    expect(await screen.findByRole("heading", { name: "Payments" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "How business is" })).toBeInTheDocument();
   });
 
   it("puts somebody back at the door when they sign out", async () => {
     show(platform({ session: true }));
-    await screen.findByRole("heading", { name: "Payments" });
+    await screen.findByRole("heading", { name: "How business is" });
 
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
 
