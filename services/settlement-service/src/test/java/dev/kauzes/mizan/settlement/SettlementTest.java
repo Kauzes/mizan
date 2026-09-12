@@ -11,6 +11,8 @@ import dev.kauzes.mizan.test.MizanIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
@@ -33,9 +35,18 @@ import org.springframework.test.web.servlet.MockMvc;
     // Driven by hand, so what has happened at each point is a fact rather than a race.
     "mizan.settlement.close-every=3650d",
     "mizan.settlement.fee-basis-points=290",
-    "mizan.settlement.fee-fixed-per-payment=30"
+    "mizan.settlement.fee-fixed-per-payment=30",
+    // And one day, read the same way here and by the service. Which day a capture belongs to
+    // is decided in the platform's zone, which is Istanbul in a real deployment; a test that
+    // asked for today in the JVM's zone would be asking about a different day for three hours
+    // either side of midnight, and "today is not closed yet" would fail on a CI runner in UTC
+    // at one in the morning. Which is exactly how this was found.
+    "mizan.settlement.zone=UTC"
 })
 class SettlementTest extends MizanIntegrationTest {
+
+    /** The zone above, so nothing here can ask what day it is a second way. */
+    private static final ZoneId THE_PLATFORMS_DAY = ZoneOffset.UTC;
 
     private static final LocalDate TUESDAY = LocalDate.of(2026, 3, 3);
 
@@ -193,7 +204,7 @@ class SettlementTest extends MizanIntegrationTest {
     @Test
     void leavesTodayAloneUntilItHasBeenHeardAboutInFull() {
         UUID merchant = UUID.randomUUID();
-        captured(merchant, 10_00, "TRY", LocalDate.now());
+        captured(merchant, 10_00, "TRY", LocalDate.now(THE_PLATFORMS_DAY));
 
         closing.closeWhatIsDue();
 
