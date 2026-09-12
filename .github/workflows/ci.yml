@@ -133,6 +133,13 @@ jobs:
         # quietly stopped working is a bad thing to discover while demonstrating.
         run: ./scripts/seed.sh
 
+      - name: The whole ledger balances
+        # Again, and this time over everything this job produced: the smoke check's payments,
+        # refunds, settlements and payouts, the browser journey's, and the demo seed's. Three
+        # writers, none of which wrote anything in order to make this pass, and one check that
+        # reads the tables and asks what has to be true of any ledger whatever wrote it.
+        run: ./scripts/books-balance.sh
+
       - name: What the services said
         if: failure()
         run: docker compose logs --no-color --tail 200

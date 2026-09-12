@@ -62,10 +62,14 @@ other protected route.
 - Journal entries are immutable, and the database says so: an update or a delete against the
   journal raises. A correction is a new entry naming the one it corrects, so both stay
   visible.
-- The ledger can be asked to prove it has not drifted: every currency sums to zero and every
-  kept balance agrees with its own postings. Reachable at `/actuator/ledgerintegrity`, which
-  needs a token through the gateway. It reports what disagreed and by how much rather than
-  repairing anything, because a balance that disagrees with its postings is evidence.
+- The ledger can be asked to prove it has not drifted, in three questions that can disagree:
+  every entry's own postings sum to zero, every kept balance agrees with its own postings, and
+  every currency sums to zero platform wide. Which one fails says where the bug is, and two
+  entries wrong in opposite directions is the case only the first one finds. Reachable at
+  `/actuator/ledgerintegrity`, which needs a token through the gateway. It reports what
+  disagreed and by how much rather than repairing anything, because a balance that disagrees
+  with its postings is evidence. `scripts/books-balance.sh` asks it and fails loudly, and CI
+  runs that over the data the smoke check, the browser journey and the demo seed produced.
 - A balance is kept on the account and written in the same transaction as the postings that
   move it, so reading one is a single row however long the history is. A version column
   refuses a lost update, and the write is retried rather than handed back.
@@ -672,7 +676,9 @@ not reachable from the edge, voids a second payment and confirms the books did n
 declines a third and confirms the acquirer's reason was kept, and finally asks the ledger to
 prove it still balances. It should end with:
 
-      ✓ every currency sums to zero and every balance agrees with its postings
+      ✓ every entry's own postings sum to zero, in every currency it touches
+      ✓ every account's balance is exactly what its postings add up to
+      ✓ every currency sums to zero platform wide, the merchants' books and the platform's
 
       The platform works end to end.
 

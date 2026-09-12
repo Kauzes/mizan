@@ -563,15 +563,9 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------
-step "18. The books balance"
-
-integrity=$(call 200 GET "$LEDGER/actuator/ledgerintegrity")
-sound=$(printf '%s' "$integrity" | field sound)
-[ "$sound" = "True" ] || [ "$sound" = "true" ] || {
-    printf '%s\n' "$integrity" >&2
-    fail "the ledger does not balance"
-}
-note "$(printf '%s' "$integrity" | field summary)"
-pass "every currency sums to zero and every balance agrees with its postings"
+# 18. The books balance, asked of everything that has ever been written. Its own script,
+# because CI runs it again after the browser journey and the demo seed, over data that three
+# different things produced and none of them wrote in order to make it pass.
+"$(dirname "$0")/books-balance.sh"
 
 printf '\n%s%s  The platform works end to end.%s\n\n' "$BOLD" "$GREEN" "$OFF"
