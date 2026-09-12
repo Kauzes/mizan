@@ -53,7 +53,11 @@ class SignedRequestFilterTest {
                     new AuthenticationProperties("https://mizan.local/identity", "http://x", null, null)),
             recomputingVerifier(),
             JSON,
-            1024 * 1024);
+            1024 * 1024,
+            // The edge port and the actuator's own, which this class only needs because the
+            // filter refuses to guard a port that is not the edge.
+            8080,
+            8090);
 
     @Test
     void passesASignedRequestThrough() {

@@ -6,6 +6,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    // The scrape endpoint. The actuator alone measures plenty and has nowhere to
+    // put it; this is what makes the numbers somebody else can collect.
+    runtimeOnly("io.micrometer:micrometer-registry-prometheus")
     // Boot 4 keeps RestClient's autoconfiguration in its own module. The ledger is reached
     // over HTTP, because settlement writes entries and does not own the books.
     implementation("org.springframework.boot:spring-boot-restclient")

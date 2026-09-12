@@ -93,6 +93,16 @@ spring:
                 - Path=/internal/notification-service/v3/api-docs,/internal/notification-service/v3/api-docs/**,/internal/notification-service/actuator/health,/internal/notification-service/actuator/health/**
               filters:
                 - StripPrefix=2
+            # The gateway's own health, forwarded to the management port it now lives on.
+            # Whether the platform is up is not a secret and the thing asking is usually a
+            # load balancer holding no credentials, so this one endpoint stays answerable
+            # from outside while the rest of the actuator does not. Everything else on that
+            # port — the metrics, the route table — is reachable only from inside the network.
+            - id: platform-health
+              uri: http://127.0.0.1:${MIZAN_MANAGEMENT_PORT:8090}
+              order: -100
+              predicates:
+                - Path=/actuator/health,/actuator/health/**
 
 mizan:
   security:
@@ -134,14 +144,36 @@ springdoc:
         url: /internal/notification-service/v3/api-docs
 
 management:
+  # The gateway's own actuator lives on a port of its own, and that port is not published
+  # outside the Compose network. Everywhere else on this platform the actuator is already out
+  # of reach because the service is not routed from the edge — the gateway is the one service
+  # that is the edge, so its numbers would otherwise be readable by anybody who can reach the
+  # API. They are not a secret worth much, and they are not nothing: request rates, upstream
+  # latencies and JVM internals are a description of what this platform is doing.
+  #
+  # Health is the exception and stays answerable from outside, through a route below. Whether
+  # the platform is up is not a secret, and the thing asking is usually a load balancer that
+  # holds no credentials.
+  server:
+    port: ${MIZAN_MANAGEMENT_PORT:8090}
   endpoints:
     web:
       exposure:
-        include: health, info, gateway
+        include: health, info, gateway, prometheus
   endpoint:
     health:
       probes:
         enabled: true
+      group:
+        # Deliberately only the application state. Redis is the one thing out here the
+        # gateway needs, and a rate limiter that cannot be reached must not make the whole
+        # platform unroutable — that would turn a degraded feature into an outage. What Redis
+        # being down does is handled where the limit is applied.
+        readiness:
+          include: readinessState
+  metrics:
+    tags:
+      service: ${spring.application.name}
 
 logging:
   pattern:

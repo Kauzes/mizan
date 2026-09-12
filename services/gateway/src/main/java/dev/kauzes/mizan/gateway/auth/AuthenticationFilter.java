@@ -7,6 +7,7 @@ import dev.kauzes.mizan.common.error.UnauthorizedException;
 import dev.kauzes.mizan.common.identity.CallerIdentity;
 import dev.kauzes.mizan.common.identity.RequestSigning;
 import dev.kauzes.mizan.common.web.Problems;
+import java.net.InetSocketAddress;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,23 +64,40 @@ public class AuthenticationFilter implements WebFilter, Ordered {
     private final SignedRequestVerifier signatures;
     private final ObjectMapper json;
     private final int maximumSignedBody;
+    private final int edgePort;
+    private final int managementPort;
 
     public AuthenticationFilter(
             PublicRoutes publicRoutes,
             AccessTokenVerifier tokens,
             SignedRequestVerifier signatures,
             ObjectMapper json,
-            @Value("${mizan.security.api-keys.maximum-signed-body:1048576}") int maximumSignedBody) {
+            @Value("${mizan.security.api-keys.maximum-signed-body:1048576}") int maximumSignedBody,
+            @Value("${server.port:8080}") int edgePort,
+            @Value("${management.server.port:-1}") int managementPort) {
 
         this.publicRoutes = publicRoutes;
         this.tokens = tokens;
         this.signatures = signatures;
         this.json = json;
         this.maximumSignedBody = maximumSignedBody;
+        this.edgePort = edgePort;
+        this.managementPort = managementPort;
     }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+        if (arrivedOnTheManagementPort(exchange)) {
+            // This filter guards the edge, and the management port is not the edge. It is not
+            // published outside the platform's own network, it carries no merchant's data,
+            // and what it serves — the metrics, the route table — is the platform asking
+            // itself questions, exactly as every other service's actuator is.
+            //
+            // Left to itself, this filter would refuse the scrape, and a monitoring system
+            // that cannot read the gateway looks identical to a gateway with nothing to say.
+            return chain.filter(exchange);
+        }
+
         ServerWebExchange stripped = withoutClaimedIdentity(exchange);
 
         if (publicRoutes.isPublic(stripped.getRequest())) {
@@ -90,6 +108,22 @@ public class AuthenticationFilter implements WebFilter, Ordered {
             return signed(stripped, chain);
         }
         return bearer(stripped, chain);
+    }
+
+    /**
+     * Whether this request came in on the actuator's own port rather than the API's.
+     *
+     * <p>Only when the two are actually different. A deployment that puts the actuator back on
+     * the edge port gets no exemption from this — which is the point of comparing rather than
+     * trusting a flag: the exemption exists because the port is unreachable from outside, so
+     * it has to disappear the moment that stops being true.
+     */
+    private boolean arrivedOnTheManagementPort(ServerWebExchange exchange) {
+        if (managementPort <= 0 || managementPort == edgePort) {
+            return false;
+        }
+        InetSocketAddress arrivedAt = exchange.getRequest().getLocalAddress();
+        return arrivedAt != null && arrivedAt.getPort() == managementPort;
     }
 
     private Mono<Void> bearer(ServerWebExchange exchange, WebFilterChain chain) {

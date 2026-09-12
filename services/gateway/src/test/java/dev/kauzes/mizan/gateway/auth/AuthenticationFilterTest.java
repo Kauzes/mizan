@@ -56,6 +56,10 @@ class AuthenticationFilterTest {
 
     private static final int MAXIMUM_BODY = 1024 * 1024;
 
+    /** The two ports the gateway listens on: the edge, and the actuator's own. */
+    private static final int EDGE_PORT = 8080;
+    private static final int MANAGEMENT_PORT = 8090;
+
     private final RSAKey key = freshKey();
     private final AuthenticationProperties properties =
             new AuthenticationProperties(ISSUER, "http://identity/jwks", null, null);
@@ -65,7 +69,9 @@ class AuthenticationFilterTest {
             new AccessTokenVerifier(keysHolding(key), properties),
             signaturesRefusing(),
             JSON,
-            MAXIMUM_BODY);
+            MAXIMUM_BODY,
+            EDGE_PORT,
+            MANAGEMENT_PORT);
 
     @Test
     void refusesARequestCarryingNoToken() throws Exception {
@@ -184,7 +190,9 @@ class AuthenticationFilterTest {
                 new AccessTokenVerifier(keysThatCannotBeReached(), properties),
                 signaturesRefusing(),
                 JSON,
-                MAXIMUM_BODY);
+                MAXIMUM_BODY,
+                EDGE_PORT,
+                MANAGEMENT_PORT);
 
         MockServerWebExchange exchange = request(MockServerHttpRequest.get(PROTECTED)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token(builder -> builder)));
@@ -195,6 +203,59 @@ class AuthenticationFilterTest {
                 .as("perfectly good credentials should not be reported as bad ones")
                 .isEqualTo(503);
         assertThat(refusalOf(exchange).path("code").asString()).isEqualTo("UPSTREAM_UNAVAILABLE");
+    }
+
+    @Test
+    void doesNotGuardThePortThatIsNotTheEdge() {
+        // The actuator lives on its own port, which is not published outside the platform's
+        // network. Left to itself this filter would refuse the scrape, and a monitoring system
+        // that cannot read the gateway looks exactly like a gateway with nothing to say.
+        RecordingChain chain = new RecordingChain();
+
+        filter.filter(arrivingOn(MANAGEMENT_PORT, "/actuator/prometheus"), chain).block();
+
+        assertThat(chain.reached).isTrue();
+    }
+
+    @Test
+    void stillGuardsTheSamePathOnTheEdgePort() {
+        // The exemption is about which door the request came in by, not about the path. The
+        // same path on the port merchants reach is refused exactly as it always was.
+        MockServerWebExchange exchange = arrivingOn(EDGE_PORT, "/actuator/prometheus");
+        RecordingChain chain = new RecordingChain();
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(chain.reached).isFalse();
+        assertThat(exchange.getResponse().getStatusCode().value()).isEqualTo(401);
+    }
+
+    @Test
+    void guardsEverythingWhenTheActuatorIsOnTheEdgePortAfterAll() {
+        // A deployment that puts the two back on one port gets no exemption. The exemption
+        // exists because that port is unreachable from outside, so it has to disappear the
+        // moment that stops being true.
+        AuthenticationFilter oneDoor = new AuthenticationFilter(
+                new PublicRoutes(),
+                new AccessTokenVerifier(keysHolding(key), properties),
+                signaturesRefusing(),
+                JSON,
+                MAXIMUM_BODY,
+                EDGE_PORT,
+                EDGE_PORT);
+
+        MockServerWebExchange exchange = arrivingOn(EDGE_PORT, "/actuator/prometheus");
+        RecordingChain chain = new RecordingChain();
+
+        oneDoor.filter(exchange, chain).block();
+
+        assertThat(chain.reached).isFalse();
+        assertThat(exchange.getResponse().getStatusCode().value()).isEqualTo(401);
+    }
+
+    private static MockServerWebExchange arrivingOn(int port, String path) {
+        return request(MockServerHttpRequest.get(path)
+                .localAddress(new java.net.InetSocketAddress("127.0.0.1", port)));
     }
 
     private void assertRefused(String token) throws Exception {

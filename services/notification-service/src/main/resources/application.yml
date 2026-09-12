@@ -84,11 +84,21 @@ management:
         # deadletters is how an operator finds out what could not be handled and sends one
         # back once the bug is fixed. Reachable only through the gateway's internal route,
         # which needs a token.
-        include: health, info, deadletters
+        include: health, info, deadletters, prometheus
   endpoint:
     health:
       probes:
         enabled: true
+      group:
+        # Ready means able to do the work, which for this service means reaching its
+        # database. The default readiness group says only that the application context
+        # started, and a service that started perfectly and cannot reach Postgres is not a
+        # service anything should be routed to.
+        readiness:
+          include: readinessState, db
+  metrics:
+    tags:
+      service: ${spring.application.name}
 
 logging:
   pattern:

@@ -1,0 +1,53 @@
+# What collects the numbers every service is already producing.
+#
+# Static targets, one per service, by container name on the Compose network. Not service
+# discovery: there is no orchestrator here to discover anything from, and a list of eight
+# names that a test checks against the services that exist is honest about what it is. The
+# Kubernetes deployment in MIZ-12 gets discovery, because there it is a fact about the cluster
+# rather than a second copy of this file.
+#
+# A missing target here is the failure worth designing against: monitoring that has quietly
+# stopped covering a service looks exactly like a service with nothing wrong. MetricsWiringTest
+# reads this file and the service modules and refuses to let the two drift apart.
+
+global:
+  # Often enough to see an incident develop, rarely enough that the scrape is not itself
+  # a load. Nothing here alerts on a single sample.
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    platform: mizan
+
+scrape_configs:
+  - job_name: mizan
+    # Where every Spring service puts them. None of these ports is reachable from the edge:
+    # the gateway routes the merchant API and nothing else, and its own actuator sits on a
+    # management port that is not published outside this network. The one thing answerable
+    # from outside is health, because a probe holds no credentials.
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          # On its management port, not the one it serves the API from: the gateway is
+          # the edge, and its numbers are not something to hand to whoever can reach it.
+          - gateway:8090
+          - identity-service:8081
+          - ledger-service:8082
+          - payment-service:8083
+          - risk-service:8084
+          - notification-service:8085
+          - bank-simulator:8086
+          - settlement-service:8087
+    relabel_configs:
+      # The container name is the service name here, and "instance: gateway:8080" is a label
+      # nobody wants to read. Every metric already carries a service tag of its own; this
+      # makes the target agree with it rather than saying the same thing two ways.
+      - source_labels: [__address__]
+        regex: "([^:]+):.*"
+        target_label: service
+        replacement: "$1"
+
+  - job_name: prometheus
+    # It watches itself, so "no data" can be told apart from "nothing was collected".
+    static_configs:
+      - targets:
+          - localhost:9090

@@ -563,7 +563,45 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------
-# 18. The books balance, asked of everything that has ever been written. Its own script,
+# ---------------------------------------------------------------------------------------
+step "18. The platform's own numbers are being collected"
+
+# Only visible from here. A scrape endpoint that answers in a test proves nothing about
+# whether anything is collecting it, and monitoring that has quietly stopped covering a
+# service looks exactly like a service with nothing wrong.
+if command -v docker > /dev/null 2>&1 && docker compose ps prometheus > /dev/null 2>&1; then
+    # The gateway is the edge, so its own numbers must not be readable by whoever can reach
+    # the API. Health still is, because a probe holds no credentials.
+    call 401 GET "$GATEWAY/actuator/prometheus" > /dev/null
+    call 200 GET "$GATEWAY/actuator/health" > /dev/null
+    pass "the gateway answers what is up, and says nothing about what it is doing"
+
+    # The first scrape has to have happened, and the stack may have only just come up.
+    for attempt in $(seq 1 20); do
+        up=$(call 200 GET "$PROMETHEUS/api/v1/query?query=up%7Bjob%3D%22mizan%22%7D"             | "$PYTHON" -c '
+import json, sys
+answer = json.load(sys.stdin)["data"]["result"]
+print(sum(1 for series in answer if series["value"][1] == "1"))')
+        [ "$up" -ge 8 ] && break
+        sleep 3
+    done
+    [ "$up" -ge 8 ] || fail "only $up of the platform's services are being scraped"
+    pass "$up services are being scraped, every one of them answering"
+
+    # A metric that does not say which service it came from is a metric that loses its
+    # meaning the moment anything adds two of them together.
+    named=$(call 200 GET "$PROMETHEUS/api/v1/query?query=count%20by%20(service)%20(jvm_info)"         | "$PYTHON" -c '
+import json, sys
+print(len([s for s in json.load(sys.stdin)["data"]["result"]
+           if s["metric"].get("service")]))')
+    [ "${named:-0}" -ge 8 ] || fail "only $named service(s) tag their metrics with their name"
+    pass "and every one of them says which service its numbers are about"
+else
+    note "no Prometheus in this stack, so nothing was checked about collection"
+fi
+
+# ---------------------------------------------------------------------------------------
+# 19. The books balance, asked of everything that has ever been written. Its own script,
 # because CI runs it again after the browser journey and the demo seed, over data that three
 # different things produced and none of them wrote in order to make it pass.
 "$(dirname "$0")/books-balance.sh"

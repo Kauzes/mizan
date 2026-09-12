@@ -17,6 +17,9 @@ PAYMENTS="${MIZAN_PAYMENTS:-http://localhost:8083}"
 # The same, for closing a day. Deciding when a merchant gets paid is the platform's own
 # business and is not routed from the edge.
 SETTLEMENT="${MIZAN_SETTLEMENT:-http://localhost:8087}"
+# What collects what every service measures. Reached directly because it is not part of the
+# API at all: it is the platform watching itself.
+PROMETHEUS="${MIZAN_PROMETHEUS:-http://localhost:9090}"
 
 # Whichever Python is here, chosen by running it rather than by finding it on PATH. Windows
 # ships a python3 that is not an interpreter at all but a stub that advertises the Microsoft
