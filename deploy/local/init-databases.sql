@@ -3,3 +3,4 @@ CREATE DATABASE ledger;
 CREATE DATABASE payment;
 CREATE DATABASE risk;
 CREATE DATABASE notification;
+CREATE DATABASE settlement;

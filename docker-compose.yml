@@ -227,6 +227,34 @@ services:
       retries: 30
       start_period: 30s
 
+  settlement-service:
+    build:
+      context: .
+      args:
+        MODULE: settlement-service
+    environment:
+      MIZAN_DB_URL: jdbc:postgresql://postgres:5432/settlement
+      MIZAN_KAFKA: kafka:9092
+      MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
+      MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
+      # A minute rather than an hour, so a demo or a smoke check can close today's day
+      # without waiting for tomorrow. A deployment leaves it at the default: captures arrive
+      # asynchronously, and a close that runs too soon strands them in the wrong day.
+      MIZAN_SETTLEMENT_CLOSE_AFTER: ${MIZAN_SETTLEMENT_CLOSE_AFTER:-1m}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8087:8087"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8087/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
   console:
     build:
       context: .

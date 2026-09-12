@@ -40,6 +40,11 @@ spring:
             # would have been a way for one merchant to score against another merchant's
             # baseline and to read another merchant's rulings, because none of those paths
             # names a merchant the gateway could scope by.
+            - id: settlement-service
+              uri: http://settlement-service:8087
+              order: -100
+              predicates:
+                - Path=/api/v1/merchants/*/settlements,/api/v1/merchants/*/settlements/**
             - id: notification-service
               uri: http://notification-service:8085
               order: -100
@@ -74,6 +79,12 @@ spring:
               uri: http://risk-service:8084
               predicates:
                 - Path=/internal/risk-service/v3/api-docs,/internal/risk-service/v3/api-docs/**,/internal/risk-service/actuator/health,/internal/risk-service/actuator/health/**
+              filters:
+                - StripPrefix=2
+            - id: settlement-service-internal
+              uri: http://settlement-service:8087
+              predicates:
+                - Path=/internal/settlement-service/v3/api-docs,/internal/settlement-service/v3/api-docs/**,/internal/settlement-service/actuator/health,/internal/settlement-service/actuator/health/**
               filters:
                 - StripPrefix=2
             - id: notification-service-internal
@@ -117,6 +128,8 @@ springdoc:
         url: /internal/payment-service/v3/api-docs
       - name: risk-service
         url: /internal/risk-service/v3/api-docs
+      - name: settlement-service
+        url: /internal/settlement-service/v3/api-docs
       - name: notification-service
         url: /internal/notification-service/v3/api-docs
 

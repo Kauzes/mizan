@@ -29,6 +29,7 @@ class GatewayRouteDefinitionTests {
                 "identity-service",
                 "ledger-service",
                 "payment-service",
+                "settlement-service",
                 "notification-service");
 
         // Risk is deliberately absent. Nothing it serves is asked for by a merchant: scoring

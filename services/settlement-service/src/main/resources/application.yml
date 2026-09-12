@@ -1,0 +1,73 @@
+server:
+  port: 8087
+
+spring:
+  application:
+    name: settlement-service
+  datasource:
+    url: ${MIZAN_DB_URL:jdbc:postgresql://localhost:5432/settlement}
+    username: ${MIZAN_DB_USERNAME:mizan}
+    password: ${MIZAN_DB_PASSWORD:mizan}
+  jpa:
+    hibernate:
+      # Migrations own the schema. Anything Hibernate would generate is drift, and drift
+      # should fail the service on startup rather than quietly reshape a live database.
+      ddl-auto: validate
+    open-in-view: false
+  kafka:
+    bootstrap-servers: ${MIZAN_KAFKA:localhost:29092}
+    consumer:
+      group-id: ${MIZAN_KAFKA_GROUP:settlement-service}
+      # Earliest, because a service that only settles what happened since it last restarted
+      # would silently drop a day of captures across a deploy.
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    listener:
+      ack-mode: record
+  flyway:
+    locations: classpath:db/migration/settlement
+
+mizan:
+  events:
+    retries: ${MIZAN_EVENT_RETRIES:3}
+    first-retry: ${MIZAN_EVENT_FIRST_RETRY:500ms}
+    longest-retry: ${MIZAN_EVENT_LONGEST_RETRY:10s}
+  settlement:
+    # Which day a capture belongs to. One zone for the whole platform on purpose: a merchant
+    # and an acquirer that disagree about when Tuesday started cannot reconcile Tuesday, and
+    # the acquirer's day is the one that is not negotiable.
+    zone: ${MIZAN_SETTLEMENT_ZONE:Europe/Istanbul}
+    # What this platform charges for taking a payment: a share of the amount and a fixed part
+    # per payment. Both configuration rather than constants, because the right numbers differ
+    # between a demo and a deployment, and because the rule as applied is stored on every
+    # batch so changing it never moves a settlement somebody has already been shown.
+    fee-basis-points: ${MIZAN_SETTLEMENT_FEE_BPS:290}
+    fee-fixed-per-payment: ${MIZAN_SETTLEMENT_FEE_FIXED:30}
+    # How long after a day ends before it is closed. Late enough that a capture at the very
+    # end of the day has been heard about, since events arrive asynchronously and a batch
+    # that closed too early would leave payments to be settled in a day they did not happen.
+    close-after: ${MIZAN_SETTLEMENT_CLOSE_AFTER:1h}
+    close-every: ${MIZAN_SETTLEMENT_CLOSE_EVERY:15m}
+
+springdoc:
+  writer-with-order-by-keys: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, settlements
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    correlation: "[%X{correlationId:-}] "

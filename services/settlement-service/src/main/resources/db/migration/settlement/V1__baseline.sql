@@ -1,0 +1,5 @@
+-- Baseline for the settlement database, owned by settlement-service.
+--
+-- Deliberately empty, like every other service's. A table arrives in the migration that
+-- introduces the feature needing it, so the history of this schema starts at a known point
+-- rather than with a table nothing reads yet.
