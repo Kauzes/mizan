@@ -1,6 +1,7 @@
 package dev.kauzes.mizan.ledger.journal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -146,6 +147,47 @@ class InternalEntryTest extends MizanIntegrationTest {
                         + "is what lets one whose answer was lost be finished by repeating it")
                 .isEqualTo(first);
         assertThat(entriesOf(merchant.id)).isEqualTo(1);
+    }
+
+    @Test
+    void handsBackOneEntryToAServiceHoldingItsId() throws Exception {
+        Merchant merchant = merchantWithASettlementAccount();
+        String entryId = idOf(internally(captureOf(merchant, reference()))
+                .andExpect(status().isCreated()));
+
+        // Settlement asks this to check that a correction an operator says they posted was in
+        // fact posted. It is told whose entry it is, which is what makes the check worth
+        // making: an entry in somebody else's books does not correct this merchant's problem.
+        mockMvc.perform(get("/internal/entries/" + entryId)
+                        .header(ServiceCredential.HEADER, serviceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(entryId))
+                .andExpect(jsonPath("$.merchantId").value(merchant.id.toString()))
+                .andExpect(jsonPath("$.postings.length()").value(2));
+    }
+
+    @Test
+    void saysThereIsNoSuchEntryRatherThanNothing() throws Exception {
+        // The difference matters to the caller: "no entry with that id" means an operator
+        // typed a correction that does not exist, and anything else means the books could not
+        // be asked. A ruling is refused in the first case and not written at all in the
+        // second, so the two must not arrive looking the same.
+        mockMvc.perform(get("/internal/entries/" + UUID.randomUUID())
+                        .header(ServiceCredential.HEADER, serviceToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value("No entry with that id."));
+    }
+
+    @Test
+    void willNotReadAnEntryWithoutTheServiceCredential() throws Exception {
+        Merchant merchant = merchantWithASettlementAccount();
+        String entryId = idOf(internally(captureOf(merchant, reference()))
+                .andExpect(status().isCreated()));
+
+        // Reading an entry by id alone is not scoped to a merchant, so the credential is the
+        // whole of what keeps it away from one.
+        mockMvc.perform(get("/internal/entries/" + entryId))
+                .andExpect(status().isUnauthorized());
     }
 
     private ResultActions internally(String body) throws Exception {

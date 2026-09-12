@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -170,6 +171,41 @@ public class LedgerBooks {
         }
     }
 
+    /**
+     * The entry with this id, as the books have it, or nothing if there is no such entry.
+     *
+     * <p>Asked so that an operator ruling that a difference was corrected can be checked
+     * against the ledger rather than believed. A decision recorded as evidence has to be
+     * evidence, and "corrected by entry 8f21…" is only evidence if that entry exists.
+     *
+     * <p>An unreachable ledger is not the same answer as a missing entry, and is not turned
+     * into one: this throws, and the ruling does not happen. Recording a correction that could
+     * not be checked would put the claim beyond checking forever.
+     */
+    public Optional<PostedEntry> entry(UUID entryId) {
+        try {
+            return Optional.ofNullable(http.get()
+                    .uri("/internal/entries/{entryId}", entryId)
+                    .retrieve()
+                    .body(PostedEntry.class));
+
+        } catch (HttpClientErrorException.NotFound noSuchEntry) {
+            return Optional.empty();
+
+        } catch (HttpClientErrorException refused) {
+            throw new MizanException(
+                    ErrorCode.UNPROCESSABLE,
+                    "The books would not say what that entry is: " + detailOf(refused),
+                    refused);
+
+        } catch (Exception unreachable) {
+            throw new MizanException(
+                    ErrorCode.UPSTREAM_UNAVAILABLE,
+                    "The ledger could not be reached, so a correction cannot be checked.",
+                    unreachable);
+        }
+    }
+
     private UUID post(Entry entry) {
         try {
             Written written =
@@ -235,6 +271,11 @@ public class LedgerBooks {
             Instant occurredAt,
             UUID corrects,
             List<Posting> postings) {
+    }
+
+    /** An entry as the books have it, with only the parts a ruling has to check. */
+    public record PostedEntry(
+            UUID id, UUID merchantId, String description, UUID corrects) {
     }
 
     private record Written(UUID id) {

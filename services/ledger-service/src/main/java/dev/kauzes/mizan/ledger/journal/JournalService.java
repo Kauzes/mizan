@@ -245,6 +245,25 @@ public class JournalService {
     }
 
     /**
+     * One entry, without a merchant to scope it to.
+     *
+     * <p>For another service that has been handed an entry id and has to know whether it names
+     * anything — settlement checking that a correction an operator says they posted was in
+     * fact posted. It cannot ask through the merchant route, because a difference between this
+     * platform and a bank does not always have a merchant, and because a service forging a
+     * merchant's identity to read their data is the boundary the internal routes exist to
+     * keep. The entry says which merchant it belongs to, so nothing is hidden by asking this
+     * way; what is not offered is a way to list or search them.
+     */
+    @Transactional(readOnly = true)
+    public EntryResponse find(UUID entryId) {
+        return entries
+                .findById(entryId)
+                .map(EntryResponse::of)
+                .orElseThrow(() -> new NotFoundException("No entry with that id."));
+    }
+
+    /**
      * An account this merchant does not own is not an account this entry may name. Looked up
      * scoped rather than looked up and then checked, so a platform account is refused here
      * the same way another merchant's is: it is simply not one of this merchant's.

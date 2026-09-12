@@ -510,6 +510,34 @@ company. `POST /actuator/reconciliation/{day}` on the settlement service runs on
   one made rather than reporting every problem again as new. The only time anybody reconciles
   twice is after an incident, which is the worst moment to be handed a page of duplicates.
 
+### A difference reaches a person
+
+A reconciliation nobody reads is a reconciliation that was not run. The queue is the same shape
+the platform uses for dead lettered events and stuck payments — what is outstanding, why, and an
+action to take — because it is the same question about a different subject.
+
+- **A difference is outstanding until somebody rules on it, and nothing else takes it off the
+  list.** Not a later run that no longer sees it: a difference that stopped being reported is
+  not the same as one that was explained. The row stays and says the newest run no longer
+  reports it, because "it went away" is something a person needs to be told rather than a reason
+  to stop telling them. ADR 0039 is why, along with the three cheaper designs that were not
+  taken.
+- **Two rulings and no more.** Acknowledged, which means a person looked and nothing about the
+  money changes; or corrected, which means an entry was posted in the ledger and the ruling
+  names it. There is deliberately no write-off — a write-off by another name is still the
+  feature that makes a ledger untrustworthy.
+- **Ruling never moves money.** The correcting entry goes through the ledger like every other
+  entry, where it is visible as a correction rather than as a tidy-up, and the ruling is checked
+  against the books before it is written: an entry that does not exist, or one in another
+  merchant's books, is refused. A decision recorded as evidence has to be evidence.
+- **Who decided and why are both required**, and every ruling is kept. A decision nobody owns
+  and nobody explained is not an audit trail, and somebody who acknowledged a difference on
+  Monday and corrected it on Thursday did two things.
+- **The platform says so without being asked.** A sweep logs what is waiting and how long the
+  oldest has waited, louder once it has gone past the platform's patience. An endpoint only
+  answers somebody who thought to look, and the failure worth guarding against is nobody
+  looking.
+
 ## The console
 
 A React and TypeScript application, built with Vite, served by nginx beside the API rather than
