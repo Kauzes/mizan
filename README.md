@@ -36,6 +36,7 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 | `bank-simulator` | 8086 | Fake acquirer that approves, declines, times out, duplicates, and sends a statement that disagrees |
 | `console` | 5173 | The merchant console: React, TypeScript, Vite, served beside the API |
 | `prometheus` | 9090 | Collects what every service measures. Configured from `deploy/local/prometheus.yml` |
+| `grafana` | 3000 | Two dashboards, provisioned from `deploy/local/grafana`. Nothing is clicked to make it work |
 | `common` | n/a | Shared money type, error codes, correlation context. No Spring |
 | `common-web` | n/a | Auto configured problem details and correlation id propagation |
 | `common-test` | n/a | Integration test harness: containers pinned to the compose images |
@@ -71,6 +72,17 @@ other protected route.
   disagreed and by how much rather than repairing anything, because a balance that disagrees
   with its postings is evidence. `scripts/books-balance.sh` asks it and fails loudly, and CI
   runs that over the data the smoke check, the browser journey and the demo seed produced.
+- A dashboard is a file in this repository. Grafana comes up with the datasource and both
+  dashboards already on it, provisioned from `deploy/local/grafana`, and the file wins on every
+  restart — a dashboard somebody built once inside a running container is one nobody can
+  review, nobody can bring back, and nobody sees change. There are two of them because they are
+  two different questions asked by two different people at two different times: **is the
+  platform up**, and **is it just this payment**. Thirteen panels between them, each with a
+  sentence saying what it is for, and no dual axis anywhere: two measures of different scale on
+  one pair of axes is a way to make any two lines look related. A test refuses a panel that
+  names a metric no service registers, and the smoke check asks the running Prometheus the same
+  question of every name on both dashboards — a panel querying a metric that does not exist
+  renders as an empty chart, and an empty chart looks exactly like a quiet platform. ADR 0042.
 - Every service measures itself, and a Prometheus in the stack collects it. The scrape
   configuration is a file in this repository rather than something set up once in a running
   container, and a test reads it against the services that exist: monitoring that has quietly
@@ -648,6 +660,14 @@ on an origin of its own.
   amount is a different refund.
 - Run it with `npm run dev` in `console`, or reach the Compose stack's copy at
   `http://localhost:5173`.
+
+The platform watching itself is at <http://localhost:3000>, which opens on **is the platform
+up**: whether anything is down and since when, what is failing, what is slow, and what is
+about to be. **Is it just this payment** is the other one, for the call from a merchant whose
+payment did not go through — the approval rate, what the bank is refusing and for what reason,
+every queue that waits for a person, and whether the books still balance. No sign in, because
+this stack is local and a login page would protect nothing; the raw numbers are at
+<http://localhost:9090>.
 
 Listing payments takes filters — status, risk verdict, amount range, date range, and the
 merchant's own reference — and pages server side. The paging is in headers (`X-Total-Count`,

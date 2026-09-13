@@ -1,0 +1,19 @@
+# The dashboards come from a directory of files, so a change to what the platform watches is
+# a diff somebody can review rather than a click somebody made once.
+
+apiVersion: 1
+
+providers:
+  - name: mizan
+    type: file
+    # Editing in the browser is allowed — reading a dashboard usually means poking at it — but
+    # the file wins on every restart, and nothing saved in the browser survives. The file is
+    # the dashboard; the browser is a view of it.
+    allowUiUpdates: false
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      # Keeps the directory layout out of Grafana's folder tree, which is one fewer thing
+      # that has to agree with anything.
+      foldersFromFilesStructure: false

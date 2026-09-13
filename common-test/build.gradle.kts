@@ -22,3 +22,27 @@ dependencies {
 
     testImplementation("org.apache.kafka:kafka-clients")
 }
+
+// These tests read files that are on no classpath: the Compose file, .env, the scrape
+// configuration, the Grafana provisioning and dashboards, every service's application.yml,
+// and every service's production sources. Gradle cannot infer that, so editing a dashboard
+// leaves the test that checks the dashboards UP-TO-DATE and the check quietly does not run —
+// which was found the first time a metric name in a dashboard was deliberately broken and the
+// build stayed green.
+tasks.named<Test>("test") {
+    inputs.files(rootProject.file("docker-compose.yml"), rootProject.file(".env"))
+        .withPropertyName("platformFiles")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+
+    inputs.dir(rootProject.file("deploy/local"))
+        .withPropertyName("deployFiles")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+
+    inputs.files(rootProject.fileTree("services") {
+        include("*/src/main/resources/application.yml")
+        include("*/src/main/java/**/*.java")
+        include("*/src/test/java/**/*.java")
+    })
+        .withPropertyName("serviceFiles")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
