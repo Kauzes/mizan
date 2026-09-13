@@ -673,7 +673,88 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------
-# 20. The books balance, asked of everything that has ever been written. Its own script,
+step "20. The dashboards came up already knowing what to show"
+
+# A dashboard somebody built once in a running Grafana is a dashboard nobody can review and
+# nobody can bring back. These come from files in this repository, and what cannot be proved
+# from the files is exactly what is checked here: that Grafana read them, that the datasource
+# it was handed actually reaches Prometheus, and that every metric every panel asks for is a
+# metric that exists. A panel naming a metric that does not renders as an empty chart, and an
+# empty chart looks exactly like a quiet platform.
+if command -v docker > /dev/null 2>&1 && docker compose ps grafana > /dev/null 2>&1; then
+    call 200 GET "$GRAFANA/api/health" > /dev/null
+    pass "grafana is up"
+
+    # Provisioned, not clicked. If this is missing, every panel on both dashboards is blank.
+    source=$(call 200 GET "$GRAFANA/api/datasources/uid/mizan-prometheus")
+    [ "$(printf '%s' "$source" | field type)" = "prometheus" ] \
+        || fail "the provisioned datasource is not a prometheus one: $source"
+    pass "its datasource was provisioned from the repository, not set up by hand"
+
+    # And it works. A datasource with the wrong URL provisions perfectly and fails only when
+    # somebody opens a panel, which is the one moment nobody wants to debug it.
+    through=$(call 200 GET \
+        "$GRAFANA/api/datasources/proxy/uid/mizan-prometheus/api/v1/query?query=up" \
+        | field status)
+    [ "$through" = "success" ] || fail "grafana cannot query prometheus through it: $through"
+    pass "and grafana can actually read the numbers through it"
+
+    # Both of them, by uid, because two dashboards sharing one would silently replace it.
+    for dashboard in mizan-platform-up mizan-is-it-everybody; do
+        call 200 GET "$GRAFANA/api/dashboards/uid/$dashboard" > /dev/null
+    done
+    pass "both dashboards are loaded, and each is where its link says it is"
+
+    # The acceptance criterion, asked of the running platform rather than of the files. The
+    # static test covers the metrics this repository owns; this covers every other name a
+    # panel uses — the JVM's, Spring's, the scrape's — which no file here can vouch for.
+    missing=$(call 200 GET "$PROMETHEUS/api/v1/label/__name__/values" | "$PYTHON" -c '
+import json, os, re, sys
+
+published = set(json.load(sys.stdin)["data"])
+promql = {
+    "sum", "min", "max", "avg", "count", "count_values", "stddev", "stdvar", "topk",
+    "bottomk", "quantile", "group", "by", "without", "on", "ignoring", "group_left",
+    "group_right", "rate", "irate", "increase", "delta", "idelta", "deriv",
+    "predict_linear", "resets", "changes", "abs", "ceil", "floor", "round", "clamp",
+    "clamp_max", "clamp_min", "exp", "ln", "log2", "log10", "sqrt", "sgn", "absent",
+    "absent_over_time", "histogram_quantile", "label_replace", "label_join", "time",
+    "timestamp", "vector", "scalar", "sort", "sort_desc", "sum_over_time", "avg_over_time",
+    "min_over_time", "max_over_time", "count_over_time", "last_over_time", "offset",
+    "and", "or", "unless", "bool",
+}
+
+wanted = {}
+folder = sys.argv[1]
+for name in sorted(os.listdir(folder)):
+    if not name.endswith(".json"):
+        continue
+    with open(os.path.join(folder, name), encoding="utf-8") as handle:
+        for panel in json.load(handle)["panels"]:
+            for target in panel.get("targets", []):
+                expression = target.get("expr", "")
+                # Label selectors, windows, and the labels a by() groups on. All three look
+                # exactly like a metric name to a regular expression and none of them is one.
+                expression = re.sub(r"\{[^}]*}", " ", expression)
+                expression = re.sub(r"\[[^]]*]", " ", expression)
+                expression = re.sub(
+                    r"\b(?:by|without|on|ignoring|group_left|group_right)\s*\([^)]*\)",
+                    " ", expression)
+                for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", expression):
+                    if token not in promql:
+                        wanted.setdefault(token, []).append("%s/%s" % (name, panel["title"]))
+
+for metric in sorted(set(wanted) - published):
+    print("  %s, asked for by %s" % (metric, wanted[metric][0]), file=sys.stderr)
+print(len(set(wanted) - published))' "$(dirname "$0")/../deploy/local/grafana/dashboards")
+    [ "$missing" = "0" ] || fail "$missing metric(s) on the dashboards do not exist"
+    pass "and every metric every panel asks for is one the platform really publishes"
+else
+    note "no Grafana in this stack, so nothing was checked about the dashboards"
+fi
+
+# ---------------------------------------------------------------------------------------
+# 21. The books balance, asked of everything that has ever been written. Its own script,
 # because CI runs it again after the browser journey and the demo seed, over data that three
 # different things produced and none of them wrote in order to make it pass.
 "$(dirname "$0")/books-balance.sh"

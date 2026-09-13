@@ -1,0 +1,245 @@
+{
+  "uid": "mizan-is-it-everybody",
+  "title": "Mizan — is it just this payment?",
+  "description": "The question somebody asks with a merchant on the phone: one payment went wrong, and is that one payment or is it everybody. Nothing here is about the JVM, and nothing here names a merchant — that number belongs in the console, behind the access control the console already has. ADR 0041.",
+  "tags": ["mizan"],
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 41,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Approved, of everything attempted",
+      "description": "Over the last half hour. The single number that answers the phone call: if this is where it usually is, the merchant's problem is the merchant's, and if it has fallen, it is everybody's. An hour with no payments at all says so in words rather than showing a red nought — a ratio of nothing to nothing is not a collapsed approval rate, and a panel that cannot tell the two apart is a panel that cries wolf every quiet night.",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "mizan-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(mizan_payments_authorizations_total{outcome=\"approved\"}[30m])) / sum(rate(mizan_payments_authorizations_total[30m]))",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "noValue": "nothing attempted",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "nan",
+                "result": { "text": "nothing attempted", "color": "text", "index": 0 }
+              }
+            },
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": { "text": "nothing attempted", "color": "text", "index": 1 }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 0.7 },
+              { "color": "green", "value": 0.85 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "What became of each authorization",
+      "description": "Held counted apart from declined on purpose. A decline is between a merchant and a bank; a hold is this platform's own decision, which somebody here has to answer for. Added together they hide the one anybody here can act on.",
+      "gridPos": { "h": 5, "w": 18, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "mizan-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (rate(mizan_payments_authorizations_total[5m]))",
+          "legendFormat": "{{outcome}}"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never" }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Why the bank refused",
+      "description": "The reason, not a total. \"Declines are up\" is a fact nobody can act on; \"declines for insufficient funds are up\" is a conversation with a merchant, and \"declines for do not honour are up\" is a conversation with an acquirer. A reason this platform does not name counts as other — the real one is on the payment and in the log.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "mizan-prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (reason) (rate(mizan_payments_authorizations_total{outcome=\"declined\"}[5m]))",
+          "legendFormat": "{{reason}}"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never" }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Waiting for a person",
+      "description": "Every queue on the platform that only a human empties. All of them are counts, on one axis, because two measures of different scale sharing a pair of axes is a way to make any two lines look related. How old the oldest of them is has its own panel, for the same reason.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "mizan-prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum(mizan_payments_needing_a_person)", "legendFormat": "payments nobody can finish" },
+        { "refId": "B", "expr": "sum(mizan_reviews_waiting)", "legendFormat": "reviews nobody has ruled on" },
+        { "refId": "C", "expr": "sum(mizan_deadletters_outstanding)", "legendFormat": "events set aside" },
+        { "refId": "D", "expr": "sum(mizan_webhooks_waiting)", "legendFormat": "webhooks undelivered" },
+        { "refId": "E", "expr": "sum(mizan_reconciliation_differences_waiting)", "legendFormat": "the bank disagrees" },
+        { "refId": "F", "expr": "sum(mizan_settlement_captures_waiting)", "legendFormat": "captures no batch has claimed" }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never" }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "How long the oldest of them has waited",
+      "description": "Its own panel because it is seconds and the one beside it is counts. The oldest rather than an average: one difference nobody has looked at since Friday is a worse state than nine that turned up this morning, and an average says the opposite.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "mizan-prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "max(mizan_webhooks_lag_seconds)", "legendFormat": "oldest webhook undelivered" },
+        { "refId": "B", "expr": "max(mizan_reconciliation_oldest_seconds)", "legendFormat": "oldest difference unruled" }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never" }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "The books",
+      "description": "Every entry balances, every account's balance is what its postings add up to, and every currency sums to zero platform wide. Checked on a timer rather than when somebody thinks to ask. If this is not green, nothing else on this dashboard matters.",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "mizan-prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "min(mizan_ledger_sound)", "instant": true }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DRIFTED", "index": 0 },
+                "1": { "text": "balanced", "index": 1 }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Webhooks given up on",
+      "description": "Not the same as waiting. These will never arrive without somebody doing something, and they are invisible in a count of what is pending.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "mizan-prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum(mizan_webhooks_given_up_on)", "instant": true }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    }
+  ]
+}

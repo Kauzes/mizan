@@ -1,0 +1,23 @@
+# Where the dashboards get their numbers, declared rather than clicked.
+#
+# A datasource configured by hand in a running Grafana lives in that container's database and
+# nowhere else: it cannot be reviewed, it cannot be recreated, and it disappears the first time
+# somebody runs `docker compose down -v`. This file is read at startup, every startup.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    # Named in every dashboard by this uid rather than by "whichever datasource is default",
+    # so a second datasource added later cannot silently repoint every panel.
+    uid: mizan-prometheus
+    isDefault: true
+    editable: false
+    jsonData:
+      # Matches the scrape interval in prometheus.yml. Grafana uses it to decide the smallest
+      # step it will ask for, and a step finer than the data produces gaps that look like an
+      # outage.
+      timeInterval: 15s

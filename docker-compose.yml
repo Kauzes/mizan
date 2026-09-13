@@ -320,8 +320,47 @@ services:
       retries: 20
       start_period: 10s
 
+  grafana:
+    # Where the numbers become something a person reads. Provisioned entirely from files in
+    # this repository: the datasource, the dashboard provider, and the dashboards themselves.
+    # Nothing is clicked to make this work, and nothing survives in the container that is not
+    # also in the repository — a dashboard somebody built once in a running Grafana is a
+    # dashboard nobody can review and nobody can bring back.
+    image: ${GRAFANA_IMAGE}
+    volumes:
+      - ./deploy/local/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/local/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    environment:
+      # A local stack, opened by a person who has already reached the machine it runs on.
+      # A sign-in page here would protect nothing and would be one more thing to get past
+      # while something is on fire. Anywhere that matters, this is not how it is run.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_BASIC_ENABLED: "false"
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      # Opening Grafana should answer a question, not present a menu.
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/is-the-platform-up.json
+      # Nothing here should reach the internet to work.
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    ports:
+      - "3000:3000"
+    # Depending on Prometheus for ordering only, not for health: a monitoring stack that waits
+    # for the thing it monitors is one that is never up when it is needed.
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
 volumes:
   pgdata:
   kafkadata:
   redisdata:
   prometheusdata:
+  grafanadata:
