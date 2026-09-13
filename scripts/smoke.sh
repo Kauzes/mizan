@@ -601,7 +601,79 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------
-# 19. The books balance, asked of everything that has ever been written. Its own script,
+step "19. The numbers being collected are about payments, not about the JVM"
+
+# Only provable from here. Every one of these was driven by this run: the approval in step 7,
+# the decline in step 8, the queues the earlier steps filled. A unit test can prove a counter
+# increments when something calls it; only a real run proves the thing that should call it
+# does, in the assembled platform, and that a scrape carried the number out of the process.
+if command -v docker > /dev/null 2>&1 && docker compose ps prometheus > /dev/null 2>&1; then
+    promql() {
+        call 200 GET "$PROMETHEUS/api/v1/query?query=$1" | "$PYTHON" -c '
+import json, sys
+answer = json.load(sys.stdin)["data"]["result"]
+print(answer[0]["value"][1] if answer else "")'
+    }
+
+    # The scrape interval has to have passed at least once since the payments above.
+    for attempt in $(seq 1 20); do
+        approved=$(promql 'mizan_payments_authorizations_total%7Boutcome%3D%22approved%22%7D')
+        [ -n "$approved" ] && [ "${approved%%.*}" -ge 1 ] && break
+        sleep 3
+    done
+    [ -n "$approved" ] && [ "${approved%%.*}" -ge 1 ] \
+        || fail "nothing counted an approved authorization, though this run made several"
+    pass "the approvals this run made are counted, and collected"
+
+    # The reason, not a total. "Declines are up" is a fact nobody can act on; "declines for
+    # insufficient funds are up" is a conversation with a merchant, and "declines for do not
+    # honour are up" is a conversation with an acquirer.
+    refused=$(promql \
+        'mizan_payments_authorizations_total%7Boutcome%3D%22declined%22%2Creason%3D%22insufficient_funds%22%7D')
+    [ -n "$refused" ] && [ "${refused%%.*}" -ge 1 ] \
+        || fail "the decline in step 8 was not counted under the reason the bank gave"
+    pass "and the decline is counted under insufficient_funds, not under a total"
+
+    # Every queue a person empties, as a number. A queue nobody can see the length of is a
+    # queue that is discovered when a merchant asks why they have not been paid.
+    for queue in mizan_payments_needing_a_person \
+                 mizan_reviews_waiting \
+                 mizan_deadletters_outstanding \
+                 mizan_webhooks_waiting \
+                 mizan_webhooks_lag_seconds \
+                 mizan_reconciliation_differences_waiting \
+                 mizan_settlement_captures_waiting; do
+        [ -n "$(promql "$queue")" ] \
+            || fail "$queue is not being collected, so its backlog is invisible"
+    done
+    pass "every queue that waits for a person reports its length, and zero when it is empty"
+
+    # The books, on a timer, in the running platform. books-balance.sh below asks the service
+    # directly; this asks whether anything would have noticed without being asked.
+    sound=$(promql mizan_ledger_sound)
+    [ "$sound" = "1" ] \
+        || fail "the ledger drift gauge says $sound, so either the books moved or nothing checked"
+    pass "the ledger checks itself on a timer, and the answer leaves the process"
+
+    # The one that is not about any single metric. Cardinality is how a monitoring system
+    # falls over, and it falls over at the moment somebody needs it.
+    offending=$(call 200 GET \
+        "$PROMETHEUS/api/v1/labels?match%5B%5D=%7B__name__%3D~%22mizan_.%2B%22%7D" \
+        | "$PYTHON" -c '
+import json, sys
+never = {"merchant", "merchantid", "merchant_id", "payment", "paymentid", "payment_id",
+         "amount", "money", "card", "reference", "user", "userid", "user_id", "email"}
+found = [label for label in json.load(sys.stdin)["data"] if label.lower() in never]
+print(",".join(found))')
+    [ -z "$offending" ] \
+        || fail "these labels have no upper bound and are somebody's business: $offending"
+    pass "and no number is labelled with a merchant, a payment, a card or an amount"
+else
+    note "no Prometheus in this stack, so nothing was checked about what is measured"
+fi
+
+# ---------------------------------------------------------------------------------------
+# 20. The books balance, asked of everything that has ever been written. Its own script,
 # because CI runs it again after the browser journey and the demo seed, over data that three
 # different things produced and none of them wrote in order to make it pass.
 "$(dirname "$0")/books-balance.sh"

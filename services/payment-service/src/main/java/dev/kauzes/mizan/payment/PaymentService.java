@@ -31,6 +31,7 @@ public class PaymentService {
     private final UnknownOutcomes unknownOutcomes;
     private final PaymentEvents events;
     private final PaymentSearch search;
+    private final PaymentMetrics metrics;
 
     public PaymentService(
             PaymentRepository payments,
@@ -39,7 +40,8 @@ public class PaymentService {
             RiskClient risk,
             UnknownOutcomes unknownOutcomes,
             PaymentEvents events,
-            PaymentSearch search) {
+            PaymentSearch search,
+            PaymentMetrics metrics) {
 
         this.payments = payments;
         this.acquirer = acquirer;
@@ -48,6 +50,7 @@ public class PaymentService {
         this.unknownOutcomes = unknownOutcomes;
         this.events = events;
         this.search = search;
+        this.metrics = metrics;
     }
 
     /**
@@ -183,6 +186,7 @@ public class PaymentService {
             if (assessment.isReview()) {
                 payment.heldForReview(String.join("; ", assessment.reasons()));
                 events.record(payment, payment.riskReasons());
+                metrics.heldForReview();
                 log.info("payment {} is held for review: {}", paymentId, assessment.reasons());
                 return PaymentResponse.of(payment);
             }
@@ -201,16 +205,19 @@ public class PaymentService {
                 // back: the caller is told by an exception being thrown, and a note written
                 // here would go with it. The same lesson as MIZ-33 and MIZ-36.
                 unknownOutcomes.record(merchantId, paymentId, noAnswer.getMessage());
+                metrics.noAnswer();
             }
             throw noAnswer;
         }
 
         if (decision.approved()) {
             payment.authorized(decision.acquirerReference(), decision.cardLastFour());
+            metrics.authorized();
             log.info("authorized payment {} as {}", paymentId, decision.acquirerReference());
         } else {
             payment.declined(
                     decision.acquirerReference(), decision.cardLastFour(), decision.reason());
+            metrics.declined(decision.reason());
             log.info("payment {} was declined: {}", paymentId, decision.reason());
         }
 

@@ -76,6 +76,25 @@ other protected route.
   container, and a test reads it against the services that exist: monitoring that has quietly
   stopped covering a service looks exactly like a service with nothing wrong. The gateway's own
   actuator sits on a port the edge does not serve, which is ADR 0040.
+- The numbers that matter are about the money, not about the JVM. Heap size says a service is
+  unwell; it never says a merchant is not being paid. So the platform also counts
+  authorizations by what became of them and by the reason the bank gave, and publishes the
+  length of every queue that waits for a person — payments nobody can finish, reviews nobody
+  has ruled on, events set aside, webhooks undelivered, differences between this platform and
+  the bank, captures no batch has claimed. Lag is the age of the oldest thing still waiting
+  rather than an average, because an average is reassuring during exactly the incident worth
+  noticing. The ledger's integrity check runs on a timer and publishes what it found, so the
+  books not balancing is something the platform says rather than something somebody has to
+  think to ask.
+- No metric is labelled with a merchant, a payment, a card or an amount. Every label multiplies
+  the series a monitoring system keeps and a merchant id has no upper bound, which is how that
+  system falls over at the moment somebody needs it — and it would put one merchant's business
+  in a place with no access control on it. Decline reasons are a closed set this platform
+  chose; anything an acquirer sends that is not in it counts as `other`, with the real reason
+  still on the payment and in the log. Both are asserted in the test suite and again by the
+  smoke check, against every series the running platform actually publishes. ADR 0041 says
+  what was given up by deciding that, and why the console is where a per merchant number
+  belongs.
 - Ready means able to do the work. A service that owns a database is not ready until it can
   reach it, and the container probes ask for readiness rather than for a live port, so a
   service that started perfectly and cannot reach Postgres is never routed to.
