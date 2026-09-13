@@ -1,5 +1,6 @@
 package dev.kauzes.mizan.notification.webhook;
 
+import dev.kauzes.mizan.notification.NotificationMetrics;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -37,6 +38,7 @@ public class WebhookDispatcher {
 
     private final WebhookDeliveries deliveries;
     private final WebhookSender sender;
+    private final NotificationMetrics metrics;
     private final TransactionTemplate transaction;
     private final ExecutorService workers;
     private final int batchSize;
@@ -45,12 +47,14 @@ public class WebhookDispatcher {
     public WebhookDispatcher(
             WebhookDeliveries deliveries,
             WebhookSender sender,
+            NotificationMetrics metrics,
             PlatformTransactionManager transactions,
             @Value("${mizan.webhooks.batch-size:32}") int batchSize,
             @Value("${mizan.webhooks.attempts:8}") int attemptLimit) {
 
         this.deliveries = deliveries;
         this.sender = sender;
+        this.metrics = metrics;
         this.transaction = new TransactionTemplate(transactions);
         this.batchSize = batchSize;
         this.attemptLimit = attemptLimit;
@@ -107,6 +111,7 @@ public class WebhookDispatcher {
                         delivery.attempts(),
                         outcome.statusCode(),
                         outcome.tookMillis());
+                metrics.delivered();
             } else {
                 deliveries.failed(
                         delivery.id(),
@@ -115,6 +120,7 @@ public class WebhookDispatcher {
                         outcome.tookMillis(),
                         outcome.error(),
                         attemptLimit);
+                metrics.failed();
             }
         });
     }

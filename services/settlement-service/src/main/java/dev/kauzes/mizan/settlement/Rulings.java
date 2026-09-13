@@ -101,7 +101,25 @@ public class Rulings {
      */
     @Transactional(readOnly = true)
     public Map<String, Object> howMuchIsWaiting() {
+        Outstanding outstanding = outstanding();
         Map<String, Object> answer = new LinkedHashMap<>();
+        answer.put("outstanding", outstanding.count());
+        answer.put(
+                "oldest",
+                outstanding.oldest() == null ? null : outstanding.oldest().toString());
+        answer.put("byOutcome", byOutcome());
+        return answer;
+    }
+
+    /**
+     * The same question, typed, for anything that is not rendering JSON.
+     *
+     * <p>One definition of what "waiting" means — a difference no ruling names — in one place.
+     * A second copy of that {@code not exists} in a metrics class would be a queue that could
+     * disagree with itself about its own length.
+     */
+    @Transactional(readOnly = true)
+    public Outstanding outstanding() {
         Map<String, Object> counted = jdbc.queryForMap(
                 """
                 select count(*) as outstanding, min(first_seen_at) as oldest
@@ -111,14 +129,14 @@ public class Rulings {
                 )
                 """);
 
-        long outstanding = ((Number) counted.get("outstanding")).longValue();
         Timestamp oldest = (Timestamp) counted.get("oldest");
-
-        answer.put("outstanding", outstanding);
-        answer.put("oldest", oldest == null ? null : oldest.toInstant().toString());
-        answer.put("byOutcome", byOutcome());
-        return answer;
+        return new Outstanding(
+                ((Number) counted.get("outstanding")).longValue(),
+                oldest == null ? null : oldest.toInstant());
     }
+
+    /** How many differences are waiting, and since when the oldest of them has been. */
+    public record Outstanding(long count, Instant oldest) {}
 
     private Map<String, Object> byOutcome() {
         Map<String, Object> tally = new LinkedHashMap<>();
