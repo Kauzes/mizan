@@ -89,6 +89,13 @@ jobs:
       - name: Start the platform
         # The same command a reader is told to run. If this needs a flag the README does not
         # mention, the README is wrong and this is where that shows up.
+        #
+        # In JSON, because nobody is watching this one with their eyes and the shape a
+        # deployment ships is the shape worth exercising. A developer running the same command
+        # on a laptop gets the readable output, which is the whole reason the format is a
+        # variable rather than a decision.
+        env:
+          MIZAN_LOG_FORMAT: ecs
         run: docker compose up -d --build --wait
 
       - name: Smoke check

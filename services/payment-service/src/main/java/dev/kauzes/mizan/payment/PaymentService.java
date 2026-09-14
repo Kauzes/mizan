@@ -133,6 +133,21 @@ public class PaymentService {
     }
 
     /**
+     * The one rule about a card that this service applies itself.
+     *
+     * <p>Deliberately not an annotation. Everything else on this platform is validated
+     * declaratively, and it should be; this is the exception because a card is the one field
+     * whose rejected value must never be written down, and declarative validation writes it
+     * down as part of saying no.
+     */
+    private static void refuseACardThatIsNotOne(String card) {
+        if (card == null || !card.matches("[0-9]{12,19}")) {
+            throw new UnprocessableException(
+                    "The card must be 12 to 19 digits and nothing else.");
+        }
+    }
+
+    /**
      * Asks the acquirer to reserve the money.
      *
      * <p>Nothing is posted to the ledger. An authorization is a promise that the money is
@@ -145,6 +160,15 @@ public class PaymentService {
      */
     @Transactional
     public PaymentResponse authorize(UUID merchantId, UUID paymentId, AuthorizeRequest request) {
+        // Checked here rather than by an annotation on the request, and that is a decision
+        // about logs rather than about validation. Bean Validation reports a failure by
+        // quoting the value it rejected, and Spring writes that rejection out — so a mistyped
+        // card, or one an attacker is probing with, ended up in a log line verbatim. Found by
+        // driving a real card through and reading back everything the platform wrote.
+        //
+        // The message says the rule and never the value. MIZ-79.
+        refuseACardThatIsNotOne(request.card());
+
         Payment payment = mine(merchantId, paymentId);
 
         // Checked before the acquirer is troubled, so a payment that cannot be authorized is

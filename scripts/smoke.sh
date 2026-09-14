@@ -879,7 +879,82 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------
-# 22. The books balance, asked of everything that has ever been written. Its own script,
+step "22. Nothing this run wrote to a log should have been written down"
+
+# The one check that could not be a code review. A card reaches a log through a line somebody
+# added during an incident, a toString on a request object, an exception that quotes what it
+# was given, or a framework logging a body nobody asked it to. None of those looks wrong where
+# it is written, and a log store keeps what it is given for months.
+#
+# So the real thing is driven — this whole run has been driving it — and then everything eight
+# services wrote is read back and searched. Not for one card: for anything shaped like one.
+if command -v docker > /dev/null 2>&1 && docker compose ps payment-service > /dev/null 2>&1; then
+    # The platform's own services, not the infrastructure beside them. Tempo's block ids and
+    # Kafka's offsets are not something this platform wrote, and scanning them only finds
+    # hexadecimal that happens to look like digits.
+    written=$(docker compose logs --no-color --since 30m         gateway identity-service ledger-service payment-service risk-service         notification-service settlement-service bank-simulator 2>/dev/null)
+    lines=$(printf '%s' "$written" | wc -l)
+    [ "${lines:-0}" -gt 50 ] || fail "only $lines log lines to check, which proves nothing"
+    note "$lines lines from every service in the stack"
+
+    leaked=$(printf '%s' "$written" | "$PYTHON" -c '
+import re, sys
+
+# What a card looks like, rather than what a long number looks like: an issuer digit, then
+# twelve to eighteen more however they were spaced, and passing the Luhn check. Without all
+# three this flags every epoch timestamp and every Kafka offset, and a check that cries wolf
+# is a check somebody switches off.
+# Not glued to letters either side, so the digits inside a UUID or a hex id are not a card.
+card_shaped = re.compile(r"(?<![0-9A-Za-z-])([3-6](?:[ -]?[0-9]){12,18})(?![0-9A-Za-z])")
+
+def luhn(digits):
+    total, doubling = 0, False
+    for digit in reversed([int(d) for d in digits]):
+        if doubling:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        total += digit
+        doubling = not doubling
+    return total % 10 == 0
+
+never = ("a-shared-secret-for-local-runs", "bWl6YW4t", "\"card\":\"", "cardNumber", "pan=",
+         "BEGIN PRIVATE KEY", "password=")
+
+found = []
+for line in sys.stdin.read().splitlines():
+    for secret in never:
+        if secret in line:
+            found.append("names %s: %s" % (secret, line[:160]))
+    for match in card_shaped.finditer(line):
+        digits = re.sub(r"[ -]", "", match.group())
+        if luhn(digits):
+            found.append("card shaped %s: %s" % (digits, line[:160]))
+
+for line in found[:10]:
+    print("  " + line, file=sys.stderr)
+print(len(found))')
+    [ "$leaked" = "0" ] || fail "$leaked log line(s) hold something that should never be written"
+    pass "no card, no key and no secret in anything the platform wrote"
+
+    # Both ids on the lines that have a request behind them. A line nobody can group with the
+    # request that caused it is a line nobody can use.
+    attributed=$(printf '%s' "$written" | "$PYTHON" -c '
+import re, sys
+# The readable pattern is "[<correlation> <trace>] "; the JSON one carries them as fields.
+readable = re.compile(r"\[[0-9a-f-]{8,} [0-9a-f]{32}\]")
+structured = re.compile(r"\"(?:correlationId|trace_id|traceId)\"")
+text = sys.stdin.read()
+print(len(readable.findall(text)) + len(structured.findall(text)))')
+    [ "${attributed:-0}" -ge 1 ] \
+        || fail "no log line carries both a correlation id and a trace id"
+    pass "and $attributed line(s) carry both the id a person reads out and the id that opens a trace"
+else
+    note "no Compose stack, so nothing was read back out of the logs"
+fi
+
+# ---------------------------------------------------------------------------------------
+# 23. The books balance, asked of everything that has ever been written. Its own script,
 # because CI runs it again after the browser journey and the demo seed, over data that three
 # different things produced and none of them wrote in order to make it pass.
 "$(dirname "$0")/books-balance.sh"

@@ -67,6 +67,10 @@ services:
       # Where this service sends its spans. The collector decides what is kept;
       # this one exports all of them.
       MIZAN_OTLP: http://otel-collector:4318/v1/traces
+      # Readable by default, because the usual reader of these is a person watching a
+      # terminal. Set to ecs for the JSON a log store can query, which is what CI runs
+      # with and what a deployment sets.
+      MIZAN_LOG_FORMAT: ${MIZAN_LOG_FORMAT:-}
       MIZAN_JWK_SET_URI: http://identity-service:8081/.well-known/jwks.json
       MIZAN_API_KEY_VERIFICATION_URI: http://identity-service:8081/internal/api-keys/verify
     ports:
@@ -87,6 +91,10 @@ services:
       # Where this service sends its spans. The collector decides what is kept;
       # this one exports all of them.
       MIZAN_OTLP: http://otel-collector:4318/v1/traces
+      # Readable by default, because the usual reader of these is a person watching a
+      # terminal. Set to ecs for the JSON a log store can query, which is what CI runs
+      # with and what a deployment sets.
+      MIZAN_LOG_FORMAT: ${MIZAN_LOG_FORMAT:-}
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/identity
       # This stack speaks plain HTTP, and a Secure cookie is never sent over it — so the
       # console's session would not survive a reload locally. Off here and nowhere else:
@@ -121,6 +129,10 @@ services:
       # Where this service sends its spans. The collector decides what is kept;
       # this one exports all of them.
       MIZAN_OTLP: http://otel-collector:4318/v1/traces
+      # Readable by default, because the usual reader of these is a person watching a
+      # terminal. Set to ecs for the JSON a log store can query, which is what CI runs
+      # with and what a deployment sets.
+      MIZAN_LOG_FORMAT: ${MIZAN_LOG_FORMAT:-}
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/ledger
       MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
       MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
@@ -149,6 +161,10 @@ services:
       # Where this service sends its spans. The collector decides what is kept;
       # this one exports all of them.
       MIZAN_OTLP: http://otel-collector:4318/v1/traces
+      # Readable by default, because the usual reader of these is a person watching a
+      # terminal. Set to ecs for the JSON a log store can query, which is what CI runs
+      # with and what a deployment sets.
+      MIZAN_LOG_FORMAT: ${MIZAN_LOG_FORMAT:-}
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/payment
       MIZAN_ACQUIRER_URL: http://bank-simulator:8086
       # The books, reached directly rather than through the edge. This is not a merchant's
@@ -189,6 +205,10 @@ services:
       # Where this service sends its spans. The collector decides what is kept;
       # this one exports all of them.
       MIZAN_OTLP: http://otel-collector:4318/v1/traces
+      # Readable by default, because the usual reader of these is a person watching a
+      # terminal. Set to ecs for the JSON a log store can query, which is what CI runs
+      # with and what a deployment sets.
+      MIZAN_LOG_FORMAT: ${MIZAN_LOG_FORMAT:-}
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/risk
       # Baselines are learned from payment events. Risk never reads the payment database.
       MIZAN_KAFKA: kafka:9092
@@ -217,6 +237,10 @@ services:
       # Where this service sends its spans. The collector decides what is kept;
       # this one exports all of them.
       MIZAN_OTLP: http://otel-collector:4318/v1/traces
+      # Readable by default, because the usual reader of these is a person watching a
+      # terminal. Set to ecs for the JSON a log store can query, which is what CI runs
+      # with and what a deployment sets.
+      MIZAN_LOG_FORMAT: ${MIZAN_LOG_FORMAT:-}
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/notification
       # The first service on this platform that listens rather than answers.
       MIZAN_KAFKA: kafka:9092
@@ -254,6 +278,10 @@ services:
       # Where this service sends its spans. The collector decides what is kept;
       # this one exports all of them.
       MIZAN_OTLP: http://otel-collector:4318/v1/traces
+      # Readable by default, because the usual reader of these is a person watching a
+      # terminal. Set to ecs for the JSON a log store can query, which is what CI runs
+      # with and what a deployment sets.
+      MIZAN_LOG_FORMAT: ${MIZAN_LOG_FORMAT:-}
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/settlement
       MIZAN_KAFKA: kafka:9092
       MIZAN_LEDGER_URL: http://ledger-service:8082
@@ -315,6 +343,10 @@ services:
       # Where this service sends its spans. The collector decides what is kept;
       # this one exports all of them.
       MIZAN_OTLP: http://otel-collector:4318/v1/traces
+      # Readable by default, because the usual reader of these is a person watching a
+      # terminal. Set to ecs for the JSON a log store can query, which is what CI runs
+      # with and what a deployment sets.
+      MIZAN_LOG_FORMAT: ${MIZAN_LOG_FORMAT:-}
     ports:
       - "8086:8086"
     healthcheck:

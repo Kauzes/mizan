@@ -905,7 +905,8 @@ components:
           description: "The card. Only its last four digits are kept, and the acquirer\
             \ decides what to do from them: see its own documentation for the catalogue."
           example: "4000000000000000"
-          minLength: 1
+          maxLength: 19
+          minLength: 12
           pattern: "[0-9]{12,19}"
       required:
       - card
