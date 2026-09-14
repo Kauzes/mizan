@@ -18,6 +18,11 @@ global:
   external_labels:
     platform: mizan
 
+# What wakes somebody up. Files in this repository, reviewed like code, and each rule is made
+# to fire and made to stay quiet by alerts-test.yml before it is trusted (smoke step 23).
+rule_files:
+  - /etc/prometheus/alerts.yml
+
 scrape_configs:
   - job_name: mizan
     # Where every Spring service puts them. None of these ports is reachable from the edge:

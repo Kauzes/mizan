@@ -1,0 +1,94 @@
+# What wakes somebody up.
+#
+# Few rules, on purpose. Each one names something a person has to do, in its own annotation,
+# in a sentence. A condition nobody would act on at three in the morning belongs on a
+# dashboard, not here: an alert nobody acts on is a pager nobody answers, and the platform is
+# worse off than with no alerting at all.
+#
+# AlertsTest reads this file and refuses a rule without a severity, a summary or an action,
+# and a rule that names a metric no service registers. A rule with a typo in a metric name
+# never fires and looks exactly like a platform that is fine.
+
+groups:
+  - name: the-money
+    rules:
+      - alert: LedgerDoesNotBalance
+        # Not a threshold and not a rate: the books are right or they are not. One scrape is
+        # enough, because a drifted ledger does not fix itself and waiting only lets more
+        # postings land on top of the wrong one.
+        expr: min(mizan_ledger_sound) < 1
+        for: 0m
+        labels:
+          severity: page
+        annotations:
+          summary: The ledger no longer balances.
+          action: >-
+            Stop settlement payouts, then call /actuator/ledgerintegrity on ledger-service and
+            read which of the three questions failed — an entry, an account or a currency —
+            because that says where the bug is. Correct with a new entry; never edit a balance.
+
+      - alert: AnEventWasSetAside
+        # An event on the dead letter topic is something a merchant should have been told and
+        # was not. Ten minutes rather than zero, because an operator redelivering a batch by
+        # hand passes through this state on the way out of it.
+        expr: sum(mizan_deadletters_outstanding) > 0
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: An event could not be handled and has been set aside.
+          action: >-
+            Open the dead letters on notification-service, read the reason on the oldest one,
+            fix what it names, and redeliver it. Do not delete it: it is the only record that a
+            merchant was never told.
+
+      - alert: TheBankDisagreesAndNobodyHasRuled
+        # The settlement service already says this in its logs after 24 hours (SaysSoOutLoud).
+        # This is what makes it reach a person who is not reading logs.
+        expr: max(mizan_reconciliation_oldest_seconds) > 86400
+        for: 15m
+        labels:
+          severity: ticket
+        annotations:
+          summary: A difference between this platform and the bank has waited more than a day.
+          action: >-
+            Open the reconciliation queue on settlement-service, compare the oldest difference
+            with the bank's statement, and rule on it — acknowledged, or corrected with the id
+            of the ledger entry that corrects it.
+
+  - name: the-traffic
+    rules:
+      - alert: AuthorizationsCollapsed
+        # The shape of an acquirer outage and of a bad deployment, and the one alert that will
+        # fire for a reason nobody predicted. A rate rather than a count, and only when enough
+        # was attempted to mean anything: a quiet night with two declines is not an outage.
+        expr: |
+          (
+            sum(rate(mizan_payments_authorizations_total{outcome="approved"}[10m]))
+              /
+            sum(rate(mizan_payments_authorizations_total[10m]))
+          ) < 0.5
+          and
+          sum(increase(mizan_payments_authorizations_total[10m])) >= 20
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: Fewer than half of authorizations are being approved.
+          action: >-
+            Look at "why the bank refused" on the is-it-just-this-payment dashboard. One reason
+            dominating means the acquirer — call them. Everything rising at once after a release
+            means the release — roll it back first and investigate second.
+
+      - alert: AServiceIsNotAnswering
+        # Two minutes, because a rolling restart passes through this and should not page.
+        expr: up{job="mizan"} == 0
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: "{{ $labels.service }} has stopped answering."
+          action: >-
+            Check that container's logs for why it stopped, and its readiness endpoint for what
+            it is waiting on. A service that cannot reach its database reports itself not ready
+            rather than down, so down means the process itself.

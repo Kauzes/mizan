@@ -364,6 +364,9 @@ services:
     image: ${PROMETHEUS_IMAGE}
     volumes:
       - ./deploy/local/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/local/alerts.yml:/etc/prometheus/alerts.yml:ro
+      # The rules' own tests, beside them, so promtool in this container can run them.
+      - ./deploy/local/alerts-test.yml:/etc/prometheus/alerts-test.yml:ro
       - prometheusdata:/prometheus
     ports:
       - "9090:9090"
