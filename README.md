@@ -113,6 +113,15 @@ other protected route.
   trace is kept for days and read by whoever is debugging, which makes it exactly the wrong
   place for any of them. The smoke check reads back a real trace and fails on an attribute that
   is named like a secret or holds anything card shaped.
+- Something wakes somebody up, and only for the things worth waking up for. Five alert rules in
+  `deploy/local/alerts.yml`, loaded by the stack's Prometheus: the ledger not balancing, an event
+  set aside, a difference with the bank unruled for a day, a collapse in the approval rate, and a
+  service that stays down. Each one says in its own annotation what a person does about it. Each
+  is made to fire on the condition it exists for, and made to stay quiet on the nearest harmless
+  one, by `alerts-test.yml` run through Prometheus's own evaluator — a rule that parses is not a
+  rule that works, and one that never fires looks exactly like a platform that is fine. Anything
+  interesting that nobody would act on at three in the morning is on a dashboard instead.
+  ADR 0045.
 - A dashboard is a file in this repository. Grafana comes up with the datasource and both
   dashboards already on it, provisioned from `deploy/local/grafana`, and the file wins on every
   restart — a dashboard somebody built once inside a running container is one nobody can

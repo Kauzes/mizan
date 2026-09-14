@@ -1,0 +1,135 @@
+# Each rule, made to fire and made to stay quiet.
+#
+# A rule that parses is not a rule that works. The failure worth designing against is the one
+# that never fires, because it looks exactly like a platform that is fine. So every alert here
+# is shown the condition it exists for and must fire, and shown the nearest harmless condition
+# and must not — the second half is what keeps it from waking somebody for nothing.
+#
+# Run by `promtool test rules`, which is Prometheus's own evaluator rather than a copy of it.
+
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: a drifted ledger pages at once, and a sound one never does
+    interval: 1m
+    input_series:
+      - series: 'mizan_ledger_sound{service="ledger-service"}'
+        values: '1 1 0 0'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: LedgerDoesNotBalance
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: LedgerDoesNotBalance
+        exp_alerts:
+          - exp_labels:
+              severity: page
+            exp_annotations:
+              summary: The ledger no longer balances.
+              action: >-
+                Stop settlement payouts, then call /actuator/ledgerintegrity on ledger-service
+                and read which of the three questions failed — an entry, an account or a
+                currency — because that says where the bug is. Correct with a new entry; never
+                edit a balance.
+
+  - name: a dead letter pages once it has stayed ten minutes, not while it is being redelivered
+    interval: 1m
+    input_series:
+      - series: 'mizan_deadletters_outstanding{service="notification-service"}'
+        # Set aside briefly and redelivered, then set aside and left.
+        values: '0 1 1 0 0 1x12'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: AnEventWasSetAside
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: AnEventWasSetAside
+        exp_alerts:
+          - exp_labels:
+              severity: page
+            exp_annotations:
+              summary: An event could not be handled and has been set aside.
+              action: >-
+                Open the dead letters on notification-service, read the reason on the oldest
+                one, fix what it names, and redeliver it. Do not delete it: it is the only
+                record that a merchant was never told.
+
+  - name: a difference unruled for a day raises a ticket, not a page
+    interval: 1m
+    input_series:
+      - series: 'mizan_reconciliation_oldest_seconds{service="settlement-service"}'
+        values: '86000 86100x20'
+      - series: 'mizan_reconciliation_oldest_seconds{service="settlement-service",run="late"}'
+        values: '90000x20'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: TheBankDisagreesAndNobodyHasRuled
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+            exp_annotations:
+              summary: A difference between this platform and the bank has waited more than a day.
+              action: >-
+                Open the reconciliation queue on settlement-service, compare the oldest
+                difference with the bank's statement, and rule on it — acknowledged, or
+                corrected with the id of the ledger entry that corrects it.
+
+  - name: approvals collapsing pages, but a quiet night of two declines does not
+    interval: 1m
+    input_series:
+      # Busy and healthy, then the acquirer stops approving.
+      - series: 'mizan_payments_authorizations_total{outcome="approved",reason="none"}'
+        values: '0+30x15 450x20'
+      - series: 'mizan_payments_authorizations_total{outcome="declined",reason="do_not_honour"}'
+        values: '0+1x15 15+40x20'
+    alert_rule_test:
+      - eval_time: 14m
+        alertname: AuthorizationsCollapsed
+        exp_alerts: []
+      - eval_time: 34m
+        alertname: AuthorizationsCollapsed
+        exp_alerts:
+          - exp_labels:
+              severity: page
+            exp_annotations:
+              summary: Fewer than half of authorizations are being approved.
+              action: >-
+                Look at "why the bank refused" on the is-it-just-this-payment dashboard. One
+                reason dominating means the acquirer — call them. Everything rising at once
+                after a release means the release — roll it back first and investigate second.
+
+  - name: a quiet night with only declines is not an outage
+    interval: 1m
+    input_series:
+      - series: 'mizan_payments_authorizations_total{outcome="declined",reason="insufficient_funds"}'
+        values: '0 1 1 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2'
+    alert_rule_test:
+      - eval_time: 19m
+        alertname: AuthorizationsCollapsed
+        exp_alerts: []
+
+  - name: a service that stays down pages, and a restart does not
+    interval: 1m
+    input_series:
+      - series: 'up{job="mizan",service="risk-service"}'
+        values: '1 0 1 1 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: AServiceIsNotAnswering
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: AServiceIsNotAnswering
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              job: mizan
+              service: risk-service
+            exp_annotations:
+              summary: risk-service has stopped answering.
+              action: >-
+                Check that container's logs for why it stopped, and its readiness endpoint for
+                what it is waiting on. A service that cannot reach its database reports itself
+                not ready rather than down, so down means the process itself.

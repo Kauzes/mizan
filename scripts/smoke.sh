@@ -954,7 +954,51 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------
-# 23. The books balance, asked of everything that has ever been written. Its own script,
+step "23. What wakes somebody up is loaded, and each rule fires when it should"
+
+# A rule that parses is not a rule that works, and the one that never fires looks exactly like
+# a platform that is fine. So the rules are tested by Prometheus's own evaluator, inside the
+# Prometheus this stack runs, and then the running instance is asked whether it loaded them.
+if command -v docker > /dev/null 2>&1 && docker compose ps prometheus > /dev/null 2>&1; then
+    MSYS_NO_PATHCONV=1 docker compose exec -T prometheus \
+        promtool test rules /etc/prometheus/alerts-test.yml > /dev/null 2>&1 \
+        || {
+            MSYS_NO_PATHCONV=1 docker compose exec -T prometheus \
+                promtool test rules /etc/prometheus/alerts-test.yml >&2
+            fail "an alert rule does not fire, or fires, when its test says otherwise"
+        }
+    pass "every rule fires on the condition it exists for, and stays quiet on the harmless one"
+
+    loaded=$(call 200 GET "$PROMETHEUS/api/v1/rules?type=alert" | "$PYTHON" -c '
+import json, sys
+groups = json.load(sys.stdin)["data"]["groups"]
+names = sorted(rule["name"] for group in groups for rule in group["rules"])
+print(" ".join(names))')
+    for rule in LedgerDoesNotBalance AnEventWasSetAside TheBankDisagreesAndNobodyHasRuled \
+                AuthorizationsCollapsed AServiceIsNotAnswering; do
+        case " $loaded " in
+            *" $rule "*) ;;
+            *) fail "$rule is not loaded by the running Prometheus, so it cannot fire" ;;
+        esac
+    done
+    pass "and the running Prometheus has loaded all of them: $loaded"
+
+    # The one that must never be firing on a healthy run. If it is, either the books moved or
+    # the rule is wrong, and both are worth failing on.
+    firing=$(call 200 GET "$PROMETHEUS/api/v1/alerts" | "$PYTHON" -c '
+import json, sys
+alerts = json.load(sys.stdin)["data"]["alerts"]
+print(" ".join(sorted({a["labels"]["alertname"] for a in alerts if a["state"] == "firing"})))')
+    case " $firing " in
+        *" LedgerDoesNotBalance "*) fail "the ledger alert is firing on a run that balanced" ;;
+    esac
+    pass "and the ledger alert is quiet, as it should be when the books balance"
+else
+    note "no Prometheus in this stack, so nothing was checked about alerting"
+fi
+
+# ---------------------------------------------------------------------------------------
+# 24. The books balance, asked of everything that has ever been written. Its own script,
 # because CI runs it again after the browser journey and the demo seed, over data that three
 # different things produced and none of them wrote in order to make it pass.
 "$(dirname "$0")/books-balance.sh"
