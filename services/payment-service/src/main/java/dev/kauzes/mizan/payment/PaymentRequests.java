@@ -48,9 +48,14 @@ final class PaymentRequests {
                                     "The card. Only its last four digits are kept, and the "
                                             + "acquirer decides what to do from them: see its "
                                             + "own documentation for the catalogue.",
-                            example = "4000000000000000")
-                    @NotBlank
-                    @Pattern(regexp = "[0-9]{12,19}", message = "must look like a card number")
+                            example = "4000000000000000",
+                            // Documented here and enforced by PaymentService, not by Bean
+                            // Validation: a validation failure quotes the rejected value, and
+                            // this is the one value that must never reach a log. ADR 0044.
+                            requiredMode = Schema.RequiredMode.REQUIRED,
+                            pattern = "[0-9]{12,19}",
+                            minLength = 12,
+                            maxLength = 19)
                     String card) {
 
         /** A card number is not something to print. */

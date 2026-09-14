@@ -75,6 +75,11 @@ mizan:
     # not raced for no benefit.
     resolve-after: ${MIZAN_REFUND_RESOLVE_AFTER:10s}
   outbox:
+    # This service owns an outbox table (V7) and publishes what is written to it. Declared
+    # rather than inferred from having a database and a producer, which two other services
+    # also have without owning an outbox. OutboxOwnershipTest keeps this in step with the
+    # migrations.
+    publish: true
     # How often the relay looks for events to publish. A second is the delay a consumer sees
     # on an idle platform; under load a pass that fills its batch runs again at once rather
     # than waiting for the next tick.
@@ -138,6 +143,3 @@ management:
           # the release that removes it.
           endpoint: ${MIZAN_OTLP:http://localhost:4318/v1/traces}
 
-logging:
-  pattern:
-    correlation: "[%X{correlationId:-}] "

@@ -66,6 +66,9 @@ class LearnsFromRealPaymentsTest extends MizanIntegrationTest {
                         dev.kauzes.mizan.payment.PaymentApplication.class)
                 .run(
                         "--spring.config.name=payment-test",
+                        // The real service owns an outbox and publishes it; the relay is
+                        // opt-in since MIZ-79, so this copy has to say so too.
+                        "--mizan.outbox.publish=true",
                         "--spring.datasource.url=" + MizanContainers.database("payment"),
                         "--spring.datasource.username=" + MizanContainers.postgres().getUsername(),
                         "--spring.datasource.password=" + MizanContainers.postgres().getPassword(),

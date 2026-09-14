@@ -54,6 +54,3 @@ management:
           # the release that removes it.
           endpoint: ${MIZAN_OTLP:http://localhost:4318/v1/traces}
 
-logging:
-  pattern:
-    correlation: "[%X{correlationId:-}] "

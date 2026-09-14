@@ -74,6 +74,22 @@ other protected route.
   disagreed and by how much rather than repairing anything, because a balance that disagrees
   with its postings is evidence. `scripts/books-balance.sh` asks it and fails loudly, and CI
   runs that over the data the smoke check, the browser journey and the demo seed produced.
+- One component shapes every log line, so a new service gets it by existing rather than by
+  remembering. Readable by default, because the usual reader is a person watching a terminal;
+  ECS JSON when `MIZAN_LOG_FORMAT` says so, which is what CI runs the whole stack with and what
+  a deployment sets — the shape that ships is exercised on every pull request rather than first
+  tried in anger. Both ids are on every line, including the lines with no request behind them: a
+  Kafka consumer takes the producer's correlation id off the message, and every run of every
+  scheduled sweep gets one of its own, because those are precisely the lines about a merchant
+  not being told and a batch not closing.
+- No card, no key and no secret is ever written to a log, and that is asserted rather than
+  reviewed. A test drives real cards through an approval, a refusal, a void and a malformed
+  request, then reads back every line the platform wrote and fails on anything that passes for a
+  card — issuer digit, thirteen to nineteen digits, Luhn. The smoke check does the same over
+  everything all eight services wrote during a whole run. Writing that check found a real one:
+  Bean Validation reports a failure by quoting the value it rejected, so a mistyped card was in
+  a log line verbatim. The card is now checked by this platform's own code, which says the rule
+  and never the value. ADR 0044.
 - One payment is one trace, across every hop it took. The gateway, the services it calls, the
   acquirer, and — the part that matters — the consumers on the other side of a Kafka topic, which
   pick the event up minutes later on a thread with no relation to the request. Nothing in flight

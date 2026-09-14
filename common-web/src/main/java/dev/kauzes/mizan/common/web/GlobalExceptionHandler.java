@@ -37,6 +37,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
         if (code.status() >= 500) {
             log.error("{} failed the request", code.slug(), exception);
+        } else if (exception.getCause() != null) {
+            // A refusal the platform decided on its own needs no stack trace: the sentence is
+            // the whole story. One that was caused by something else is a different case —
+            // the message a caller is given is deliberately about their request, and what
+            // actually went wrong is underneath it. Logged once, here, rather than left to
+            // whoever wrapped it to remember.
+            log.warn("{}: {}", code.slug(), exception.getMessage(), exception.getCause());
         } else {
             log.warn("{}: {}", code.slug(), exception.getMessage());
         }

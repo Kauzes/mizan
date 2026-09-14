@@ -62,6 +62,102 @@ public class MizanWebAutoConfiguration {
         }
     }
 
+
+    /**
+     * The two places a log line has no request to inherit an id from.
+     *
+     * <p>Its own configuration, active in every service, because both are about what the logs
+     * look like rather than about the web: a service with no HTTP endpoints at all still
+     * consumes messages and still runs timers, and its lines still have to be findable.
+     */
+    @AutoConfiguration
+    public static class WorkThatIsNotARequest {
+
+        /**
+         * A consumer thread has never seen a request, so the id comes off the message.
+         *
+         * <p>Registered on the container factory rather than left as a loose bean. That
+         * distinction is the whole reason this exists: {@code KafkaCorrelation} could read
+         * the header since MIZ-22 and nothing ever called it.
+         */
+        @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+        @ConditionalOnClass(name = "org.springframework.kafka.listener.RecordInterceptor")
+        public static class WhenThereIsAConsumer {
+
+            @Bean
+            @ConditionalOnMissingBean
+            public dev.kauzes.mizan.common.web.logging.EveryRecordIsSomebodysRequest
+                    everyRecordIsSomebodysRequest() {
+
+                return new dev.kauzes.mizan.common.web.logging.EveryRecordIsSomebodysRequest();
+            }
+
+            /**
+             * Puts it on the factory Boot built, because Boot 4 offers nothing to contribute
+             * one through — the customizer interface that existed for this was removed when
+             * the Kafka auto-configuration moved into a module of its own.
+             *
+             * <p>Static, so that asking for it cannot drag the rest of this configuration
+             * into existence before the bean factory is ready for it.
+             */
+            @Bean
+            @ConditionalOnMissingBean(name = "recordsCarryTheirCorrelationId")
+            public static org.springframework.beans.factory.config.BeanPostProcessor
+                    recordsCarryTheirCorrelationId(
+                            org.springframework.beans.factory.ObjectProvider<
+                                            dev.kauzes.mizan.common.web.logging
+                                                    .EveryRecordIsSomebodysRequest>
+                                    interceptor) {
+
+                return new org.springframework.beans.factory.config.BeanPostProcessor() {
+
+                    @Override
+                    public Object postProcessAfterInitialization(Object bean, String name) {
+                        if (bean
+                                instanceof org.springframework.kafka.config
+                                        .ConcurrentKafkaListenerContainerFactory<?, ?> factory) {
+
+                            interceptor.ifAvailable(each -> setOn(factory, each));
+                        }
+                        return bean;
+                    }
+
+                    @SuppressWarnings("unchecked")
+                    private void setOn(
+                            org.springframework.kafka.config
+                                    .ConcurrentKafkaListenerContainerFactory<?, ?> factory,
+                            dev.kauzes.mizan.common.web.logging.EveryRecordIsSomebodysRequest
+                                    each) {
+
+                        ((org.springframework.kafka.config
+                                        .ConcurrentKafkaListenerContainerFactory<String, String>)
+                                        factory)
+                                .setRecordInterceptor(each);
+                    }
+                };
+            }
+        }
+
+        /** Every run of every timer is one piece of work, with one id. */
+        @Bean
+        @ConditionalOnMissingBean
+        public dev.kauzes.mizan.common.web.logging.EverySweepIsItsOwnPieceOfWork
+                everySweepIsItsOwnPieceOfWork() {
+
+            return new dev.kauzes.mizan.common.web.logging.EverySweepIsItsOwnPieceOfWork();
+        }
+
+        @Bean
+        @ConditionalOnMissingBean(name = "sweepsCarryAnIdOfTheirOwn")
+        public org.springframework.boot.task.ThreadPoolTaskSchedulerCustomizer
+                sweepsCarryAnIdOfTheirOwn(
+                        dev.kauzes.mizan.common.web.logging.EverySweepIsItsOwnPieceOfWork
+                                decorator) {
+
+            return scheduler -> scheduler.setTaskDecorator(decorator);
+        }
+    }
+
     @AutoConfiguration
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
     @ConditionalOnClass(name = "org.springframework.web.servlet.DispatcherServlet")
@@ -240,6 +336,13 @@ public class MizanWebAutoConfiguration {
         org.springframework.jdbc.core.JdbcTemplate.class,
         org.springframework.kafka.core.KafkaTemplate.class
     })
+    // Asked for, not inferred. Having a database and a Kafka producer does not mean having an
+    // outbox: notification-service and settlement-service have both, for dead letters, and from
+    // MIZ-50 until MIZ-79 each ran a relay once a second against a table they do not own, and
+    // logged an ERROR every time. Nobody noticed because the lines were readable text among
+    // thousands of others; the first run in JSON counted them.
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+            name = "mizan.outbox.publish", havingValue = "true")
     public static class EventPublishing {
 
         @Bean
