@@ -1,0 +1,41 @@
+# Where the traces are kept, and what serves them to Grafana.
+#
+# One process holding everything: receiving, storing and querying. That is what Tempo is for
+# at this size, and it means a trace is reachable without an object store, a search index or
+# anything else to keep running. A deployment splits it up; nothing about the traces changes
+# when it does.
+
+stream_over_http_enabled: true
+
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        # Only the collector talks to this. The services never export here directly, because
+        # the decision about which traces to keep is made in one place and this is not it.
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  # Short, because a trace nobody can find for two minutes is a trace nobody can find during
+  # the incident it belongs to. A deployment trades this the other way.
+  max_block_duration: 1m
+
+compactor:
+  compaction:
+    # A day. These are traces from a stack on a laptop; keeping them longer would only fill
+    # a disk with a record of yesterday's demo.
+    block_retention: 24h
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks

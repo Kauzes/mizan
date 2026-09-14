@@ -5,6 +5,7 @@ import { formatMoney } from "../money/money";
 import { useSession } from "../session/SessionProvider";
 import { readable } from "./filters";
 import { Refunding } from "./Refunding";
+import { Trace } from "./Trace";
 import type { Attempt, Delivery, Entry, Payment, Refund } from "./types";
 
 /**
@@ -166,7 +167,8 @@ export function PaymentDetail() {
             <span>
               {step.from ? `${readable(step.from)} → ` : ""}
               <strong>{readable(step.to)}</strong>
-              {step.because ? <span className="muted"> — {step.because}</span> : null}
+              {step.reason ? <span className="muted"> — {step.reason}</span> : null}
+              {step.traceId ? <Trace id={step.traceId} /> : null}
             </span>
           </li>
         ))}

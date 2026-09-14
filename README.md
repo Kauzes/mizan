@@ -37,6 +37,8 @@ them. Nothing below is claimed until it is in the repo and covered by a test.
 | `console` | 5173 | The merchant console: React, TypeScript, Vite, served beside the API |
 | `prometheus` | 9090 | Collects what every service measures. Configured from `deploy/local/prometheus.yml` |
 | `grafana` | 3000 | Two dashboards, provisioned from `deploy/local/grafana`. Nothing is clicked to make it work |
+| `otel-collector` | 4318 | Receives every span every service makes, and decides which traces are kept |
+| `tempo` | 3200 | Where a kept trace lives. Read through Grafana, or directly by the smoke check |
 | `common` | n/a | Shared money type, error codes, correlation context. No Spring |
 | `common-web` | n/a | Auto configured problem details and correlation id propagation |
 | `common-test` | n/a | Integration test harness: containers pinned to the compose images |
@@ -72,6 +74,29 @@ other protected route.
   disagreed and by how much rather than repairing anything, because a balance that disagrees
   with its postings is evidence. `scripts/books-balance.sh` asks it and fails loudly, and CI
   runs that over the data the smoke check, the browser journey and the demo seed produced.
+- One payment is one trace, across every hop it took. The gateway, the services it calls, the
+  acquirer, and — the part that matters — the consumers on the other side of a Kafka topic, which
+  pick the event up minutes later on a thread with no relation to the request. Nothing in flight
+  can carry that link, so the outbox row carries it: the trace is written beside the event, in
+  the same transaction as the state change, and the relay puts it on the message as a standard
+  `traceparent` header that the consumer's own tracing library continues from.
+- Every service exports every span, and one collector decides what is kept. That is the whole
+  reason a collector is there: a service samples at the first span of a trace, which is before
+  the failure it would want to keep has happened, so head sampling keeps a random tenth of the
+  failures and records the days when nothing went wrong. The rule, written down in
+  `deploy/local/otel-collector.yml` and asserted by a test, is that anything that failed and
+  anything slow is kept whatever the volume control says. ADR 0043.
+- The correlation id and the trace id are two different tools and neither replaces the other.
+  The correlation id is short, chosen here, on every log line, and can be read out over a
+  telephone. The trace id is thirty-two hexadecimal characters and is what a tracing system can
+  look up. So a request's response carries both, the correlation id is an attribute on the span,
+  and each step of a payment records the trace it happened in — which is what the console shows
+  beside it, for the person who has a merchant on the phone and needs to hand somebody
+  something.
+- Nothing goes in a span that would not be allowed in a log: no card, no token, no secret. A
+  trace is kept for days and read by whoever is debugging, which makes it exactly the wrong
+  place for any of them. The smoke check reads back a real trace and fails on an attribute that
+  is named like a secret or holds anything card shaped.
 - A dashboard is a file in this repository. Grafana comes up with the datasource and both
   dashboards already on it, provisioned from `deploy/local/grafana`, and the file wins on every
   restart — a dashboard somebody built once inside a running container is one nobody can
@@ -660,6 +685,11 @@ on an origin of its own.
   amount is a different refund.
 - Run it with `npm run dev` in `console`, or reach the Compose stack's copy at
   `http://localhost:5173`.
+
+One payment's whole journey is at <http://localhost:3000/explore>, under Tempo: paste the trace
+id from a payment's timeline in the console, or from the `X-Trace-Id` header on any response.
+A trace takes about ten seconds to become searchable, because the collector waits for the slow
+half of it before deciding whether to keep it.
 
 The platform watching itself is at <http://localhost:3000>, which opens on **is the platform
 up**: whether anything is down and since when, what is failing, what is slow, and what is

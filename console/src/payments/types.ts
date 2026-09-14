@@ -15,8 +15,15 @@ export interface PaymentRow {
 export interface Transition {
   readonly from: string | null;
   readonly to: string;
-  readonly because: string | null;
+  /**
+   * Why, in the platform's words. Named for the field the API actually sends: this was
+   * `because` here for several stories, which meant the reason a payment was held or voided
+   * was read from a property that never arrived and silently rendered as nothing.
+   */
+  readonly reason: string | null;
   readonly at: string;
+  /** The trace this step happened in. Null on one taken before tracing, or by a scheduler. */
+  readonly traceId: string | null;
 }
 
 export interface Payment extends PaymentRow {

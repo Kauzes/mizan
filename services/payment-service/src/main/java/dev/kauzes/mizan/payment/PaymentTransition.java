@@ -1,5 +1,6 @@
 package dev.kauzes.mizan.payment;
 
+import dev.kauzes.mizan.common.correlation.CurrentTrace;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -44,6 +45,21 @@ public class PaymentTransition {
     @Column(nullable = false, updatable = false)
     private Instant at;
 
+    /**
+     * The trace this step happened in, so the row a person is reading and the trace that
+     * produced it are one click apart.
+     *
+     * <p>On the step rather than on the payment, because a payment has several of them and
+     * they are the interesting ones separately: the authorization that was slow, the capture
+     * that failed, the refund three days later. A single id on the payment would be whichever
+     * of those happened last, which is rarely the one somebody is asking about.
+     *
+     * <p>Null when nothing was tracing, which is every unit test and any step taken by a
+     * scheduler rather than by a request.
+     */
+    @Column(name = "trace_id", updatable = false)
+    private String traceId;
+
     protected PaymentTransition() {
         // for JPA
     }
@@ -54,6 +70,7 @@ public class PaymentTransition {
         this.to = to;
         this.reason = reason;
         this.at = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        this.traceId = CurrentTrace.idOrNull();
     }
 
     public UUID id() {
@@ -74,5 +91,9 @@ public class PaymentTransition {
 
     public Instant at() {
         return at;
+    }
+
+    public String traceId() {
+        return traceId;
     }
 }

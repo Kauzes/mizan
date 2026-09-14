@@ -23,6 +23,9 @@ PROMETHEUS="${MIZAN_PROMETHEUS:-http://localhost:9090}"
 # Where those numbers become something a person reads. Also not part of the API: it is the
 # platform being looked at rather than used.
 GRAFANA="${MIZAN_GRAFANA:-http://localhost:3000}"
+# Where a trace is kept. Asked directly, because the question the smoke check has is whether
+# the trace exists at all, which is a question about the store rather than about the browser.
+TEMPO="${MIZAN_TEMPO:-http://localhost:3200}"
 
 # Whichever Python is here, chosen by running it rather than by finding it on PATH. Windows
 # ships a python3 that is not an interpreter at all but a stub that advertises the Microsoft

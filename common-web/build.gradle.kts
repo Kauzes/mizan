@@ -22,6 +22,12 @@ dependencies {
     // of this, and the beans are conditional on a KafkaTemplate actually being there.
     compileOnly("org.springframework.kafka:spring-kafka")
     compileOnly(libs.springdoc.common)
+    // What the outbox asks for the current trace. Optional for the same reason as the rest:
+    // a service with no tracing gets Traces.NONE and behaves exactly as it did before.
+    compileOnly("io.micrometer:micrometer-tracing")
+    // What actually attaches the correlation interceptor to a client. Optional: a service
+    // that calls nobody has no RestClient to customise.
+    compileOnly("org.springframework.boot:spring-boot-restclient")
 
     testImplementation("org.springframework.boot:spring-boot-starter-web")
     // The library, not the starter: the starter brings DataSource autoconfiguration, and
@@ -34,4 +40,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-validation")
     testImplementation("org.springframework.boot:spring-boot-starter-webflux")
     testImplementation(libs.springdoc.webmvc.ui)
+    testImplementation("io.micrometer:micrometer-tracing")
+    testImplementation("io.micrometer:micrometer-tracing-test")
+    testImplementation("org.springframework.boot:spring-boot-restclient")
 }

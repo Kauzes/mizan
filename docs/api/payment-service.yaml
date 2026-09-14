@@ -1265,6 +1265,12 @@ components:
           - DECLINED
           - CAPTURED
           - VOIDED
+        traceId:
+          type: string
+          description: "The trace this step happened in, for handing to somebody who\
+            \ can open it. Null on a step taken before this platform traced anything,\
+            \ or by a scheduler rather than by a request."
+          example: 4bf92f3577b34da6a3ce929d0e0e4736
     VoidRequest:
       type: object
       description: Why the reservation is being released

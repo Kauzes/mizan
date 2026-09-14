@@ -47,14 +47,21 @@ const CAPTURED = {
   createdAt: "2026-03-01T09:00:00Z",
   updatedAt: "2026-03-01T10:00:00Z",
   history: [
-    { from: null, to: "CREATED", because: null, at: "2026-03-01T09:00:00Z" },
+    { from: null, to: "CREATED", reason: null, at: "2026-03-01T09:00:00Z", traceId: null },
     {
       from: "CREATED",
       to: "HELD_FOR_REVIEW",
-      because: "the amount is unusual for this merchant",
+      reason: "an analyst asked for a second look",
       at: "2026-03-01T09:30:00Z",
+      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
     },
-    { from: "HELD_FOR_REVIEW", to: "CAPTURED", because: null, at: "2026-03-01T10:00:00Z" },
+    {
+      from: "HELD_FOR_REVIEW",
+      to: "CAPTURED",
+      reason: null,
+      at: "2026-03-01T10:00:00Z",
+      traceId: null,
+    },
   ],
 };
 
@@ -144,10 +151,29 @@ describe("one payment", () => {
 
     expect(screen.getByText("created")).toBeInTheDocument();
     expect(screen.getAllByText(/held for review/).length).toBeGreaterThan(0);
-    // The reason the scorer gave, kept beside the transition rather than looked up later.
+
+    // The reason kept on the step itself, in a sentence nothing else on this page says. It
+    // used to be read from a property the API does not send, and this assertion used to pass
+    // anyway because the risk panel happened to show the same words — so the wording here is
+    // deliberately the analyst's rather than the scorer's.
     expect(
-      screen.getAllByText(/the amount is unusual for this merchant/).length,
-    ).toBeGreaterThan(0);
+      screen.getByText(/an analyst asked for a second look/),
+    ).toBeInTheDocument();
+  });
+
+  it("offers the trace of a step to whoever is on the telephone", async () => {
+    show(platform(["OWNER"]).fetchImpl);
+
+    await screen.findByRole("heading", { name: /order-1/ });
+
+    // Short on screen and whole on the clipboard: thirty-two hexadecimal characters on every
+    // row would drown the words somebody is actually reading.
+    const trace = screen.getByRole("button", { name: /4bf92f3577b34da6a3ce929d0e0e4736/ });
+    expect(trace).toHaveTextContent("trace 4bf92f35");
+
+    // Only the steps that have one. A scheduler's step has no trace and must not offer a
+    // button that copies nothing.
+    expect(screen.getAllByRole("button", { name: /Trace / })).toHaveLength(1);
   });
 
   it("says what risk decided and who overruled it", async () => {

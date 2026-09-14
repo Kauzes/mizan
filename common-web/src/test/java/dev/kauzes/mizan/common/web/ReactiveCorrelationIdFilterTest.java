@@ -1,5 +1,6 @@
 package dev.kauzes.mizan.common.web;
 
+import dev.kauzes.mizan.common.web.trace.Traces;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.kauzes.mizan.common.correlation.CorrelationContext;
@@ -11,7 +12,7 @@ import org.springframework.web.server.WebFilterChain;
 
 class ReactiveCorrelationIdFilterTest {
 
-    private final ReactiveCorrelationIdFilter filter = new ReactiveCorrelationIdFilter();
+    private final ReactiveCorrelationIdFilter filter = new ReactiveCorrelationIdFilter(Traces.NONE);
 
     @Test
     void stampsTheIdOntoTheForwardedRequest() {
