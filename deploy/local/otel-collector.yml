@@ -1,0 +1,59 @@
+# The one place that decides which traces are kept.
+#
+# Every service exports every span it makes, and this is what throws most of them away. That
+# is deliberate and it is the whole reason a collector is here at all: the interesting rule —
+# keep anything that failed — cannot be applied by a service. A service decides whether to
+# sample at the first span of a trace, which is before the failure it would want to keep has
+# happened. Only something looking at a finished trace can apply it, and that is here.
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  tail_sampling:
+    # Long enough for the slow half of a trace to arrive. A trace decided on before its last
+    # span lands is a trace stored with a hole in it.
+    decision_wait: 10s
+    num_traces: 50000
+    policies:
+      # Any policy matching keeps the trace. The first two are the rule; the third is the
+      # volume control, and it is the only one a deployment turns down.
+      - name: anything-that-failed
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+      - name: anything-slow
+        type: latency
+        latency:
+          threshold_ms: 1000
+      - name: some-of-what-is-left
+        type: probabilistic
+        probabilistic:
+          # Everything, on a laptop, where the volume is a few hundred traces and finding the
+          # one you just made matters more than disk. A deployment sets this to a few percent;
+          # the two policies above are unaffected by it, which is the point of writing it this
+          # way rather than sampling in the services.
+          sampling_percentage: ${env:MIZAN_TRACE_KEEP_PERCENT}
+
+exporters:
+  otlp:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [tail_sampling]
+      exporters: [otlp]
+  telemetry:
+    metrics:
+      # Not scraped by this platform's Prometheus job, which is a list of this platform's own
+      # services and should stay that way.
+      level: basic

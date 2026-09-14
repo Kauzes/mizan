@@ -110,7 +110,8 @@ public class OutboxRelay {
     private List<PendingEvent> claim() {
         return jdbc.query(
                 "select id, type, version, aggregate_type, aggregate_id, merchant_id, "
-                        + "occurred_at, correlation_id, payload::text as payload, sequence, "
+                        + "occurred_at, correlation_id, trace_parent, "
+                        + "payload::text as payload, sequence, "
                         + "attempts "
                         + "from outbox_event "
                         + "where published_at is null "
@@ -127,6 +128,7 @@ public class OutboxRelay {
                         row.getObject("merchant_id", UUID.class),
                         row.getTimestamp("occurred_at").toInstant(),
                         row.getString("correlation_id"),
+                        row.getString("trace_parent"),
                         row.getString("payload"),
                         row.getLong("sequence"),
                         row.getInt("attempts")),

@@ -28,5 +28,11 @@ public abstract class MizanIntegrationTest {
         registry.add(
                 "spring.kafka.bootstrap-servers",
                 () -> MizanContainers.kafka().getBootstrapServers());
+
+        // No collector here, and nothing worth exporting to one. Left on, every test JVM
+        // spends its run retrying an HTTP call to a port nothing is listening on and says so
+        // in the log each time. The spans are still made — what a test asserts about tracing
+        // it asserts from the registry, not from what left the process.
+        registry.add("management.tracing.export.enabled", () -> "false");
     }
 }

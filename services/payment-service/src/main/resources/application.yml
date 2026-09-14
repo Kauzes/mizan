@@ -112,6 +112,31 @@ management:
   metrics:
     tags:
       service: ${spring.application.name}
+  tracing:
+    sampling:
+      # Everything, from the service. The decision about what to keep is made once, by the
+      # collector, where it can be made after a trace is finished and therefore after it is
+      # known whether anything in it failed. Head sampling cannot do that: it decides at the
+      # first span, before the error exists. A tracing setup that drops the failures only
+      # records the days when nothing happened.
+      probability: ${MIZAN_TRACE_SAMPLE:1.0}
+  otlp:
+    metrics:
+      export:
+        # Off. The starter that brings tracing also brings a metrics registry that pushes to
+        # a collector, and this platform is scraped rather than pushing: two copies of every
+        # number, arriving by different routes, is how a dashboard comes to disagree with
+        # itself. Left on it also fills every log with 404s from an endpoint that does not
+        # take metrics, which is how it was noticed.
+        enabled: false
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          # Boot 4's current name for it. The older management.otlp.tracing.endpoint still
+          # works and is deprecated, which is the sort of thing that is silently fine until
+          # the release that removes it.
+          endpoint: ${MIZAN_OTLP:http://localhost:4318/v1/traces}
 
 logging:
   pattern:

@@ -64,6 +64,9 @@ services:
       args:
         MODULE: gateway
     environment:
+      # Where this service sends its spans. The collector decides what is kept;
+      # this one exports all of them.
+      MIZAN_OTLP: http://otel-collector:4318/v1/traces
       MIZAN_JWK_SET_URI: http://identity-service:8081/.well-known/jwks.json
       MIZAN_API_KEY_VERIFICATION_URI: http://identity-service:8081/internal/api-keys/verify
     ports:
@@ -81,6 +84,9 @@ services:
       args:
         MODULE: identity-service
     environment:
+      # Where this service sends its spans. The collector decides what is kept;
+      # this one exports all of them.
+      MIZAN_OTLP: http://otel-collector:4318/v1/traces
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/identity
       # This stack speaks plain HTTP, and a Secure cookie is never sent over it — so the
       # console's session would not survive a reload locally. Off here and nowhere else:
@@ -112,6 +118,9 @@ services:
       args:
         MODULE: ledger-service
     environment:
+      # Where this service sends its spans. The collector decides what is kept;
+      # this one exports all of them.
+      MIZAN_OTLP: http://otel-collector:4318/v1/traces
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/ledger
       MIZAN_DB_USERNAME: ${POSTGRES_USER:-mizan}
       MIZAN_DB_PASSWORD: ${POSTGRES_PASSWORD:-mizan}
@@ -137,6 +146,9 @@ services:
       args:
         MODULE: payment-service
     environment:
+      # Where this service sends its spans. The collector decides what is kept;
+      # this one exports all of them.
+      MIZAN_OTLP: http://otel-collector:4318/v1/traces
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/payment
       MIZAN_ACQUIRER_URL: http://bank-simulator:8086
       # The books, reached directly rather than through the edge. This is not a merchant's
@@ -174,6 +186,9 @@ services:
       args:
         MODULE: risk-service
     environment:
+      # Where this service sends its spans. The collector decides what is kept;
+      # this one exports all of them.
+      MIZAN_OTLP: http://otel-collector:4318/v1/traces
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/risk
       # Baselines are learned from payment events. Risk never reads the payment database.
       MIZAN_KAFKA: kafka:9092
@@ -199,6 +214,9 @@ services:
       args:
         MODULE: notification-service
     environment:
+      # Where this service sends its spans. The collector decides what is kept;
+      # this one exports all of them.
+      MIZAN_OTLP: http://otel-collector:4318/v1/traces
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/notification
       # The first service on this platform that listens rather than answers.
       MIZAN_KAFKA: kafka:9092
@@ -233,6 +251,9 @@ services:
       args:
         MODULE: settlement-service
     environment:
+      # Where this service sends its spans. The collector decides what is kept;
+      # this one exports all of them.
+      MIZAN_OTLP: http://otel-collector:4318/v1/traces
       MIZAN_DB_URL: jdbc:postgresql://postgres:5432/settlement
       MIZAN_KAFKA: kafka:9092
       MIZAN_LEDGER_URL: http://ledger-service:8082
@@ -290,6 +311,10 @@ services:
       context: .
       args:
         MODULE: bank-simulator
+    environment:
+      # Where this service sends its spans. The collector decides what is kept;
+      # this one exports all of them.
+      MIZAN_OTLP: http://otel-collector:4318/v1/traces
     ports:
       - "8086:8086"
     healthcheck:
@@ -319,6 +344,55 @@ services:
       timeout: 5s
       retries: 20
       start_period: 10s
+
+  otel-collector:
+    # Every span every service makes arrives here, and most of them stop here. Keeping the
+    # decision in one process is what makes "an error is always kept" possible at all: a
+    # service samples at the first span of a trace, before the failure exists.
+    image: ${OTEL_COLLECTOR_IMAGE}
+    command: ["--config=/etc/otel/config.yml"]
+    volumes:
+      - ./deploy/local/otel-collector.yml:/etc/otel/config.yml:ro
+    environment:
+      # How much of what did not fail and was not slow is kept. Everything here; a few
+      # percent anywhere that matters.
+      MIZAN_TRACE_KEEP_PERCENT: ${MIZAN_TRACE_KEEP_PERCENT:-100}
+    ports:
+      # The services export to 4318 over HTTP. Published so that a service run outside the
+      # stack from an IDE lands in the same traces as the rest of the platform.
+      - "4318:4318"
+    depends_on:
+      - tempo
+    healthcheck:
+      # The collector answers on its own extension port only if one is configured; this asks
+      # the receiver instead, which is the thing that has to be working.
+      test: ["CMD", "/otelcol-contrib", "--version"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  tempo:
+    # Where a trace is kept and where Grafana reads it from. Reached by the collector, never
+    # by a service: the sampling decision is made once, and not here.
+    image: ${TEMPO_IMAGE}
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./deploy/local/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempodata:/var/tempo
+    ports:
+      # Published so the smoke check can ask for the trace it just made. Grafana reaches it
+      # over the network by name and does not need this.
+      - "3200:3200"
+    healthcheck:
+      # By name rather than by address, and the opposite way round from the console's: this
+      # image listens on IPv6 and 127.0.0.1 is answered by something that says 503 while Tempo
+      # itself is perfectly well. Its own busybox wget, because there is no shell tooling here.
+      test: ["CMD", "/busybox/wget", "-q", "-O", "/dev/null", "http://localhost:3200/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
 
   grafana:
     # Where the numbers become something a person reads. Provisioned entirely from files in
@@ -351,6 +425,7 @@ services:
     # for the thing it monitors is one that is never up when it is needed.
     depends_on:
       - prometheus
+      - tempo
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/health || exit 1"]
       interval: 10s
@@ -364,3 +439,4 @@ volumes:
   redisdata:
   prometheusdata:
   grafanadata:
+  tempodata:

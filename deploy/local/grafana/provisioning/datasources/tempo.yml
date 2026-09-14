@@ -1,0 +1,21 @@
+# Where a trace is read from. Provisioned for the same reason the Prometheus one is: a
+# datasource configured by hand exists in one container and nowhere anybody can review.
+
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    uid: mizan-tempo
+    editable: false
+    jsonData:
+      # A trace and the service graph are different questions; this platform answers the
+      # first one only, from the traces themselves, with no extra process to keep running.
+      serviceMap:
+        datasourceUid: mizan-prometheus
+      # Pasting a trace id into the search box is what somebody with a merchant on the phone
+      # actually does, so it is the mode that opens first.
+      search:
+        hide: false

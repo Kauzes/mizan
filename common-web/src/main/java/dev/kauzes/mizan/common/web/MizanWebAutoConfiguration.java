@@ -20,6 +20,48 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  */
 public class MizanWebAutoConfiguration {
 
+
+    /**
+     * The trace, for anything that needs to carry it, name it or hand it over.
+     *
+     * <p>Its own configuration rather than part of the events one, because the gateway has no
+     * database and still has to put the trace id on a response — it is the service a person's
+     * request arrives at first, so it is the one holding the id worth handing over.
+     */
+    @AutoConfiguration
+    public static class Tracing {
+
+        /**
+         * What the platform's tracer says, when there is a tracer to ask.
+         *
+         * <p>The condition is on the class, not on the method, for the reason written on
+         * {@link Servlet.ClientsCarryTheCorrelationId}: a bean method's return type and
+         * parameters are read before a method level condition is evaluated, so naming an
+         * absent class in either is a service that fails to start rather than one that
+         * skips a bean.
+         */
+        @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+        @ConditionalOnClass(name = "io.micrometer.tracing.Tracer")
+        public static class WhenThereIsATracer {
+
+            @Bean
+            @ConditionalOnMissingBean
+            @ConditionalOnBean(io.micrometer.tracing.Tracer.class)
+            public dev.kauzes.mizan.common.web.trace.Traces traces(
+                    io.micrometer.tracing.Tracer tracer) {
+
+                return new dev.kauzes.mizan.common.web.trace.MicrometerTraces(tracer);
+            }
+        }
+
+        /** A service with no tracing. Everything that asks gets nothing, and nothing breaks. */
+        @Bean
+        @ConditionalOnMissingBean(dev.kauzes.mizan.common.web.trace.Traces.class)
+        public dev.kauzes.mizan.common.web.trace.Traces noTraces() {
+            return dev.kauzes.mizan.common.web.trace.Traces.NONE;
+        }
+    }
+
     @AutoConfiguration
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
     @ConditionalOnClass(name = "org.springframework.web.servlet.DispatcherServlet")
@@ -27,8 +69,10 @@ public class MizanWebAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        public CorrelationIdFilter correlationIdFilter() {
-            return new CorrelationIdFilter();
+        public CorrelationIdFilter correlationIdFilter(
+                dev.kauzes.mizan.common.web.trace.Traces traces) {
+
+            return new CorrelationIdFilter(traces);
         }
 
         @Bean
@@ -41,6 +85,34 @@ public class MizanWebAutoConfiguration {
         @ConditionalOnMissingBean
         public CorrelationPropagationInterceptor correlationPropagationInterceptor() {
             return new CorrelationPropagationInterceptor();
+        }
+
+        /**
+         * What puts that interceptor on every client this service builds.
+         *
+         * <p>Without this the interceptor is a bean, is correct, and is never called by
+         * anything — the same failure as MIZ-41, MIZ-47 and MIZ-55, and it lasted from MIZ-22
+         * until tracing made it visible: a trace of one payment carried three different
+         * correlation ids, one per service, because each hop found no header and generated
+         * its own. A wiring test asserted the bean existed, which was never the question.
+         *
+         * <p>A class of its own, with the condition on the class rather than on the method.
+         * A {@code @ConditionalOnClass} on a bean method does not stop Spring reading that
+         * method's return type, so a service with no HTTP client on its classpath — the
+         * ledger, for one — fails to start rather than skipping the bean. Found by starting
+         * it, which is the only way that one shows up.
+         */
+        @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+        @ConditionalOnClass(name = "org.springframework.boot.restclient.RestClientCustomizer")
+        public static class ClientsCarryTheCorrelationId {
+
+            @Bean
+            @ConditionalOnMissingBean(name = "correlationPropagation")
+            public org.springframework.boot.restclient.RestClientCustomizer correlationPropagation(
+                    CorrelationPropagationInterceptor interceptor) {
+
+                return builder -> builder.requestInterceptor(interceptor);
+            }
         }
 
         @Bean
@@ -119,9 +191,10 @@ public class MizanWebAutoConfiguration {
         @ConditionalOnMissingBean
         public dev.kauzes.mizan.common.web.outbox.Outbox outbox(
                 org.springframework.jdbc.core.JdbcTemplate jdbc,
-                tools.jackson.databind.ObjectMapper json) {
+                tools.jackson.databind.ObjectMapper json,
+                dev.kauzes.mizan.common.web.trace.Traces traces) {
 
-            return new dev.kauzes.mizan.common.web.outbox.Outbox(jdbc, json);
+            return new dev.kauzes.mizan.common.web.outbox.Outbox(jdbc, json, traces);
         }
 
         /**
@@ -263,8 +336,9 @@ public class MizanWebAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        public ReactiveCorrelationIdFilter reactiveCorrelationIdFilter() {
-            return new ReactiveCorrelationIdFilter();
+        public ReactiveCorrelationIdFilter reactiveCorrelationIdFilter(
+                dev.kauzes.mizan.common.web.trace.Traces traces) {
+            return new ReactiveCorrelationIdFilter(traces);
         }
     }
 

@@ -1,5 +1,6 @@
 package dev.kauzes.mizan.common.web.outbox;
 
+import dev.kauzes.mizan.common.web.trace.Traces;
 import java.sql.Timestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,9 +38,19 @@ public class Outbox {
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
 
-    public Outbox(JdbcTemplate jdbc, ObjectMapper json) {
+    /**
+     * What was happening when the event was recorded, so that the consumer of it — minutes
+     * later, in another process, on a thread with no relation to this one — can continue the
+     * same trace. The hop across a topic is the one nobody can reconstruct by hand, and the
+     * outbox makes it worse: by the time the relay publishes, the request that caused the
+     * event is long finished. Nothing but the row itself can carry this.
+     */
+    private final Traces traces;
+
+    public Outbox(JdbcTemplate jdbc, ObjectMapper json, Traces traces) {
         this.jdbc = jdbc;
         this.json = json;
+        this.traces = traces;
     }
 
     /**
@@ -60,8 +71,8 @@ public class Outbox {
 
         jdbc.update(
                 "insert into outbox_event (id, type, version, aggregate_type, aggregate_id, "
-                        + "merchant_id, occurred_at, correlation_id, payload) "
-                        + "values (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb)",
+                        + "merchant_id, occurred_at, correlation_id, trace_parent, payload) "
+                        + "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb)",
                 event.eventId(),
                 event.type(),
                 event.version(),
@@ -70,6 +81,7 @@ public class Outbox {
                 event.merchantId(),
                 Timestamp.from(event.occurredAt()),
                 event.correlationId(),
+                traces.parent(),
                 json.writeValueAsString(event.payload()));
 
         log.debug(

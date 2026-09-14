@@ -26,6 +26,9 @@ import tools.jackson.databind.node.ObjectNode;
  */
 public class KafkaEventPublisher implements EventPublisher {
 
+    /** The W3C trace context header, which every tracing library already knows to look for. */
+    private static final String TRACE_PARENT = "traceparent";
+
     private final KafkaTemplate<String, String> kafka;
     private final ObjectMapper json;
     private final Duration timeout;
@@ -49,6 +52,13 @@ public class KafkaEventPublisher implements EventPublisher {
         header(record, "merchant-id", event.merchantId().toString());
         if (event.correlationId() != null && !event.correlationId().isBlank()) {
             header(record, "correlation-id", event.correlationId());
+        }
+        if (event.traceParent() != null && !event.traceParent().isBlank()) {
+            // The standard name, not one of this platform's own, because what reads it is a
+            // consumer's tracing library rather than any code written here. This is the hop
+            // nobody can reconstruct by hand: the request that caused the event finished
+            // minutes ago and on another machine.
+            header(record, TRACE_PARENT, event.traceParent());
         }
 
         try {

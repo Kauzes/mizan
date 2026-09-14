@@ -10,6 +10,9 @@ import java.util.UUID;
  * broker needs to understand it. Deserialising it into something and serialising it again
  * would be work whose only possible outcome is changing what a consumer receives.
  *
+ * @param traceParent the trace the event was recorded in, so a consumer continues it rather
+ *     than starting one of its own. Null for a row written before this platform traced
+ *     anything, or by work that was not part of a request.
  * @param sequence the total order this event was written in, and what the relay publishes by
  * @param attempts how many times publishing this has been tried and failed
  */
@@ -22,6 +25,7 @@ public record PendingEvent(
         UUID merchantId,
         Instant occurredAt,
         String correlationId,
+        String traceParent,
         String payload,
         long sequence,
         int attempts) {

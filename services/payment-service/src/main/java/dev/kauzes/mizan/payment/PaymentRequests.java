@@ -65,11 +65,23 @@ final class PaymentRequests {
             @Schema(description = "Null for the first step") PaymentStatus from,
             PaymentStatus to,
             String reason,
-            Instant at) {
+            Instant at,
+            @Schema(
+                            description =
+                                    "The trace this step happened in, for handing to somebody "
+                                            + "who can open it. Null on a step taken before "
+                                            + "this platform traced anything, or by a "
+                                            + "scheduler rather than by a request.",
+                            example = "4bf92f3577b34da6a3ce929d0e0e4736")
+                    String traceId) {
 
         static TransitionResponse of(PaymentTransition transition) {
             return new TransitionResponse(
-                    transition.from(), transition.to(), transition.reason(), transition.at());
+                    transition.from(),
+                    transition.to(),
+                    transition.reason(),
+                    transition.at(),
+                    transition.traceId());
         }
     }
 

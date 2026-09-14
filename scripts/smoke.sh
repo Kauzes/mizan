@@ -754,7 +754,132 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------
-# 21. The books balance, asked of everything that has ever been written. Its own script,
+step "21. One payment, one trace, across every hop it took"
+
+# The part no suite can reach. A test with one process in it can prove a header is written; it
+# cannot prove that six services, two of them reached only across a Kafka topic, ended up in
+# one trace that a person can open. The hop that matters is the outbox one: by the time the
+# relay publishes, the request that caused the event has been finished for seconds or minutes,
+# on a thread with no relation to it, and nothing but the stored row was present for both ends.
+if command -v docker > /dev/null 2>&1 && docker compose ps tempo > /dev/null 2>&1; then
+    traced=$(authed 201 POST "$GATEWAY/api/v1/merchants/$MERCHANT/payments" \
+        "{\"amount\":$AMOUNT,\"currency\":\"TRY\",\"reference\":\"order-$RUN-traced\"}")
+    TRACED=$(printf '%s' "$traced" | field id)
+
+    # Raw curl rather than the helper, because what is wanted here is a response header.
+    headers=$(curl -sS -D - -o /dev/null \
+        -X POST "$GATEWAY/api/v1/merchants/$MERCHANT/payments/$TRACED/authorize" \
+        -H "Authorization: Bearer $AUTH" -H "Idempotency-Key: $(key)" \
+        -H 'Content-Type: application/json' -d '{"card":"4000000000000000"}')
+
+    TRACE=$(printf '%s' "$headers" | "$PYTHON" -c '
+import re, sys
+found = re.search(r"(?im)^x-trace-id:\s*([0-9a-f]{32})\s*$", sys.stdin.read())
+print(found.group(1) if found else "")')
+    [ -n "$TRACE" ] || fail "the edge did not hand back a trace id: $headers"
+    pass "the edge answered with the trace of the request: $TRACE"
+
+    # The collector waits for the slow half of a trace before deciding about it, and Tempo has
+    # to have written it. Both are seconds, and both are the reason this polls.
+    for attempt in $(seq 1 25); do
+        found=$(curl -sS -o /dev/null -w '%{http_code}' "$TEMPO/api/traces/$TRACE")
+        [ "$found" = "200" ] && break
+        sleep 2
+    done
+    [ "$found" = "200" ] || fail "the trace never reached the store"
+
+    spans=$(call 200 GET "$TEMPO/api/traces/$TRACE")
+
+    services=$(printf '%s' "$spans" | "$PYTHON" -c '
+import json, sys
+document = json.load(sys.stdin)
+names = set()
+for batch in document.get("batches", []):
+    for attribute in batch["resource"]["attributes"]:
+        if attribute["key"] == "service.name":
+            names.add(attribute["value"]["stringValue"])
+print(" ".join(sorted(names)))')
+    note "in this trace: $services"
+
+    for hop in gateway payment-service bank-simulator; do
+        case " $services " in
+            *" $hop "*) ;;
+            *) fail "$hop is not in the trace, so the trace stops before it" ;;
+        esac
+    done
+    pass "the edge, the platform and the acquirer are one trace, not three"
+
+    # The one that cannot be reconstructed by hand.
+    across=$(printf '%s' "$spans" | "$PYTHON" -c '
+import json, sys
+document = json.load(sys.stdin)
+crossed = []
+for batch in document.get("batches", []):
+    service = [a["value"]["stringValue"] for a in batch["resource"]["attributes"]
+               if a["key"] == "service.name"][0]
+    for scope in batch.get("scopeSpans", []):
+        for span in scope.get("spans", []):
+            if "mizan." in span.get("name", "") and "process" in span.get("name", ""):
+                crossed.append(service)
+print(" ".join(sorted(set(crossed))))')
+    [ -n "$across" ] || fail "no consumer continued the trace across the topic"
+    pass "and it continues across Kafka into $across, minutes after the request ended"
+
+    # The two ids, connected. A problem report names one of them and whoever picks it up needs
+    # the other; neither replaces the other, which is why both are here.
+    correlation=$(printf '%s' "$headers" | "$PYTHON" -c '
+import re, sys
+found = re.search(r"(?im)^x-correlation-id:\s*(\S+)\s*$", sys.stdin.read())
+print(found.group(1) if found else "")')
+    noted=$(printf '%s' "$spans" | "$PYTHON" -c '
+import json, sys
+wanted = sys.argv[1]
+document = json.load(sys.stdin)
+for batch in document.get("batches", []):
+    for scope in batch.get("scopeSpans", []):
+        for span in scope.get("spans", []):
+            for attribute in span.get("attributes", []):
+                if attribute["key"] == "mizan.correlation_id":
+                    if attribute["value"].get("stringValue") == wanted:
+                        print("yes")
+                        sys.exit()
+print("no")' "$correlation")
+    [ "$noted" = "yes" ] || fail "the correlation id $correlation is on no span in the trace"
+    pass "and the id a person reads out is on the trace, so either one finds the other"
+
+    # Nothing in a span that would not be allowed in a log. A trace is stored for days and
+    # read by whoever is debugging, which makes it exactly the wrong place for a card number.
+    leaked=$(printf '%s' "$spans" | "$PYTHON" -c '
+import json, re, sys
+
+never = {"card", "pan", "card_number", "cardnumber", "password", "secret", "token",
+         "authorization", "api_key", "apikey", "cvv", "cvc"}
+looks_like_a_card = re.compile(r"(?<!\d)(?:\d[ -]?){13,19}(?!\d)")
+
+document = json.load(sys.stdin)
+found = []
+for batch in document.get("batches", []):
+    for scope in batch.get("scopeSpans", []):
+        for span in scope.get("spans", []):
+            for attribute in span.get("attributes", []):
+                key = attribute["key"].lower().rsplit(".", 1)[-1]
+                value = str(attribute["value"].get("stringValue", ""))
+                if key in never:
+                    found.append("%s carries %s" % (span["name"], attribute["key"]))
+                elif looks_like_a_card.search(value):
+                    found.append("%s has something card shaped in %s"
+                                 % (span["name"], attribute["key"]))
+for line in found:
+    print("  " + line, file=sys.stderr)
+print(len(found))')
+    [ "$leaked" = "0" ] || fail "$leaked span attribute(s) hold something they should not"
+    pass "and no span carries a card, a token or a secret"
+else
+    note "no Tempo in this stack, so nothing was checked about tracing"
+fi
+
+# ---------------------------------------------------------------------------------------
+# 22. The books balance, asked of everything that has ever been written. Its own script,
 # because CI runs it again after the browser journey and the demo seed, over data that three
 # different things produced and none of them wrote in order to make it pass.
 "$(dirname "$0")/books-balance.sh"

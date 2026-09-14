@@ -787,3 +787,27 @@ table.figures th {
 table.figures .right {
   text-align: right;
 }
+
+/*
+ * The trace id on a timeline step. Quiet by design: it is there for the one conversation in a
+ * hundred where somebody needs it, and it must not compete with the words that say what
+ * happened.
+ */
+.trace {
+  margin-left: 0.5rem;
+  padding: 0 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: none;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  cursor: pointer;
+}
+
+.trace:hover,
+.trace:focus-visible {
+  color: var(--ink);
+  border-color: var(--ink);
+}
