@@ -113,6 +113,15 @@ other protected route.
   trace is kept for days and read by whoever is debugging, which makes it exactly the wrong
   place for any of them. The smoke check reads back a real trace and fails on an attribute that
   is named like a secret or holds anything card shaped.
+- A new version rolls out while money is moving, and the claim is tested rather than trusted.
+  `scripts/rollout-under-load.sh` installs the chart on a kind cluster and takes payments through the
+  gateway from inside it. It rolls every service out to a new version one at a time, then fails
+  unless at most 0.5% of requests failed, the slowest ten seconds kept a quarter of normal
+  throughput, and the books balance. Its first attempt failed and found three real defects: JVMs on
+  a 128MiB heap, probes that killed healthy-but-busy pods after one second, and a failure count that
+  would have passed a stalled platform. Its second passed: 2 failures in 35,521 requests and 11,839
+  payments captured, with the slowest ten seconds at 52% of typical. It runs in CI on main and on
+  deployment changes. ADR 0051.
 - The payment service grows under load, inside a written connection budget. The chart as first
   merged could not start all its pods against a default Postgres: every service opened Hikari's
   default pool of ten, which at two replicas is 120 connections against a limit of 100. Every pool
@@ -122,7 +131,7 @@ other protected route.
   runs out of connections long before CPU. CPU is the default metric because every cluster has it,
   and connections in use, the signal that actually means load, is one value away once a metrics
   adapter can see it. Running sweeps on several pods at once is proven harmless rather than locked:
-  two pods finishing the same interrupted refund at the same moment reverse the money once. ADR 0050.
+  two pods finishing the same interrupted refund at the same moment reverse the money once. ADR 0050. On the kind cluster, `scripts/autoscaling-on-kind.sh` shows it working: under load the service went from two pods to its maximum of four within about fifteen seconds and stayed pinned there, and a minute after the load stopped it removed one pod a minute until it was back to two. ADR 0051.
 - A pod is sent traffic only when it can do the work, and finishes what it started before it stops.
   Starting, ready and alive are three probes with three consequences. Liveness never depends on
   the database or Kafka, because a probe that does restarts every pod of every service during the

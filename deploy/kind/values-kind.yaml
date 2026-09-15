@@ -1,0 +1,50 @@
+# The chart, sized for a kind cluster on a laptop, for the rollout test (MIZ-86).
+#
+# Only what differs from values.yaml. Helm merges these into the defaults, so every service keeps its
+# port, configuration and credentials; what changes is how many pods, how much they ask for, and
+# where the images come from.
+
+image:
+  # Loaded straight into the node with kind load, never pulled. The tag is supplied per run.
+  repository: mizan.local
+  pullPolicy: IfNotPresent
+
+# Created by the script before the chart is installed, because Postgres needs the same password and
+# is running before the chart is. Also exercises the existingSecret path for real.
+credentials:
+  existingSecret: mizan-credentials
+
+# One pod of everything except payment-service. A rolling update of one pod still starts the new pod
+# and waits for it to be ready before stopping the old one (maxSurge 1, maxUnavailable 0 at this
+# size), which is the behaviour under test.
+services:
+  gateway:
+    replicas: 1
+    resources: { requests: { cpu: 100m, memory: 256Mi } }
+  identity-service:
+    replicas: 1
+    resources: { requests: { cpu: 100m, memory: 256Mi } }
+  ledger-service:
+    replicas: 1
+    resources: { requests: { cpu: 100m, memory: 256Mi } }
+  risk-service:
+    replicas: 1
+    resources: { requests: { cpu: 100m, memory: 256Mi } }
+  notification-service:
+    replicas: 1
+    resources: { requests: { cpu: 100m, memory: 256Mi } }
+  settlement-service:
+    replicas: 1
+    resources: { requests: { cpu: 100m, memory: 256Mi } }
+  bank-simulator:
+    replicas: 1
+    resources: { requests: { cpu: 50m, memory: 192Mi } }
+  payment-service:
+    replicas: 2
+    resources: { requests: { cpu: 200m, memory: 320Mi } }
+    autoscaling:
+      minReplicas: 2
+      # Four rather than six: this laptop's memory, not the connection budget, is the limit here.
+      maxReplicas: 4
+      # A minute rather than five, so the test can watch it come back down without waiting.
+      scaleDownAfterSeconds: 60
