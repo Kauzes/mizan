@@ -998,7 +998,37 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------
-# 24. The books balance, asked of everything that has ever been written. Its own script,
+step "24. Each image holds the service and nothing an attacker could use"
+
+# Asked of the images that are actually running, not of the Dockerfile. A Dockerfile that says
+# distroless and a base image swapped back in a hurry look identical in a code review, and
+# only the built image says which one is true.
+if command -v docker > /dev/null 2>&1 && docker compose ps payment-service > /dev/null 2>&1; then
+    for service in gateway identity-service ledger-service payment-service risk-service \
+                   notification-service settlement-service bank-simulator; do
+        image=$(docker compose images -q "$service" 2>/dev/null | head -1)
+        [ -n "$image" ] || fail "$service has no image to inspect"
+
+        user=$(docker image inspect "$image" --format '{{.Config.User}}')
+        case "$user" in
+            nonroot|65532|65532:65532) ;;
+            *) fail "$service runs as '${user:-root}', and a service has no business being root" ;;
+        esac
+
+        # No shell means a compromised process has nothing to run commands with. An exit of
+        # 0 here means one was found, which is the failure.
+        if MSYS_NO_PATHCONV=1 docker run --rm --entrypoint /bin/sh "$image" -c true \
+                > /dev/null 2>&1; then
+            fail "$service's image has a shell in it"
+        fi
+    done
+    pass "all eight run as a non root user, in an image with no shell to use"
+else
+    note "no Compose stack, so no image was inspected"
+fi
+
+# ---------------------------------------------------------------------------------------
+# 25. The books balance, asked of everything that has ever been written. Its own script,
 # because CI runs it again after the browser journey and the demo seed, over data that three
 # different things produced and none of them wrote in order to make it pass.
 "$(dirname "$0")/books-balance.sh"

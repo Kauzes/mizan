@@ -76,7 +76,10 @@ services:
     ports:
       - "8080:8080"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health/readiness"]
+      # No curl in a distroless image, so the JVM already in it asks instead. The flags keep a
+      # probe that runs every ten seconds from costing more than the work it is checking.
+      test: ["CMD", "java", "-XX:TieredStopAtLevel=1", "-XX:+UseSerialGC", "-Xmx16m",
+             "-cp", "/healthcheck", "Healthcheck", "http://localhost:8080/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -114,7 +117,10 @@ services:
     ports:
       - "8081:8081"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8081/actuator/health/readiness"]
+      # No curl in a distroless image, so the JVM already in it asks instead. The flags keep a
+      # probe that runs every ten seconds from costing more than the work it is checking.
+      test: ["CMD", "java", "-XX:TieredStopAtLevel=1", "-XX:+UseSerialGC", "-Xmx16m",
+             "-cp", "/healthcheck", "Healthcheck", "http://localhost:8081/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -146,7 +152,10 @@ services:
     ports:
       - "8082:8082"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8082/actuator/health/readiness"]
+      # No curl in a distroless image, so the JVM already in it asks instead. The flags keep a
+      # probe that runs every ten seconds from costing more than the work it is checking.
+      test: ["CMD", "java", "-XX:TieredStopAtLevel=1", "-XX:+UseSerialGC", "-Xmx16m",
+             "-cp", "/healthcheck", "Healthcheck", "http://localhost:8082/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -190,7 +199,10 @@ services:
     ports:
       - "8083:8083"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8083/actuator/health/readiness"]
+      # No curl in a distroless image, so the JVM already in it asks instead. The flags keep a
+      # probe that runs every ten seconds from costing more than the work it is checking.
+      test: ["CMD", "java", "-XX:TieredStopAtLevel=1", "-XX:+UseSerialGC", "-Xmx16m",
+             "-cp", "/healthcheck", "Healthcheck", "http://localhost:8083/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -222,7 +234,10 @@ services:
     ports:
       - "8084:8084"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8084/actuator/health/readiness"]
+      # No curl in a distroless image, so the JVM already in it asks instead. The flags keep a
+      # probe that runs every ten seconds from costing more than the work it is checking.
+      test: ["CMD", "java", "-XX:TieredStopAtLevel=1", "-XX:+UseSerialGC", "-Xmx16m",
+             "-cp", "/healthcheck", "Healthcheck", "http://localhost:8084/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -263,7 +278,10 @@ services:
     ports:
       - "8085:8085"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8085/actuator/health/readiness"]
+      # No curl in a distroless image, so the JVM already in it asks instead. The flags keep a
+      # probe that runs every ten seconds from costing more than the work it is checking.
+      test: ["CMD", "java", "-XX:TieredStopAtLevel=1", "-XX:+UseSerialGC", "-Xmx16m",
+             "-cp", "/healthcheck", "Healthcheck", "http://localhost:8085/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -306,7 +324,10 @@ services:
     ports:
       - "8087:8087"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8087/actuator/health/readiness"]
+      # No curl in a distroless image, so the JVM already in it asks instead. The flags keep a
+      # probe that runs every ten seconds from costing more than the work it is checking.
+      test: ["CMD", "java", "-XX:TieredStopAtLevel=1", "-XX:+UseSerialGC", "-Xmx16m",
+             "-cp", "/healthcheck", "Healthcheck", "http://localhost:8087/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -350,7 +371,10 @@ services:
     ports:
       - "8086:8086"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8086/actuator/health/readiness"]
+      # No curl in a distroless image, so the JVM already in it asks instead. The flags keep a
+      # probe that runs every ten seconds from costing more than the work it is checking.
+      test: ["CMD", "java", "-XX:TieredStopAtLevel=1", "-XX:+UseSerialGC", "-Xmx16m",
+             "-cp", "/healthcheck", "Healthcheck", "http://localhost:8086/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 30
