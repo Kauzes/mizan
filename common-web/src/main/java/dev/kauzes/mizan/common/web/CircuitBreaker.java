@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,13 +59,33 @@ public class CircuitBreaker {
     private final int failuresBeforeOpening;
     private final Duration stayOpenFor;
 
+    private final Predicate<RuntimeException> isAnAnswer;
+
     private final AtomicInteger consecutiveFailures = new AtomicInteger();
     private final AtomicReference<Instant> openedAt = new AtomicReference<>();
 
     public CircuitBreaker(String name, int failuresBeforeOpening, Duration stayOpenFor) {
+        this(name, failuresBeforeOpening, stayOpenFor, failed -> false);
+    }
+
+    /**
+     * A breaker that tells a refusal apart from a failure.
+     *
+     * <p>Something that answers "no" is answering. Counting that towards opening would let a
+     * run of merchants asking for something the other side rightly refuses stop the platform
+     * asking it for anything at all.
+     *
+     * @param isAnAnswer which exceptions mean the other side answered, and so count as it working
+     */
+    public CircuitBreaker(
+            String name,
+            int failuresBeforeOpening,
+            Duration stayOpenFor,
+            Predicate<RuntimeException> isAnAnswer) {
         this.name = name;
         this.failuresBeforeOpening = failuresBeforeOpening;
         this.stayOpenFor = stayOpenFor;
+        this.isAnAnswer = isAnAnswer;
     }
 
     /**
@@ -82,7 +103,11 @@ public class CircuitBreaker {
             succeeded();
             return result;
         } catch (RuntimeException failed) {
-            failed();
+            if (isAnAnswer.test(failed)) {
+                succeeded();
+            } else {
+                failed();
+            }
             throw failed;
         }
     }

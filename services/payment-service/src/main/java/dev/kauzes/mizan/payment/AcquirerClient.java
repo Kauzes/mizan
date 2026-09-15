@@ -2,15 +2,22 @@ package dev.kauzes.mizan.payment;
 
 import dev.kauzes.mizan.common.error.ErrorCode;
 import dev.kauzes.mizan.common.error.MizanException;
+import dev.kauzes.mizan.common.web.Bulkhead;
+import dev.kauzes.mizan.common.web.CircuitBreaker;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
@@ -24,6 +31,21 @@ import org.springframework.web.client.RestClient;
  * <p>A timeout is not a failure. It is the answer failing to arrive, which is a different
  * thing and is raised as such, because deciding a payment failed because we stopped listening
  * is how a customer is charged for something the merchant believes never happened.
+ *
+ * <h2>What a slow or broken acquirer is allowed to cost</h2>
+ *
+ * <p>ADR 0052. Every call waits behind two guards, and both refuse <em>without sending</em>,
+ * which is the one kind of failure that leaves nothing unknown: a payment whose authorization
+ * was never sent was not authorized, and a capture never sent took nothing.
+ *
+ * <ul>
+ *   <li><b>A bulkhead</b>: only so many calls may wait on the acquirer at once. Each one holds a
+ *       request thread and a database connection, so without a limit a slow acquirer takes every
+ *       connection, and a merchant merely reading a payment waits behind the bank.
+ *   <li><b>A breaker</b>: after enough failures in a row the acquirer is left alone for a while,
+ *       so an outage costs a handful of timeouts rather than one per payment. A refusal is an
+ *       answer and never counts; neither does a decline, which arrives as a success.
+ * </ul>
  */
 @Component
 public class AcquirerClient {
@@ -31,27 +53,94 @@ public class AcquirerClient {
     private static final Logger log = LoggerFactory.getLogger(AcquirerClient.class);
 
     private final RestClient http;
+    private final CircuitBreaker breaker;
+    private final Bulkhead bulkhead;
+    private final Counter notSentBecauseOpen;
+    private final Counter notSentBecauseFull;
 
     public AcquirerClient(
             RestClient.Builder builder,
+            MeterRegistry meters,
             @Value("${mizan.acquirer.base-url:http://localhost:8086}") String baseUrl,
-            @Value("${mizan.acquirer.timeout:5s}") Duration timeout) {
+            @Value("${mizan.acquirer.timeout:5s}") Duration timeout,
+            @Value("${mizan.acquirer.failures-before-giving-up:10}") int failuresBeforeGivingUp,
+            @Value("${mizan.acquirer.leave-alone-for:10s}") Duration leaveAloneFor,
+            @Value("${mizan.acquirer.max-concurrent-calls:8}") int maxConcurrentCalls,
+            @Value("${mizan.acquirer.wait-for-a-turn:100ms}") Duration waitForATurn) {
 
         this.http = builder
                 .baseUrl(baseUrl)
                 .requestFactory(ClientHttpRequestFactoryBuilder.detect()
                         .build(HttpClientSettings.defaults().withTimeouts(timeout, timeout)))
                 .build();
+
+        // A 4xx is the acquirer answering. It disagreeing with a request is not it being down.
+        this.breaker = new CircuitBreaker(
+                "the acquirer",
+                failuresBeforeGivingUp,
+                leaveAloneFor,
+                failed -> failed instanceof HttpClientErrorException);
+        this.bulkhead = new Bulkhead("the acquirer", maxConcurrentCalls, waitForATurn);
+
+        Gauge.builder("mizan.acquirer.breaker.open", breaker,
+                        b -> b.state() == CircuitBreaker.State.OPEN ? 1 : 0)
+                .description("1 while the acquirer is being left alone after failing repeatedly")
+                .register(meters);
+        Gauge.builder("mizan.acquirer.calls.in.flight", bulkhead, Bulkhead::inFlight)
+                .description("Calls waiting on the acquirer right now")
+                .register(meters);
+        this.notSentBecauseOpen = notSent(meters, "breaker_open");
+        this.notSentBecauseFull = notSent(meters, "too_many_waiting");
+    }
+
+    private static Counter notSent(MeterRegistry meters, String because) {
+        return Counter.builder("mizan.acquirer.calls.not.sent")
+                .description("Calls to the acquirer refused before being sent, by why")
+                .tag("because", because)
+                .register(meters);
+    }
+
+    /**
+     * Sends the call if both guards allow it.
+     *
+     * <p>A refusal becomes {@code UPSTREAM_UNAVAILABLE} and never {@code UPSTREAM_TIMEOUT}: the
+     * second means "sent, and whether it happened is unknown", which starts a resolution, and
+     * nothing was sent here to resolve.
+     */
+    private <T> T guarded(Supplier<T> call) {
+        try {
+            return bulkhead.call(() -> breaker.call(call));
+
+        } catch (CircuitBreaker.CircuitOpenException leftAlone) {
+            // Debug, as risk's is. The breaker being open is the design working, and a warning per
+            // payment during an outage buries the one line that says it started.
+            notSentBecauseOpen.increment();
+            log.debug("{}", leftAlone.getMessage());
+            throw new MizanException(
+                    ErrorCode.UPSTREAM_UNAVAILABLE,
+                    "The acquirer has been failing, so it was not asked. Nothing was sent, and it "
+                            + "is safe to try again shortly.",
+                    leftAlone);
+
+        } catch (Bulkhead.FullException full) {
+            notSentBecauseFull.increment();
+            log.debug("{}", full.getMessage());
+            throw new MizanException(
+                    ErrorCode.UPSTREAM_UNAVAILABLE,
+                    "The acquirer is slow to answer and enough requests are already waiting on "
+                            + "it. Nothing was sent, and it is safe to try again shortly.",
+                    full);
+        }
     }
 
     /** Asks the acquirer to reserve the money, using the payment's id as the request's. */
     public AcquirerDecision authorize(UUID paymentId, long amount, String currency, String card) {
         try {
-            AcquirerResponse answer = http.post()
+            AcquirerResponse answer = guarded(() -> http.post()
                     .uri("/acquirer/authorizations")
                     .body(new AcquirerRequest(paymentId.toString(), amount, currency, card))
                     .retrieve()
-                    .body(AcquirerResponse.class);
+                    .body(AcquirerResponse.class));
 
             if (answer == null) {
                 throw new MizanException(
@@ -97,10 +186,10 @@ public class AcquirerClient {
 
     private void call(String what, String acquirerReference) {
         try {
-            http.post()
+            guarded(() -> http.post()
                     .uri("/acquirer/authorizations/{reference}/" + what, acquirerReference)
                     .retrieve()
-                    .toBodilessEntity();
+                    .toBodilessEntity());
 
         } catch (ResourceAccessException noAnswer) {
             log.warn("no answer from the acquirer asking it to {} {}", what, acquirerReference);
@@ -110,7 +199,7 @@ public class AcquirerClient {
                             + what.replace("void", "voided").replace("capture", "captured")
                             + " is not yet known.",
                     noAnswer);
-        } catch (org.springframework.web.client.HttpClientErrorException refused) {
+        } catch (HttpClientErrorException refused) {
             // The acquirer disagrees about what this authorization is. Repeating is fine by
             // it, so this is a real contradiction rather than a retry, and is passed on as
             // one instead of being turned into a server error.
@@ -141,11 +230,11 @@ public class AcquirerClient {
      */
     public AcquirerRefund refund(String acquirerReference, String reference, long amount) {
         try {
-            AcquirerRefundResponse answer = http.post()
+            AcquirerRefundResponse answer = guarded(() -> http.post()
                     .uri("/acquirer/authorizations/{reference}/refund", acquirerReference)
                     .body(new AcquirerRefundRequest(reference, amount))
                     .retrieve()
-                    .body(AcquirerRefundResponse.class);
+                    .body(AcquirerRefundResponse.class));
 
             if (answer == null) {
                 throw new MizanException(
@@ -165,7 +254,7 @@ public class AcquirerClient {
                             + "not yet known.",
                     noAnswer);
 
-        } catch (org.springframework.web.client.HttpClientErrorException refused) {
+        } catch (HttpClientErrorException refused) {
             log.warn(
                     "the acquirer refused to refund {}: {}",
                     acquirerReference,
@@ -187,7 +276,7 @@ public class AcquirerClient {
     }
 
     /** The acquirer's own sentence, if it sent one, rather than this service's guess at it. */
-    private static String detailOf(org.springframework.web.client.HttpClientErrorException refused) {
+    private static String detailOf(HttpClientErrorException refused) {
         org.springframework.http.ProblemDetail problem =
                 refused.getResponseBodyAs(org.springframework.http.ProblemDetail.class);
         return problem == null || problem.getDetail() == null
@@ -219,10 +308,14 @@ public class AcquirerClient {
      * <p>Keyed on the payment's id, because that is what the request carried and what a
      * caller who never heard the answer still has. An empty answer is a real answer: this
      * acquirer has no record, so nothing was authorized.
+     *
+     * <p>Behind the same guards. A sweep asking about stuck payments during an outage is refused
+     * like anything else, and the payments stay unresolved for the next sweep, which is exactly
+     * what not being able to ask already meant.
      */
     public java.util.Optional<AcquirerDecision> lookUp(UUID paymentId) {
         try {
-            return http.get()
+            return guarded(() -> http.get()
                     .uri(builder -> builder
                             .path("/acquirer/authorizations")
                             .queryParam("requestId", paymentId.toString())
@@ -244,7 +337,7 @@ public class AcquirerClient {
                         return java.util.Optional.ofNullable(
                                         response.bodyTo(AcquirerResponse.class))
                                 .map(AcquirerResponse::asDecision);
-                    });
+                    }));
 
         } catch (MizanException already) {
             throw already;

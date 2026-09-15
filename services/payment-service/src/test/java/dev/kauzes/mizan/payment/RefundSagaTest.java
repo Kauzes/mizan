@@ -96,8 +96,14 @@ class RefundSagaTest extends MizanIntegrationTest {
         final AtomicReference<RuntimeException> broken = new AtomicReference<>();
 
         BreakableAcquirer(
-                RestClient.Builder builder, String baseUrl, java.time.Duration timeout) {
-            super(builder, baseUrl, timeout);
+                RestClient.Builder builder,
+                io.micrometer.core.instrument.MeterRegistry meters,
+                String baseUrl,
+                java.time.Duration timeout) {
+            // The production guards, at their defaults. What this test breaks is the refund call
+            // itself, from inside, which the guards never see.
+            super(builder, meters, baseUrl, timeout,
+                    10, java.time.Duration.ofSeconds(10), 8, java.time.Duration.ofMillis(100));
         }
 
         @Override
@@ -130,10 +136,12 @@ class RefundSagaTest extends MizanIntegrationTest {
         @Primary
         BreakableAcquirer breakableAcquirer(
                 RestClient.Builder builder,
+                io.micrometer.core.instrument.MeterRegistry meters,
                 @org.springframework.beans.factory.annotation.Value("${mizan.acquirer.base-url}")
                         String baseUrl) {
 
-            return new BreakableAcquirer(builder, baseUrl, java.time.Duration.ofSeconds(5));
+            return new BreakableAcquirer(
+                    builder, meters, baseUrl, java.time.Duration.ofSeconds(5));
         }
     }
 
