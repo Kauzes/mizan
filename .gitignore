@@ -5,7 +5,9 @@ bin/
 target/
 *.class
 *.jar
-!gradle/wrapper/gradle-wrapper.jar
+# Every Gradle wrapper, not only the root one: without the wildcard this line is anchored to the
+# repository root, and android/'s wrapper would be silently left out of every commit.
+!**/gradle/wrapper/gradle-wrapper.jar
 
 # Gradle
 .gradle/

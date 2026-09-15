@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Encrypted everywhere, except the machine running the emulator and the device itself.
+
+     The local Compose stack serves plain HTTP, and an emulator reaches it at 10.0.2.2. Allowing
+     cleartext app-wide to make that work would also allow it to a deployed gateway, which carries
+     card numbers and access tokens. So it is allowed by name, for those two hosts only. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>
