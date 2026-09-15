@@ -3,5 +3,11 @@ package dev.kauzes.mizan.merchant
 import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
 
-/** Where the app starts: which platform it talks to, and whether that platform is answering. */
+/** Where a merchant with no session starts. */
+@Serializable data object SignIn : NavKey
+
+/** Which platform the app talks to, and whether that platform is answering. Reached from sign in. */
 @Serializable data object Welcome : NavKey
+
+/** Where a signed in merchant starts. */
+@Serializable data object Home : NavKey
