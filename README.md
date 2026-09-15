@@ -378,6 +378,11 @@ other protected route.
   because nothing had been written. Now a sweep finds captures begun and never finished and asks
   the acquirer what it did. Captured: record it. Still only held: nothing moved, clear the mark.
   Anything else: ask a person. It never guesses what happened to money.
+- A broker outage is visible before anybody misses what it held back (ADR 0056). The outbox means a
+  Kafka outage fails no payment, which is also why it is silent: payments keep being accepted while
+  webhooks, notifications and settlement stop hearing anything. So payment-service counts what is
+  waiting to leave and how long the oldest of it has waited, and an alert pages on the age, not the
+  count, because a busy minute makes a big count and an outage makes an old one.
 - A held payment charges nobody and is not a decline. If nobody rules on it, it expires
   refused rather than approved: letting a hold resolve to "take the money" makes the
   safe-looking answer the default and turns a review queue into a delay before approving.

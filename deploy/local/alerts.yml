@@ -42,6 +42,24 @@ groups:
             fix what it names, and redeliver it. Do not delete it: it is the only record that a
             merchant was never told.
 
+      - alert: EventsHaveStoppedLeaving
+        # Payments are still being taken, which is exactly why this needs an alert: the outbox
+        # keeps a broker outage from failing a single payment, so nothing a merchant does looks
+        # wrong. What stops is everything downstream: webhooks, notifications, settlement hearing
+        # about captures. A pass publishes within a second normally, so five minutes of the
+        # oldest event waiting is not a slow moment, it is nothing leaving. Five more before
+        # paging, so a broker restart does not wake anybody. MIZ-91.
+        expr: max(mizan_outbox_oldest_waiting_seconds) > 300
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: Payment events have stopped leaving the platform.
+          action: >-
+            Check whether Kafka is up and whether payment-service can reach it; the relay's
+            warnings name the error. Nothing is lost while it waits: the events are in the outbox
+            and go out in order once the broker answers. Do not delete or edit outbox rows.
+
       - alert: TheBankDisagreesAndNobodyHasRuled
         # The settlement service already says this in its logs after 24 hours (SaysSoOutLoud).
         # This is what makes it reach a person who is not reading logs.

@@ -140,6 +140,10 @@ class PaymentMetricsTest extends MizanIntegrationTest {
         // business: StuckPaymentsTest and ReviewTest own those.
         assertThat(gauge("mizan.payments.needing.a.person")).isNotNegative();
         assertThat(gauge("mizan.reviews.waiting")).isNotNegative();
+        // And what is waiting to leave. OutboxRelayTest makes a backlog on purpose and checks
+        // these follow it; here it is only that they exist beside the others.
+        assertThat(gauge("mizan.outbox.waiting")).isNotNegative();
+        assertThat(gauge("mizan.outbox.oldest.waiting.seconds")).isNotNegative();
     }
 
     @Test
