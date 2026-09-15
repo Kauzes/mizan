@@ -39,7 +39,7 @@ never written down.**
   state machine is bounded at eight steps a pass and stops with the platform's own reason.
 - **Busy is not refused.** 429 and 409 `CONTENDED` leave the payment unfinished, to be continued; any other
   refusal finishes it as refused, with the platform's reason.
-- **The card is never kept**, on the phone as on the platform (ADR 0044). It is held in memory for one authorization and cleared from the screen's
+- **The card is never kept.** The platform keeps a card out of even its own logs (ADR 0044), and the phone keeps it out of storage. It is held in memory for one authorization and cleared from the screen's
   state when it is handed over. A payment interrupted before its authorization was answered asks for the
   card again. The same card makes the same request, which the platform replays or reads back; a different
   card is a different body under the same key, which the platform refuses, and the app says so and that
