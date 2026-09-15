@@ -23,6 +23,9 @@ val dockerAccess = gradle.sharedServices.registerIfAbsent("dockerAccess", Docker
     maxParallelUsages.set(1)
 }
 
+/** The Tomcat this platform runs until Spring Boot manages a fixed one. See subprojects. */
+val tomcatAheadOfBoot = "11.0.25"
+
 val springBootBom = libs.spring.boot.bom
 val springCloudBom = libs.spring.cloud.bom
 val testcontainersBom = libs.testcontainers.bom
@@ -49,6 +52,21 @@ subprojects {
     dependencies {
         add("implementation", platform(springBootBom))
         add("implementation", platform(springCloudBom))
+
+        // Ahead of the Boot BOM, on purpose and for as short a time as possible. Spring Boot
+        // 4.0.8 manages Tomcat 11.0.24, which has three CRITICAL findings fixed in 11.0.25, and
+        // no Boot release manages 11.0.25 yet. The image scan (MIZ-82) found them; this is the
+        // fix rather than an exception, because a fix exists. Remove it in the same commit that
+        // moves springBoot to a release managing 11.0.25 or later; left behind it is harmless
+        // until the day it pins Tomcat below what Boot would have chosen, so it is not optional.
+        constraints {
+            listOf("tomcat-embed-core", "tomcat-embed-el", "tomcat-embed-websocket").forEach {
+                add("implementation", "org.apache.tomcat.embed:$it") {
+                    version { require(tomcatAheadOfBoot) }
+                    because("CVE-2026-65182, CVE-2026-65905, CVE-2026-68525 fixed in 11.0.25")
+                }
+            }
+        }
         add("testImplementation", platform(testcontainersBom))
         add("testImplementation", "org.springframework.boot:spring-boot-starter-test")
         add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")
