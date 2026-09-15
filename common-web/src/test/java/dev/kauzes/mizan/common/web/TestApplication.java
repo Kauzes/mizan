@@ -40,6 +40,18 @@ public class TestApplication {
             return CorrelationContext.currentOrEmpty();
         }
 
+        /** Set by a test before calling /slow, and counted down once the request is being handled. */
+        static volatile java.util.concurrent.CountDownLatch slowStarted =
+                new java.util.concurrent.CountDownLatch(1);
+
+        /** A request that is still in flight when a test tells the service to stop. */
+        @GetMapping("/slow")
+        String slow() throws InterruptedException {
+            slowStarted.countDown();
+            Thread.sleep(1_500);
+            return "finished";
+        }
+
         @PostMapping("/validate")
         String validate(@Valid @RequestBody Payload payload) {
             return payload.reference();

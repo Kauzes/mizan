@@ -86,3 +86,30 @@ fi
 printf '%s' "$existing" | grep -q 'name: supplied-elsewhere' \
     || fail "the services do not read from the Secret that was named"
 pass "and with an existing Secret named, it creates none and reads from that one"
+
+step "Every pod knows when it is starting, ready and alive, and leaves before it stops"
+
+lifecycle=$(printf '%s' "$rendered" | "$PYTHON" -c '
+import re, sys
+deployments = [d for d in sys.stdin.read().split("\n---") if "kind: Deployment" in d]
+problems = []
+for d in deployments:
+    name = re.search(r"^  name: (\S+)", d, re.M).group(1)
+    for needed in ("startupProbe:", "readinessProbe:", "livenessProbe:", "preStop:",
+                   "terminationGracePeriodSeconds:"):
+        if needed not in d:
+            problems.append("%s has no %s" % (name, needed.rstrip(":")))
+    ports = set(re.findall(r"port: (http|management) ", d))
+    expected = {"management"} if name == "gateway" else {"http"}
+    if ports != expected:
+        problems.append("%s is probed on %s, expected %s" % (name, sorted(ports), sorted(expected)))
+print("\n".join(problems) or "-")')
+[ "$lifecycle" = "-" ] || fail "$lifecycle"
+pass "every Deployment has startup, readiness and liveness probes, a preStop pause and a grace period"
+pass "and the gateway is probed on its management port, everybody else on http"
+
+without_simulator=$(helm template mizan /chart "${supplied[@]}" \
+    --set services.bank-simulator.enabled=false | grep -c '^kind: Deployment' || true)
+[ "$without_simulator" = "$((services - 1))" ] \
+    || fail "disabling bank-simulator still rendered $without_simulator Deployments"
+pass "and a service set to enabled: false is not installed"

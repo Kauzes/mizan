@@ -5,13 +5,17 @@ One template rather than eight near copies, for the reason MIZ-79 took eight log
 to one: the ninth service is otherwise the one somebody forgets to give a ConfigMap, or labels
 differently from its Service selector.
 
-Probes are deliberately absent here. What starting, ready and broken mean for each service, and
-how a pod finishes its work before it stops, is MIZ-84.
+Probes, the preStop pause and the grace period came with MIZ-84: starting, ready and alive are
+three questions with three consequences, and a pod finishes its work before it stops.
 */ -}}
 {{- $root := . }}
 {{- $tag := required "image.tag is required: the commit sha CI published (there is no latest)" .Values.image.tag }}
 {{- range $name, $svc := .Values.services }}
-{{- if ne (toString (default true $svc.enabled)) "false" }}
+{{- /* Compared as text: default treats false as empty, so "default true false" is true and
+     a service set to enabled: false was installed anyway. */ -}}
+{{- if ne (toString $svc.enabled) "false" }}
+{{- /* The gateway answers health on its management port (ADR 0040); everybody else on http. */ -}}
+{{- $probePort := ternary "management" "http" (not (empty $svc.managementPort)) }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -57,6 +61,9 @@ spec:
         # address is a configuration change too.
         checksum/config: {{ list $svc.env $svc.database $svc.kafka $root.Values.dependencies $root.Values.logFormat | toYaml | sha256sum }}
     spec:
+      # Longer than the preStop pause plus the application's shutdown phase, or the kubelet kills
+      # the process while it is still answering. LifecycleWiringTest keeps it so.
+      terminationGracePeriodSeconds: {{ $root.Values.lifecycle.terminationGracePeriodSeconds }}
       securityContext:
         # The image already runs as nonroot (MIZ-81). Said again here so the cluster refuses a
         # swapped image that does not.
@@ -88,6 +95,29 @@ spec:
                   key: {{ . }}
             {{- end }}
           {{- end }}
+          # Three questions, three consequences (MIZ-84). Starting: not asked the other two until
+          # it has started, so a slow migration is not mistaken for a hung process.
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: {{ $probePort }} }
+            periodSeconds: 5
+            failureThreshold: 36
+          # Ready: can it do the work now, database included? No: no traffic, nothing else.
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: {{ $probePort }} }
+            periodSeconds: 5
+            failureThreshold: 3
+          # Alive: is the process itself stuck? No: restart. Never a dependency, or a database
+          # outage restarts every pod of every service at once.
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: {{ $probePort }} }
+            periodSeconds: 10
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              # Leave the Service before stopping, so requests routed in the last moment do not
+              # reach a server already closing. The kubelet's own sleep: the image has no shell.
+              sleep:
+                seconds: {{ $root.Values.lifecycle.preStopSeconds }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

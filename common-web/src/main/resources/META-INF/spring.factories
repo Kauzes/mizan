@@ -1,5 +1,5 @@
-# How this platform logs, contributed before logging is initialised. Not an auto-configuration:
-# by the time beans exist the first lines have already been written in whatever shape Boot
-# chose, and the shape is the whole point.
+# Contributed before logging and the application context are initialised. Not auto-configurations:
+# by the time beans exist, the first lines have been written and the shutdown behaviour chosen.
 org.springframework.boot.EnvironmentPostProcessor=\
-  dev.kauzes.mizan.common.web.logging.HowThisPlatformLogs
+  dev.kauzes.mizan.common.web.logging.HowThisPlatformLogs,\
+  dev.kauzes.mizan.common.web.lifecycle.HowThisPlatformStops
