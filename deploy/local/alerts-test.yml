@@ -57,6 +57,30 @@ tests:
                 one, fix what it names, and redeliver it. Do not delete it: it is the only
                 record that a merchant was never told.
 
+  - name: events stuck in the outbox page, and a broker restart does not
+    interval: 1m
+    input_series:
+      - series: 'mizan_outbox_oldest_waiting_seconds{service="payment-service"}'
+        # A broker restart: the oldest event waits two minutes, then everything drains. Then an
+        # outage: nothing leaves, and the oldest event ages a minute every minute.
+        values: '0 60 120 0 0 60+60x15'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: EventsHaveStoppedLeaving
+        exp_alerts: []
+      - eval_time: 17m
+        alertname: EventsHaveStoppedLeaving
+        exp_alerts:
+          - exp_labels:
+              severity: page
+            exp_annotations:
+              summary: Payment events have stopped leaving the platform.
+              action: >-
+                Check whether Kafka is up and whether payment-service can reach it; the relay's
+                warnings name the error. Nothing is lost while it waits: the events are in the
+                outbox and go out in order once the broker answers. Do not delete or edit outbox
+                rows.
+
   - name: a difference unruled for a day raises a ticket, not a page
     interval: 1m
     input_series:

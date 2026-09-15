@@ -151,6 +151,12 @@ class OutboxRelayTest extends MizanIntegrationTest {
     @Autowired
     private Recording publisher;
 
+    @Autowired
+    private PaymentMetrics metrics;
+
+    @Autowired
+    private io.micrometer.core.instrument.MeterRegistry meters;
+
     @BeforeEach
     void clearWhateverEarlierTestsLeft() {
         // Every test in this class counts what was published, and the relay publishes
@@ -317,6 +323,45 @@ class OutboxRelayTest extends MizanIntegrationTest {
         relay.drain();
         assertThat(publisher.typesFor(payment))
                 .containsExactly("payment.authorized", "payment.captured");
+    }
+
+    @Test
+    void theBacklogIsCountedWhileItWaitsAndClearsOnceItLeaves() throws Exception {
+        Merchant merchant = merchantWithASettlementAccount();
+        UUID payment = authorized(merchant);
+
+        // The broker refusing, as it would while unreachable. MIZ-91.
+        publisher.refuse.add(payment);
+        relay.drain();
+        metrics.countWhatIsWaiting();
+
+        assertThat(gauge("mizan.outbox.waiting"))
+                .as("the one event that could not leave is counted")
+                .isEqualTo(1.0);
+
+        // Shown to be measured rather than merely present: a gauge stuck at zero would pass
+        // everything above. Aged by waiting, not by editing the row: the outbox refuses any change
+        // but published_at (outbox_event_is_append_only), which the first version of this test
+        // found by trying.
+        Thread.sleep(2_100);
+        metrics.countWhatIsWaiting();
+        assertThat(gauge("mizan.outbox.oldest.waiting.seconds"))
+                .as("how long the oldest has waited, which is what the alert pages on")
+                .isGreaterThanOrEqualTo(1.0);
+
+        publisher.refuse.remove(payment);
+        makeRetriesDue();
+        relay.drain();
+        metrics.countWhatIsWaiting();
+
+        assertThat(gauge("mizan.outbox.waiting")).isZero();
+        assertThat(gauge("mizan.outbox.oldest.waiting.seconds"))
+                .as("nothing waiting means nothing old, not the age of the last thing that was")
+                .isZero();
+    }
+
+    private double gauge(String name) {
+        return meters.get(name).gauge().value();
     }
 
     // -- reading the outbox --------------------------------------------------------------

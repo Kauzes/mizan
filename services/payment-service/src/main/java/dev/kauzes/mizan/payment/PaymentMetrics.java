@@ -73,6 +73,19 @@ public class PaymentMetrics {
 
     private final AtomicLong waitingForReview = new AtomicLong();
 
+    /**
+     * Events written and not yet published, and how long the oldest of them has waited. MIZ-91.
+     *
+     * <p>Kept here because this is the one service that publishes from an outbox. A broker that is
+     * unreachable costs a merchant nothing at the moment of paying, which is the point of the
+     * outbox, and it is also why nobody notices: payments keep being accepted while webhooks stop
+     * going out and settlement stops hearing about captures. The count says how much is waiting.
+     * The age says whether it is moving, which is the question an operator actually has.
+     */
+    private final AtomicLong eventsWaiting = new AtomicLong();
+
+    private final AtomicLong oldestEventWaitingSeconds = new AtomicLong();
+
     public PaymentMetrics(MeterRegistry meters, JdbcTemplate jdbc) {
         this.meters = meters;
         this.jdbc = jdbc;
@@ -83,6 +96,15 @@ public class PaymentMetrics {
 
         Gauge.builder("mizan.reviews.waiting", waitingForReview, AtomicLong::get)
                 .description("Payments held for review that nobody has ruled on")
+                .register(meters);
+
+        Gauge.builder("mizan.outbox.waiting", eventsWaiting, AtomicLong::get)
+                .description("Events written to the outbox and not yet published")
+                .register(meters);
+
+        Gauge.builder("mizan.outbox.oldest.waiting.seconds", oldestEventWaitingSeconds, AtomicLong::get)
+                .description("How long the oldest unpublished event has waited, 0 when none is")
+                .baseUnit("seconds")
                 .register(meters);
     }
 
@@ -155,6 +177,21 @@ public class PaymentMetrics {
                 """
                 select count(*) from payment
                 where status = 'HELD_FOR_REVIEW' and review_ruling is null
+                """));
+
+        eventsWaiting.set(countOf(
+                """
+                select count(*) from outbox_event where published_at is null
+                """));
+
+        // From when it was written, not when it happened: an event written a second ago about a
+        // payment from yesterday has waited a second. The outbox has no written-at column, so the
+        // time the event occurred stands in, which is the same moment for every event this
+        // service writes as it acts.
+        oldestEventWaitingSeconds.set(countOf(
+                """
+                select coalesce(extract(epoch from now() - min(occurred_at)), 0)::bigint
+                from outbox_event where published_at is null
                 """));
     }
 
