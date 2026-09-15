@@ -1,0 +1,148 @@
+# What an install of Mizan needs to be told.
+#
+# Everything a person MUST supply is marked REQUIRED, and the chart refuses to render without it,
+# naming what is missing. Nothing secret has a default here, because a default credential is
+# either obviously fake or quietly becomes the credential a deployment runs on.
+#
+#   helm install mizan deploy/helm/mizan \
+#     --set image.tag=<commit sha> \
+#     --set-file credentials.jwtPrivateKey=jwt.pem \
+#     --set credentials.databasePassword=... (and the rest of credentials below)
+#
+# The Compose stack stays the fast local path. This chart does not replace it.
+
+image:
+  # Where CI publishes (MIZ-82). Images are named mizan-<service>.
+  repository: ghcr.io/kauzes
+  # REQUIRED. The commit the images were built from. There is deliberately no default and no
+  # "latest": an install should say exactly which source it is running.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Things this chart connects to and does not install.
+dependencies:
+  postgres:
+    host: postgres
+    port: 5432
+    username: mizan
+  kafka:
+    bootstrapServers: kafka:9092
+  # The collector that decides which traces are kept (ADR 0043).
+  otlpEndpoint: http://otel-collector:4318/v1/traces
+
+# ECS JSON, because something is going to query these (ADR 0044). Readable text is for a person
+# watching a terminal, which is the Compose stack's job.
+logFormat: ecs
+
+# Credentials, delivered as one Kubernetes Secret. Either name a Secret that already exists with
+# these keys, or supply every value. REQUIRED one way or the other.
+credentials:
+  existingSecret: ""
+  # Postgres password for every service that owns a database.
+  databasePassword: ""
+  # Shared token for calls that move money between services (payment, settlement → ledger).
+  internalServiceToken: ""
+  # Base64 of 32 bytes. Encrypts merchant API key secrets at rest (identity-service).
+  apiKeyEncryptionKey: ""
+  # Base64 of 32 bytes. Encrypts webhook signing secrets at rest (notification-service).
+  # Deliberately a different key from the one above: one compromise should not be both.
+  webhookEncryptionKey: ""
+  # PKCS#8 PEM. Signs access tokens (identity-service). Pass with --set-file.
+  jwtPrivateKey: ""
+
+# One entry per service. Anything under env is plain configuration and lands in that service's
+# ConfigMap; nothing under env may be a credential, and ChartTest checks that.
+services:
+  gateway:
+    replicas: 2
+    port: 8080
+    # The actuator lives here and no Service exposes it (ADR 0040).
+    managementPort: 8090
+    resources:
+      requests: { cpu: 250m, memory: 384Mi }
+      limits: { memory: 512Mi }
+    env:
+      MIZAN_JWK_SET_URI: http://identity-service:8081/.well-known/jwks.json
+      MIZAN_API_KEY_VERIFICATION_URI: http://identity-service:8081/internal/api-keys/verify
+    credentials: []
+
+  identity-service:
+    replicas: 2
+    port: 8081
+    database: identity
+    resources:
+      requests: { cpu: 250m, memory: 384Mi }
+      limits: { memory: 512Mi }
+    env: {}
+    credentials: [databasePassword, apiKeyEncryptionKey, jwtPrivateKey]
+
+  ledger-service:
+    replicas: 2
+    port: 8082
+    database: ledger
+    resources:
+      requests: { cpu: 250m, memory: 384Mi }
+      limits: { memory: 512Mi }
+    env: {}
+    credentials: [databasePassword, internalServiceToken]
+
+  payment-service:
+    replicas: 2
+    port: 8083
+    database: payment
+    kafka: true
+    resources:
+      requests: { cpu: 500m, memory: 512Mi }
+      limits: { memory: 768Mi }
+    env:
+      MIZAN_ACQUIRER_URL: http://bank-simulator:8086
+      MIZAN_LEDGER_URL: http://ledger-service:8082
+      MIZAN_RISK_URL: http://risk-service:8084
+    credentials: [databasePassword, internalServiceToken]
+
+  risk-service:
+    replicas: 2
+    port: 8084
+    database: risk
+    kafka: true
+    resources:
+      requests: { cpu: 250m, memory: 384Mi }
+      limits: { memory: 512Mi }
+    env: {}
+    credentials: [databasePassword]
+
+  notification-service:
+    replicas: 2
+    port: 8085
+    database: notification
+    kafka: true
+    resources:
+      requests: { cpu: 250m, memory: 384Mi }
+      limits: { memory: 512Mi }
+    env: {}
+    credentials: [databasePassword, webhookEncryptionKey]
+
+  settlement-service:
+    replicas: 2
+    port: 8087
+    database: settlement
+    kafka: true
+    resources:
+      requests: { cpu: 250m, memory: 384Mi }
+      limits: { memory: 512Mi }
+    env:
+      MIZAN_ACQUIRER_URL: http://bank-simulator:8086
+      MIZAN_LEDGER_URL: http://ledger-service:8082
+    credentials: [databasePassword, internalServiceToken]
+
+  # The fake acquirer. A real deployment turns it off and points the payment and settlement
+  # services at a real one.
+  bank-simulator:
+    enabled: true
+    replicas: 1
+    port: 8086
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { memory: 384Mi }
+    env: {}
+    credentials: []

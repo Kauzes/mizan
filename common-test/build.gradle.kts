@@ -30,11 +30,20 @@ dependencies {
 // which was found the first time a metric name in a dashboard was deliberately broken and the
 // build stayed green.
 tasks.named<Test>("test") {
-    inputs.files(rootProject.file("docker-compose.yml"), rootProject.file(".env"))
+    // .trivyignore.yaml is read by ExceptionsTest. Left out, an exception could be edited to
+    // run until 2099 and the test that forbids it would stay UP-TO-DATE and never run.
+    inputs.files(
+        rootProject.file("docker-compose.yml"),
+        rootProject.file(".env"),
+        rootProject.file(".trivyignore.yaml"))
         .withPropertyName("platformFiles")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 
-    inputs.dir(rootProject.file("deploy/local"))
+    // All of deploy, not only deploy/local. The Helm chart arrived in MIZ-83 under deploy/helm,
+    // and ChartTest stayed UP-TO-DATE through a deliberately broken values.yaml because only
+    // the directory that existed when this was written had been declared — the same hole,
+    // one directory over.
+    inputs.dir(rootProject.file("deploy"))
         .withPropertyName("deployFiles")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 

@@ -32,6 +32,11 @@ jobs:
       - name: Build
         run: ./gradlew build
 
+      - name: The Helm chart renders, and refuses to render incomplete
+        # Helm runs from a pinned image, so nothing is installed on the runner for it. ChartTest
+        # in the build above checks the chart's values; this checks what Helm makes of them.
+        run: ./scripts/check-chart.sh
+
       - name: Publish test report
         if: always()
         uses: actions/upload-artifact@v4

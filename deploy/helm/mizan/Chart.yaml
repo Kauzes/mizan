@@ -1,0 +1,10 @@
+apiVersion: v2
+name: mizan
+description: >-
+  The Mizan payments platform: eight services, installed together. Postgres, Kafka and the
+  observability stack are dependencies this chart points at rather than owns.
+type: application
+# The chart's own version. The services' version is the image tag, supplied at install time and
+# never defaulted: see values.yaml.
+version: 0.1.0
+appVersion: "0.1.0"

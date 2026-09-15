@@ -113,6 +113,14 @@ other protected route.
   trace is kept for days and read by whoever is debugging, which makes it exactly the wrong
   place for any of them. The smoke check reads back a real trace and fails on an attribute that
   is named like a secret or holds anything card shaped.
+- One Helm chart, `deploy/helm/mizan`, installs all eight services onto a cluster from one loop over
+  its values. It points at Postgres, Kafka and the trace collector rather than installing them.
+  It will not render without an image tag, since there is no `latest`, or without every
+  credential, and it names whatever is missing. Credentials go only into a Secret, each service
+  receives just the keys it reads, and no Service exposes a management port. Every pod runs as
+  non root with a read-only root filesystem and no capabilities. `ChartTest` keeps the chart in
+  step with the service modules, and `scripts/check-chart.sh` renders it every way an install can
+  go. The Compose stack stays the fast local path. ADR 0048.
 - CI publishes the image it tested, and a known fixable hole stops it. The images the smoke check,
   the browser journey and the demo seed ran against are the ones scanned, and on main the ones
   pushed to the GitHub container registry, tagged by commit. A pull request publishes nothing.
