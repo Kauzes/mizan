@@ -30,6 +30,12 @@ data:
   {{- if $svc.database }}
   MIZAN_DB_URL: {{ printf "jdbc:postgresql://%s:%v/%s" $root.Values.dependencies.postgres.host $root.Values.dependencies.postgres.port $svc.database | quote }}
   MIZAN_DB_USERNAME: {{ $root.Values.dependencies.postgres.username | quote }}
+  {{- if $svc.databasePool }}
+  # Sized against the Postgres connection budget in values.yaml, not left at Hikari's ten.
+  SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE: {{ $svc.databasePool | quote }}
+  # An idle pod keeps two open rather than its whole pool.
+  SPRING_DATASOURCE_HIKARI_MINIMUMIDLE: "2"
+  {{- end }}
   {{- end }}
   {{- if $svc.kafka }}
   MIZAN_KAFKA: {{ $root.Values.dependencies.kafka.bootstrapServers | quote }}
@@ -46,7 +52,12 @@ metadata:
     {{- include "mizan.labels" $root | nindent 4 }}
     app.kubernetes.io/name: {{ $name }}
 spec:
+  {{- if not $svc.autoscaling }}
   replicas: {{ $svc.replicas }}
+  {{- else }}
+  # No replicas here: the autoscaler owns the count (autoscaling.yaml). With one, every helm upgrade
+  # would reset it and a deploy under load would shrink the service it is deploying.
+  {{- end }}
   selector:
     matchLabels:
       {{- include "mizan.selector" $name | nindent 6 }}
@@ -59,7 +70,7 @@ spec:
         # next unrelated restart and nobody can say which configuration a pod is running.
         # Everything the ConfigMap is built from, not only the service's own env: a new Kafka
         # address is a configuration change too.
-        checksum/config: {{ list $svc.env $svc.database $svc.kafka $root.Values.dependencies $root.Values.logFormat | toYaml | sha256sum }}
+        checksum/config: {{ list $svc.env $svc.database $svc.databasePool $svc.kafka $root.Values.dependencies $root.Values.logFormat | toYaml | sha256sum }}
     spec:
       # Longer than the preStop pause plus the application's shutdown phase, or the kubelet kills
       # the process while it is still answering. LifecycleWiringTest keeps it so.

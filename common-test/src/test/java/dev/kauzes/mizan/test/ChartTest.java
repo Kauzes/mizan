@@ -108,6 +108,44 @@ class ChartTest {
         assertThat(values).containsPattern("\\n  tag: \"\"\\n");
     }
 
+    @Test
+    void everyPodTheChartCanRunFitsInsidePostgresesConnectionLimit() {
+        // Hikari opens its whole pool at start, so a pod's connections are its pool size from the
+        // moment it exists, not only under load. Counted at the most pods the chart can run: an
+        // autoscaler's maximum, not its minimum, because the last pod to scale up is the one that
+        // is refused with "too many clients" at the moment traffic is highest.
+        int limit = numberOr(values, "(?m)^    maxConnections: (\\d+)", 100);
+        int reserved = numberOr(values, "(?m)^    reservedConnections: (\\d+)", 10);
+        int budget = limit - reserved;
+
+        int total = 0;
+        StringBuilder breakdown = new StringBuilder();
+        for (Map.Entry<String, String> service : servicesInTheChart.entrySet()) {
+            String block = service.getValue();
+            if (!Pattern.compile("(?m)^    database: ").matcher(block).find()) {
+                continue;
+            }
+            int pods = numberOr(block, "(?m)^      maxReplicas: (\\d+)",
+                    numberOr(block, "(?m)^    replicas: (\\d+)", 1));
+            // Hikari's own default when the chart does not say.
+            int pool = numberOr(block, "(?m)^    databasePool: (\\d+)", 10);
+            total += pods * pool;
+            breakdown.append(String.format("%n  %s: %d pod(s) x %d = %d",
+                    service.getKey(), pods, pool, pods * pool));
+        }
+
+        assertThat(total)
+                .as("the chart can open %d connections against a budget of %d (%d less %d kept "
+                        + "for migrations and a person with psql):%s",
+                        total, budget, limit, reserved, breakdown)
+                .isLessThanOrEqualTo(budget);
+    }
+
+    private static int numberOr(String text, String pattern, int otherwise) {
+        Matcher found = Pattern.compile(pattern).matcher(text);
+        return found.find() ? Integer.parseInt(found.group(1)) : otherwise;
+    }
+
     private static Map<String, String> servicesIn(String values) {
         int start = values.indexOf("\nservices:\n");
         assertThat(start).as("values.yaml should have a services block").isPositive();
