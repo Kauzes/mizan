@@ -47,6 +47,15 @@ public interface PaymentRepository
             PaymentStatus status, Instant before);
 
     /**
+     * Captures that were started and never finished, and have settled. MIZ-90.
+     *
+     * <p>Still authorized, because a finished capture moves the payment on and clears the mark.
+     * Ones that need a person are left out, for the same reason as above.
+     */
+    List<Payment> findByStatusAndCaptureStartedAtBeforeAndNeedsAttentionSinceIsNull(
+            PaymentStatus status, Instant before);
+
+    /**
      * Payments held for review that nobody has ruled on, since before a moment.
      *
      * <p>The sweep must skip a released payment: a person has already decided, and expiring it

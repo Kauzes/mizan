@@ -92,6 +92,16 @@ public class Payment {
     private UUID ledgerEntryId;
 
     /**
+     * When a capture was started and not yet finished. MIZ-90.
+     *
+     * <p>Written and committed before the acquirer is asked, so that a capture interrupted
+     * between the acquirer and the ledger is something a sweep can find. Not a status: the
+     * payment is still authorized, and what this records is that something began.
+     */
+    @Column(name = "capture_started_at")
+    private Instant captureStartedAt;
+
+    /**
      * What has been given back so far.
      *
      * <p>Kept here rather than summed from the refunds on every request, because it is the
@@ -354,7 +364,35 @@ public class Payment {
      */
     public void captured(UUID ledgerEntryId) {
         this.ledgerEntryId = Objects.requireNonNull(ledgerEntryId, "ledgerEntryId");
+        this.captureStartedAt = null;
         moveTo(PaymentStatus.CAPTURED, null);
+    }
+
+    /**
+     * Writes down that a capture has begun, before anybody outside the platform is asked.
+     *
+     * <p>The count of attempts starts again, because it now counts attempts to finish this
+     * capture, not whatever was once tried while working out the authorization.
+     */
+    public void captureStarted() {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        this.captureStartedAt = now;
+        this.resolveAttempts = 0;
+        this.updatedAt = now;
+    }
+
+    /**
+     * The capture never took the money: the acquirer refused it, or says it still only holds
+     * the authorization. Nothing moved, so the payment is simply authorized again, and a capture
+     * can be sent as if none had been.
+     */
+    public void captureNotReached() {
+        this.captureStartedAt = null;
+        this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+    }
+
+    public Instant captureStartedAt() {
+        return captureStartedAt;
     }
 
     /**
