@@ -141,6 +141,29 @@ class ChartTest {
                 .isLessThanOrEqualTo(budget);
     }
 
+    @Test
+    void callsWaitingOnTheAcquirerLeaveConnectionsForEverythingElse() {
+        // ADR 0052. An authorization holds a connection while it waits on the acquirer. If as many
+        // may wait as the pool has connections, a slow acquirer takes them all and a merchant
+        // reading a payment waits behind the bank, which is what the limit exists to prevent.
+        int checked = 0;
+        for (Map.Entry<String, String> service : servicesInTheChart.entrySet()) {
+            String block = service.getValue();
+            Matcher limit = Pattern.compile("(?m)^      MIZAN_ACQUIRER_MAX_CONCURRENT_CALLS: \"?(\\d+)")
+                    .matcher(block);
+            if (!limit.find()) {
+                continue;
+            }
+            int pool = numberOr(block, "(?m)^    databasePool: (\\d+)", 10);
+            assertThat(Integer.parseInt(limit.group(1)))
+                    .as("%s lets %s calls wait on the acquirer with a pool of %d",
+                            service.getKey(), limit.group(1), pool)
+                    .isLessThan(pool);
+            checked++;
+        }
+        assertThat(checked).as("payment-service sets the limit").isPositive();
+    }
+
     private static int numberOr(String text, String pattern, int otherwise) {
         Matcher found = Pattern.compile(pattern).matcher(text);
         return found.find() ? Integer.parseInt(found.group(1)) : otherwise;

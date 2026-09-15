@@ -44,6 +44,14 @@ mizan:
     # How long to wait before the answer counts as not having arrived. Short enough that a
     # merchant is not left holding a request, long enough that an ordinary answer arrives.
     timeout: ${MIZAN_ACQUIRER_TIMEOUT:5s}
+    # ADR 0052. Failures in a row, not a rate: a declined card is an answer and never counts, so
+    # ten in a row means the acquirer, not a merchant's customers.
+    failures-before-giving-up: ${MIZAN_ACQUIRER_FAILURES_BEFORE_GIVING_UP:10}
+    leave-alone-for: ${MIZAN_ACQUIRER_LEAVE_ALONE_FOR:10s}
+    # How many calls may wait on the acquirer at once. Each holds a database connection, so this
+    # stays below the pool, leaving connections for everything that is not waiting on the bank.
+    max-concurrent-calls: ${MIZAN_ACQUIRER_MAX_CONCURRENT_CALLS:8}
+    wait-for-a-turn: ${MIZAN_ACQUIRER_WAIT_FOR_A_TURN:100ms}
   ledger:
     # The books live in another service, reached directly rather than through the edge: this
     # is not a merchant's request being forwarded, it is the platform recording what it did.

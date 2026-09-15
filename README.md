@@ -362,6 +362,10 @@ other protected route.
 - The risk timeout is shorter than the acquirer's, and there is a circuit breaker in front of
   it. A guard that takes as long as the thing it guards has stopped being a guard, and one
   that costs a timeout per payment while it is down has become the outage.
+- The acquirer has a breaker too, and a limit on how many calls may wait on it at once, below
+  the database pool (ADR 0052). A slow bank would otherwise take every connection, and a merchant
+  reading a payment would wait behind it. Both refuse without sending, as a 503 rather than a 504:
+  a request never sent leaves nothing unknown to resolve, and every write is safe to retry.
 - A held payment charges nobody and is not a decline. If nobody rules on it, it expires
   refused rather than approved: letting a hold resolve to "take the money" makes the
   safe-looking answer the default and turns a review queue into a delay before approving.

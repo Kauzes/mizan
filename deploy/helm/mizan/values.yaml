@@ -138,6 +138,9 @@ services:
       limits: { memory: 768Mi }
     env:
       MIZAN_ACQUIRER_URL: http://bank-simulator:8086
+      # ADR 0052. Below databasePool, so a slow acquirer cannot take the connections a merchant
+      # reading a payment needs. ChartTest holds the two together.
+      MIZAN_ACQUIRER_MAX_CONCURRENT_CALLS: "3"
       MIZAN_LEDGER_URL: http://ledger-service:8082
       MIZAN_RISK_URL: http://risk-service:8084
     credentials: [databasePassword, internalServiceToken]

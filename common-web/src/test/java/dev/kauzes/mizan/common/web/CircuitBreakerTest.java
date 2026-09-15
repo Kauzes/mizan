@@ -11,6 +11,39 @@ import org.junit.jupiter.api.Test;
 class CircuitBreakerTest {
 
     @Test
+    void aRefusalIsAnAnswerAndDoesNotOpenIt() {
+        AtomicInteger asked = new AtomicInteger();
+        CircuitBreaker breaker = new CircuitBreaker(
+                "thing", 2, Duration.ofMinutes(1),
+                failed -> failed instanceof IllegalArgumentException);
+
+        for (int i = 0; i < 10; i++) {
+            assertThatThrownBy(() -> breaker.call(() -> {
+                        asked.incrementAndGet();
+                        throw new IllegalArgumentException("no, and that is my answer");
+                    }))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        assertThat(asked).as("every one was asked").hasValue(10);
+        assertThat(breaker.state()).isEqualTo(CircuitBreaker.State.CLOSED);
+
+        // And an answer in between failures resets the count, as a success does.
+        assertThatThrownBy(() -> breaker.call(() -> {
+                    throw new IllegalStateException("broken");
+                }))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> breaker.call(() -> {
+                    throw new IllegalArgumentException("no");
+                }))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> breaker.call(() -> {
+                    throw new IllegalStateException("broken");
+                }))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(breaker.state()).isEqualTo(CircuitBreaker.State.CLOSED);
+    }
+
+    @Test
     void letsCallsThroughWhileTheyWork() {
         CircuitBreaker breaker = new CircuitBreaker("thing", 3, Duration.ofMinutes(1));
 
