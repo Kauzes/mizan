@@ -730,8 +730,9 @@ action to take — because it is the same question about a different subject.
 
 An Android app for merchants taking payments in person, in `android/`: Kotlin, Jetpack Compose,
 MVVM with coroutines and Flow, built the same way as the Sentinel Pay app (ADR 0057). It is being
-built one story at a time under MIZ-14; today a merchant signs in, sees their own business, stays
-signed in across launches, and signs out. It can also check that the platform is answering.
+built one story at a time under MIZ-14; today a merchant signs in, stays signed in across launches,
+and takes card payments that are charged once however the app is interrupted. It can also check that
+the platform is answering.
 
 ```sh
 cd android
@@ -751,6 +752,14 @@ cd android
   would sign the merchant out. Renewal happens before a token expires, not after a request fails.
 - **Only the platform ends a session.** A refresh it rejects signs the merchant out; a refresh that
   cannot reach it keeps the session, because losing signal is not signing out.
+- **A payment taken on the phone is charged once, even if the app dies mid-way** (ADR 0059). Its
+  reference and an idempotency key for each of create, authorize and capture are written to a Room
+  database before anything is sent, and resuming sends the same requests with the same keys. An
+  interrupted payment is offered to continue when the app is next opened. Killed on the emulator while
+  the acquirer withheld an authorization, then reopened: one payment, authorized once, captured once.
+- **The card number is never stored.** A payment interrupted before its authorization was answered asks
+  for the card again; a different card under the same key is refused by the platform, and the app says
+  nothing was charged to it.
 - **Every push that changes the app builds an APK** (`.github/workflows/android.yml`), downloadable
   from the run. The UI tests are compiled there and run on an emulator locally, because a hosted
   runner's emulator is slow enough and flaky enough to be ignored.

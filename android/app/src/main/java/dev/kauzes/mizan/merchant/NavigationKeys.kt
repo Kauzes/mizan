@@ -11,3 +11,6 @@ import kotlinx.serialization.Serializable
 
 /** Where a signed in merchant starts. */
 @Serializable data object Home : NavKey
+
+/** Taking a payment, and finishing one that was interrupted. */
+@Serializable data object TakePayment : NavKey
