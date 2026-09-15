@@ -43,6 +43,10 @@ data:
   {{- if $svc.kafka }}
   MIZAN_KAFKA: {{ $root.Values.dependencies.kafka.bootstrapServers | quote }}
   {{- end }}
+  {{- if $svc.redis }}
+  MIZAN_REDIS_HOST: {{ $root.Values.dependencies.redis.host | quote }}
+  MIZAN_REDIS_PORT: {{ $root.Values.dependencies.redis.port | quote }}
+  {{- end }}
   {{- range $key, $value := $svc.env }}
   {{ $key }}: {{ $value | quote }}
   {{- end }}
@@ -73,7 +77,7 @@ spec:
         # next unrelated restart and nobody can say which configuration a pod is running.
         # Everything the ConfigMap is built from, not only the service's own env: a new Kafka
         # address is a configuration change too.
-        checksum/config: {{ list $svc.env $svc.database $svc.databasePool $svc.kafka $root.Values.dependencies $root.Values.logFormat $root.Values.jvm | toYaml | sha256sum }}
+        checksum/config: {{ list $svc.env $svc.database $svc.databasePool $svc.kafka $svc.redis $root.Values.dependencies $root.Values.logFormat $root.Values.jvm | toYaml | sha256sum }}
     spec:
       # Longer than the preStop pause plus the application's shutdown phase, or the kubelet kills
       # the process while it is still answering. LifecycleWiringTest keeps it so.

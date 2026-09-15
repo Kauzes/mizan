@@ -58,6 +58,39 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: redis
+spec:
+  selector: { app: redis }
+  ports: [{ name: redis, port: 6379, targetPort: 6379 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: redis } }
+  template:
+    metadata: { labels: { app: redis } }
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: redis
+          # The same image Compose runs (.env). Where the gateway keeps each merchant's rate limit, so
+          # every gateway pod counts against the same allowance (ADR 0053). Nothing here needs to
+          # survive a restart: losing it resets every allowance to full, which is harmless.
+          image: redis:8-alpine
+          ports: [{ containerPort: 6379 }]
+          readinessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            timeoutSeconds: 3
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: kafka
 spec:
   selector: { app: kafka }

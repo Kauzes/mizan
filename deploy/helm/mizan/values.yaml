@@ -33,6 +33,11 @@ dependencies:
     reservedConnections: 10
   kafka:
     bootstrapServers: kafka:9092
+  # Where the gateway keeps each merchant's rate limit, shared by every gateway pod (ADR 0053).
+  # Not required to route: with Redis unreachable the gateway lets requests through unlimited.
+  redis:
+    host: redis
+    port: 6379
   # The collector that decides which traces are kept (ADR 0043).
   otlpEndpoint: http://otel-collector:4318/v1/traces
 
@@ -77,12 +82,17 @@ services:
     port: 8080
     # The actuator lives here and no Service exposes it (ADR 0040).
     managementPort: 8090
+    redis: true
     resources:
       requests: { cpu: 250m, memory: 384Mi }
       limits: { memory: 512Mi }
     env:
       MIZAN_JWK_SET_URI: http://identity-service:8081/.well-known/jwks.json
       MIZAN_API_KEY_VERIFICATION_URI: http://identity-service:8081/internal/api-keys/verify
+      # ADR 0053. Per merchant, across every gateway pod. A merchant may send this many requests a
+      # second, and briefly up to the burst after being quiet. Beyond that, 429 with Retry-After.
+      MIZAN_RATE_LIMIT_PER_SECOND: "100"
+      MIZAN_RATE_LIMIT_BURST: "200"
     credentials: []
 
   identity-service:

@@ -4,6 +4,15 @@ server:
 spring:
   application:
     name: gateway
+  data:
+    redis:
+      # Each merchant's rate limit (ADR 0053). Short timeouts on purpose: Redis answering is the
+      # limit being applied, and Redis not answering is the limit being skipped. Neither is worth
+      # making a merchant wait for.
+      host: ${MIZAN_REDIS_HOST:localhost}
+      port: ${MIZAN_REDIS_PORT:6379}
+      connect-timeout: 500ms
+      timeout: 250ms
   reactor:
     # The tracing context lives in the Reactor context here, not in a thread local, because
     # this service is reactive and a request is not one thread. Without this, code inside a
@@ -112,6 +121,13 @@ spring:
                 - Path=/actuator/health,/actuator/health/**
 
 mizan:
+  rate-limit:
+    # Per merchant, shared across every gateway pod. A merchant's allowance refills at this many
+    # requests a second and holds at most the burst, so a merchant quiet for a moment can send a
+    # burst and a merchant sending steadily is held to the rate. Public routes, with no merchant
+    # yet, are not counted here.
+    requests-per-second: ${MIZAN_RATE_LIMIT_PER_SECOND:100}
+    burst: ${MIZAN_RATE_LIMIT_BURST:200}
   security:
     jwt:
       # The only issuer this gateway accepts.
