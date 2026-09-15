@@ -15,6 +15,15 @@ junit = "4.13.2"
 kotlin = "2.3.20"
 nav3Core = "1.0.1"
 lifecycleViewmodelNav3 = "2.10.0"
+# The app's first calls that need more than one GET (MIZ-98). OkHttp for HTTP and MockWebServer to test
+# it against real HTTP; kotlinx.serialization because its compiler plugin is already applied.
+#
+# OkHttp 5.4.0, not the newest. 5.5.0's Android artifact declares minCompileSdk 37, and this app compiles
+# against 36, which is also the highest AGP 9.0.1 supports. Read from each release's AAR metadata: 5.4.0
+# is the newest that asks for 36. Moving past it means moving AGP and compileSdk together, with Sentinel
+# Pay. kotlinx.serialization is the newest stable release, not the release candidate.
+okhttp = "5.4.0"
+kotlinxSerialization = "1.11.0"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -37,6 +46,9 @@ kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-t
 androidx-navigation3-runtime = { module = "androidx.navigation3:navigation3-runtime", version.ref = "nav3Core" }
 androidx-navigation3-ui = { module = "androidx.navigation3:navigation3-ui", version.ref = "nav3Core" }
 androidx-lifecycle-viewmodel-navigation3 = { module = "androidx.lifecycle:lifecycle-viewmodel-navigation3", version.ref = "lifecycleViewmodelNav3" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver3", version.ref = "okhttp" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }

@@ -730,8 +730,8 @@ action to take — because it is the same question about a different subject.
 
 An Android app for merchants taking payments in person, in `android/`: Kotlin, Jetpack Compose,
 MVVM with coroutines and Flow, built the same way as the Sentinel Pay app (ADR 0057). It is being
-built one story at a time under MIZ-14; today it starts, shows which platform it talks to, and
-checks that the platform is answering.
+built one story at a time under MIZ-14; today a merchant signs in, sees their own business, stays
+signed in across launches, and signs out. It can also check that the platform is answering.
 
 ```sh
 cd android
@@ -744,6 +744,13 @@ cd android
   running it. Anything else is `-Pmizan.gateway=...`.
 - **Plain HTTP is allowed to the emulator's host and to `localhost`, and nowhere else.** The local
   stack is HTTP; a deployed gateway carries card numbers and tokens and must not be.
+- **The phone holds its own session, encrypted with a key that never leaves the Android Keystore**
+  (ADR 0058). Nothing in the app's storage reads as a token, an email or a merchant id.
+- **A token is renewed once, however many screens ask for it at the same moment.** The platform's
+  refresh tokens are single use and replaying one revokes the whole session, so two renewals racing
+  would sign the merchant out. Renewal happens before a token expires, not after a request fails.
+- **Only the platform ends a session.** A refresh it rejects signs the merchant out; a refresh that
+  cannot reach it keeps the session, because losing signal is not signing out.
 - **Every push that changes the app builds an APK** (`.github/workflows/android.yml`), downloadable
   from the run. The UI tests are compiled there and run on an emulator locally, because a hosted
   runner's emulator is slow enough and flaky enough to be ignored.
