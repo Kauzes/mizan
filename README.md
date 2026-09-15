@@ -494,6 +494,29 @@ processes, in the images they are deployed as, over a real network, reached thro
 gateway. See [Running](#running). Both layers run in CI, and the smoke check does not wait
 for the suite — the whole point of it is the failures that leave the suite green.
 
+## Performance
+
+Measured with k6 at a fixed arrival rate, one payment per iteration: create, authorize and capture
+through the gateway, spread across ten merchants, with the books checked afterwards. On one laptop
+running everything (Ryzen 5 5600H, Docker Desktop with 7.4 GiB):
+
+| Profile | Offered | Captured | Failed | One payment, p50 / p95 / p99 |
+|---|---|---|---|---|
+| steady, 3 minutes | 30/s | 29.1/s | 0.012% | 76ms / 1,254ms / 2,160ms |
+| spike, 10 → 120 → 10/s | up to 120/s | 51.7/s averaged | none | 2,295ms / 3,801ms / 4,327ms |
+
+Steady is fast in the middle with a long tail. Spike saturates this laptop: latency rises to seconds and
+341 payments could not be started at the peak, but nothing failed and the books balanced. Overload
+here is slow, not broken.
+
+```sh
+./scripts/load-profiles.sh              # steady, then spike; fails on a missed threshold or books that do not balance
+```
+
+The profiles, the thresholds, every step's latency and what the numbers do not say are in
+[docs/performance](docs/performance/README.md). How they are measured, and why at a fixed arrival
+rate rather than with a fixed number of users, is ADR 0054.
+
 ## Migrations
 
 Each service keeps its schema in `src/main/resources/db/migration/<service>`, as
