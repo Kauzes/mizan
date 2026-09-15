@@ -113,6 +113,13 @@ other protected route.
   trace is kept for days and read by whoever is debugging, which makes it exactly the wrong
   place for any of them. The smoke check reads back a real trace and fails on an attribute that
   is named like a secret or holds anything card shaped.
+- A service image holds the service and nothing an attacker could use. Every image runs on a
+  distroless Java 21 base as a non root user, with no shell, no package manager and no curl.
+  The one thing that used curl, the container healthcheck, is now a single compiled class run
+  by the JVM already in the image. The jar is split into layers, so a code change pushes
+  under a megabyte instead of the 97 MB of dependencies. The smoke check inspects the running
+  images rather than trusting the Dockerfile. The images are only about seven percent smaller;
+  the point is what they no longer contain. ADR 0046.
 - Something wakes somebody up, and only for the things worth waking up for. Five alert rules in
   `deploy/local/alerts.yml`, loaded by the stack's Prometheus: the ledger not balancing, an event
   set aside, a difference with the bank unruled for a day, a collapse in the approval rate, and a
