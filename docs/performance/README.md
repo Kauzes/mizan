@@ -84,6 +84,14 @@ it is the platform.
 What overload looks like, then, is slow rather than broken. Requests queue, and k6 reports the ones it
 could not start rather than quietly sending fewer.
 
+## In CI
+
+`.github/workflows/load.yml` runs steady and spike on main and on changes to the load profiles. A
+GitHub runner is a much smaller machine, and the first run there saturated at steady's 30 payments a
+second: 24.8 a second captured, 755 never started, about 1.7 seconds per step at the median. So CI
+runs steady at **10 a second** (`MIZAN_LOAD_RATE`), against the same latency thresholds. Its numbers
+are a regression check, not the ones recorded above.
+
 ## Thresholds
 
 A run fails if any is missed:

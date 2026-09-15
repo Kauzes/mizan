@@ -14,11 +14,15 @@ import { Counter, Trend } from 'k6/metrics';
 const GATEWAY = __ENV.GATEWAY || 'http://localhost:8080';
 const PROFILE = __ENV.PROFILE || 'steady';
 const MERCHANTS = parseInt(__ENV.MERCHANTS || '10', 10);
+// Payments a second for the constant profiles. The recorded numbers use the defaults. CI lowers it:
+// a GitHub runner saturated below 25 a second, and a latency threshold is only a regression check
+// at a rate the machine can sustain (ADR 0054).
+const RATE = __ENV.RATE ? parseInt(__ENV.RATE, 10) : null;
 
 const PROFILES = {
   steady: {
     executor: 'constant-arrival-rate',
-    rate: 30, timeUnit: '1s', duration: '3m',
+    rate: RATE || 30, timeUnit: '1s', duration: '3m',
     preAllocatedVUs: 60, maxVUs: 200,
   },
   spike: {
@@ -35,7 +39,7 @@ const PROFILES = {
   },
   soak: {
     executor: 'constant-arrival-rate',
-    rate: 20, timeUnit: '1s', duration: '30m',
+    rate: RATE || 20, timeUnit: '1s', duration: '30m',
     preAllocatedVUs: 40, maxVUs: 150,
   },
 };

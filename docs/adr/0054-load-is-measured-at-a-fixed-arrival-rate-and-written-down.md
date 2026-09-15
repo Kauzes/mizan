@@ -55,7 +55,8 @@ profile has thresholds that fail the run, and writes its numbers beside a descri
   numbers recorded in `docs/performance/README.md` carry that description.
 - **CI runs steady and spike** on main, on demand, and on changes to the load profiles. A GitHub
   runner is a different, shared machine, so its numbers are not the recorded ones; what CI protects is
-  the thresholds.
+  the thresholds. **At a rate the runner can sustain**: steady runs at 10 payments a second in CI,
+  not 30 (below).
 
 ## Results
 
@@ -92,6 +93,26 @@ collapse would reach.
 This is exactly the kind of change the rule "chosen before the first run" exists to catch, so it is
 written down here rather than made quietly. What it does not do: it does not relax steady, whose
 latency limits are unchanged, and it does not hide spike's latency, which is in every result.
+
+### The first CI run, and a rate for a smaller machine
+
+The first run on a GitHub runner offered steady's 30 payments a second, and the runner saturated:
+
+| On a GitHub runner | steady at 30/s | spike |
+|---|---|---|
+| Captured | 24.8/s | 33.8/s averaged |
+| Never started | 755 | 3,423 |
+| Per step, p50 / p95 | about 1.7s / 4.2s | about 1.6s / 3.0s |
+| Failed | 0.029% | none |
+| Books afterwards | balanced | balanced |
+
+Steady failed its latency thresholds, and would on every run. Under that CPU starvation the gateway's
+Redis calls also hit their 250ms timeout, and it let those requests through, as ADR 0053 means it to.
+
+The latency limits were not loosened. They say what ordinary traffic may cost, and this laptop meets
+them. The rate was lowered instead: CI runs steady at 10 payments a second, set in the workflow, so
+the same limits are a regression check on that machine rather than a measurement of how small it is.
+Spike is unchanged, because overloading whatever it runs on is its purpose.
 
 ## Consequences
 

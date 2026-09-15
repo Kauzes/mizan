@@ -30,6 +30,9 @@ fi
 K6_IMAGE="$(grep -E '^K6_IMAGE=' "$ROOT/.env" | cut -d= -f2)"
 NETWORK="${MIZAN_NETWORK:-mizan_default}"
 MERCHANTS="${MIZAN_LOAD_MERCHANTS:-10}"
+# Payments a second for steady and soak; unset means the profile's own rate, which is what the
+# recorded numbers use. CI sets a lower one for a smaller machine (ADR 0054).
+RATE="${MIZAN_LOAD_RATE:-}"
 results="$ROOT/build/load"
 mkdir -p "$results"
 
@@ -54,6 +57,7 @@ call 200 GET "$GATEWAY/actuator/health" > /dev/null
     printf 'docker     %s\n' "$(docker info --format '{{.OperatingSystem}}, {{.NCPU}} CPUs, {{.MemTotal}} bytes' 2>/dev/null)"
     printf 'k6         %s\n' "$K6_IMAGE"
     printf 'merchants  %s\n' "$MERCHANTS"
+    printf 'rate       %s\n' "${RATE:-each profile's own}"
     printf 'note       every service, Postgres, Kafka, Redis, the collector and k6 share this one machine\n'
     # What was measured is the images running, which need not be what is checked out: a stack
     # started from one branch keeps its images after switching to another. So each image is named
@@ -83,6 +87,7 @@ for profile in "$@"; do
         -e PROFILE="$profile" \
         -e GATEWAY=http://gateway:8080 \
         -e MERCHANTS="$MERCHANTS" \
+        ${RATE:+-e RATE="$RATE"} \
         /scripts/payments.js
     status=$?
     set -e

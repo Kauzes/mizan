@@ -7,7 +7,14 @@ name: Load profiles
 #
 # The numbers from a GitHub runner are not the numbers in docs/performance: a different machine,
 # shared with other jobs. What this protects is the thresholds. A change that makes the platform
-# miss them fails here, whatever machine it is measured on.
+# miss them fails here.
+#
+# At a rate this machine can sustain. The first run offered steady's recorded 30 payments a second
+# and the runner saturated: 24.8 a second captured, 755 payments never started, p50 1.7 seconds per
+# step, with every service, Postgres, Kafka and Redis on its few cores. That failed the latency
+# thresholds, and it would fail them on every run, which measures the runner and protects nothing.
+# At 10 a second the same thresholds are a regression check again. Spike is unchanged: it is meant
+# to overload whatever it runs on, and its thresholds are correctness only.
 on:
   push:
     branches: [main]
@@ -41,6 +48,8 @@ jobs:
         run: docker compose up -d --build --wait
 
       - name: Take payments under each profile
+        env:
+          MIZAN_LOAD_RATE: "10"
         run: ./scripts/load-profiles.sh ${{ github.event.inputs.profiles || 'steady spike' }}
 
       - name: What was measured
