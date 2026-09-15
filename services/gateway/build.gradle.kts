@@ -21,4 +21,11 @@ dependencies {
     // token: it fetches the public half identity publishes.
     implementation(libs.nimbus.jose.jwt)
     implementation(project(":common-web"))
+    // Each merchant's rate limit, kept where every gateway pod reads the same count (ADR 0053).
+    // Reactive, because this is the one reactive service and a blocking call on its event loop
+    // stalls every request that loop is serving.
+    implementation("org.springframework.boot:spring-boot-starter-data-redis-reactive")
+
+    // A real Redis for the noisy-neighbour test, the same image Compose runs.
+    testImplementation("org.testcontainers:testcontainers")
 }

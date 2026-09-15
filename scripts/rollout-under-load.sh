@@ -108,11 +108,11 @@ kube create configmap postgres-init \
     --from-file=10-databases.sql="$(host "$ROOT/deploy/local/init-databases.sql")" \
     --dry-run=client -o yaml | kube apply -f - > /dev/null
 kube apply -f "$(host "$ROOT/deploy/kind/dependencies.yaml")" > /dev/null
-for dependency in postgres kafka otel-collector; do
+for dependency in postgres kafka redis otel-collector; do
     kube rollout status "deployment/$dependency" --timeout=300s > /dev/null \
         || fail "$dependency did not become ready"
 done
-pass "postgres, kafka and a trace collector are ready"
+pass "postgres, kafka, redis and a trace collector are ready"
 
 # ---------------------------------------------------------------------------------------------
 step "The platform, version one"

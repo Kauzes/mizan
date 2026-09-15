@@ -21,6 +21,12 @@ services:
   gateway:
     replicas: 1
     resources: { requests: { cpu: 100m, memory: 256Mi } }
+    env:
+      # The rollout test takes every payment as one merchant, around 130 requests a second, which
+      # is a load test rather than a noisy neighbour. Limited at the default it would measure the
+      # rate limit instead of the rollout. Still on, so the path through Redis is what is rolled.
+      MIZAN_RATE_LIMIT_PER_SECOND: "2000"
+      MIZAN_RATE_LIMIT_BURST: "4000"
   identity-service:
     replicas: 1
     resources: { requests: { cpu: 100m, memory: 256Mi } }

@@ -73,6 +73,9 @@ services:
       MIZAN_LOG_FORMAT: ${MIZAN_LOG_FORMAT:-}
       MIZAN_JWK_SET_URI: http://identity-service:8081/.well-known/jwks.json
       MIZAN_API_KEY_VERIFICATION_URI: http://identity-service:8081/internal/api-keys/verify
+      # Each merchant's rate limit (ADR 0053). Deliberately not in depends_on: a gateway that
+      # cannot reach Redis routes everything unlimited, so Redis starting late costs nothing.
+      MIZAN_REDIS_HOST: redis
     ports:
       - "8080:8080"
     # Longer than the 20s each service gives its in-flight work (HowThisPlatformStops). Compose's

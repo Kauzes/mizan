@@ -366,6 +366,11 @@ other protected route.
   the database pool (ADR 0052). A slow bank would otherwise take every connection, and a merchant
   reading a payment would wait behind it. Both refuse without sending, as a 503 rather than a 504:
   a request never sent leaves nothing unknown to resolve, and every write is safe to retry.
+- Each merchant has an allowance at the edge: 100 requests a second, bursts up to 200, counted in
+  Redis so every gateway pod spends from the same one (ADR 0053). Beyond it the gateway answers 429
+  with Retry-After before any service does work, so one merchant's retry loop cannot become every
+  merchant's outage. It is keyed on the merchant the gateway verified, never on the path, and if
+  Redis is down it refuses nothing: a rate limit that fails closed is a cache outage for everyone.
 - A held payment charges nobody and is not a decline. If nobody rules on it, it expires
   refused rather than approved: letting a hold resolve to "take the money" makes the
   safe-looking answer the default and turns a review queue into a delay before approving.
