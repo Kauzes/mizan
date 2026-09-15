@@ -75,6 +75,9 @@ services:
       MIZAN_API_KEY_VERIFICATION_URI: http://identity-service:8081/internal/api-keys/verify
     ports:
       - "8080:8080"
+    # Longer than the 20s each service gives its in-flight work (HowThisPlatformStops). Compose's
+    # default is 10s, which would kill a service still finishing a request on a plain docker stop.
+    stop_grace_period: 30s
     healthcheck:
       # No curl in a distroless image, so the JVM already in it asks instead. The flags keep a
       # probe that runs every ten seconds from costing more than the work it is checking.
@@ -116,6 +119,9 @@ services:
         condition: service_healthy
     ports:
       - "8081:8081"
+    # Longer than the 20s each service gives its in-flight work (HowThisPlatformStops). Compose's
+    # default is 10s, which would kill a service still finishing a request on a plain docker stop.
+    stop_grace_period: 30s
     healthcheck:
       # No curl in a distroless image, so the JVM already in it asks instead. The flags keep a
       # probe that runs every ten seconds from costing more than the work it is checking.
@@ -151,6 +157,9 @@ services:
         condition: service_healthy
     ports:
       - "8082:8082"
+    # Longer than the 20s each service gives its in-flight work (HowThisPlatformStops). Compose's
+    # default is 10s, which would kill a service still finishing a request on a plain docker stop.
+    stop_grace_period: 30s
     healthcheck:
       # No curl in a distroless image, so the JVM already in it asks instead. The flags keep a
       # probe that runs every ten seconds from costing more than the work it is checking.
@@ -198,6 +207,9 @@ services:
         condition: service_healthy
     ports:
       - "8083:8083"
+    # Longer than the 20s each service gives its in-flight work (HowThisPlatformStops). Compose's
+    # default is 10s, which would kill a service still finishing a request on a plain docker stop.
+    stop_grace_period: 30s
     healthcheck:
       # No curl in a distroless image, so the JVM already in it asks instead. The flags keep a
       # probe that runs every ten seconds from costing more than the work it is checking.
@@ -233,6 +245,9 @@ services:
         condition: service_healthy
     ports:
       - "8084:8084"
+    # Longer than the 20s each service gives its in-flight work (HowThisPlatformStops). Compose's
+    # default is 10s, which would kill a service still finishing a request on a plain docker stop.
+    stop_grace_period: 30s
     healthcheck:
       # No curl in a distroless image, so the JVM already in it asks instead. The flags keep a
       # probe that runs every ten seconds from costing more than the work it is checking.
@@ -277,6 +292,9 @@ services:
         condition: service_healthy
     ports:
       - "8085:8085"
+    # Longer than the 20s each service gives its in-flight work (HowThisPlatformStops). Compose's
+    # default is 10s, which would kill a service still finishing a request on a plain docker stop.
+    stop_grace_period: 30s
     healthcheck:
       # No curl in a distroless image, so the JVM already in it asks instead. The flags keep a
       # probe that runs every ten seconds from costing more than the work it is checking.
@@ -323,6 +341,9 @@ services:
         condition: service_healthy
     ports:
       - "8087:8087"
+    # Longer than the 20s each service gives its in-flight work (HowThisPlatformStops). Compose's
+    # default is 10s, which would kill a service still finishing a request on a plain docker stop.
+    stop_grace_period: 30s
     healthcheck:
       # No curl in a distroless image, so the JVM already in it asks instead. The flags keep a
       # probe that runs every ten seconds from costing more than the work it is checking.
@@ -370,6 +391,9 @@ services:
       MIZAN_LOG_FORMAT: ${MIZAN_LOG_FORMAT:-}
     ports:
       - "8086:8086"
+    # Longer than the 20s each service gives its in-flight work (HowThisPlatformStops). Compose's
+    # default is 10s, which would kill a service still finishing a request on a plain docker stop.
+    stop_grace_period: 30s
     healthcheck:
       # No curl in a distroless image, so the JVM already in it asks instead. The flags keep a
       # probe that runs every ten seconds from costing more than the work it is checking.

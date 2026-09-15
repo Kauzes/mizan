@@ -113,6 +113,14 @@ other protected route.
   trace is kept for days and read by whoever is debugging, which makes it exactly the wrong
   place for any of them. The smoke check reads back a real trace and fails on an attribute that
   is named like a secret or holds anything card shaped.
+- A pod is sent traffic only when it can do the work, and finishes what it started before it stops.
+  Starting, ready and alive are three probes with three consequences. Liveness never depends on
+  the database or Kafka, because a probe that does restarts every pod of every service during the
+  one outage a restart cannot fix. Every service shuts down gracefully with a 20 second phase, the
+  webhook dispatcher finishes the sends already on their way, and a pod pauses five seconds to
+  leave the Service before it stops, inside a 30 second grace period that `LifecycleWiringTest`
+  keeps longer than both. A test closes a real server mid-request and asserts the request still
+  gets its answer, and that the same request is cut off when shutdown is immediate. ADR 0049.
 - One Helm chart, `deploy/helm/mizan`, installs all eight services onto a cluster from one loop over
   its values. It points at Postgres, Kafka and the trace collector rather than installing them.
   It will not render without an image tag, since there is no `latest`, or without every

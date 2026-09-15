@@ -34,6 +34,13 @@ dependencies:
 # watching a terminal, which is the Compose stack's job.
 logFormat: ecs
 
+# How a pod stops. The application gives in-flight work 20s (HowThisPlatformStops); the pod waits
+# preStopSeconds first so it has left the Service, and the grace period has to cover both with room
+# to spare or Kubernetes kills the process mid-answer. LifecycleWiringTest keeps them in order.
+lifecycle:
+  preStopSeconds: 5
+  terminationGracePeriodSeconds: 30
+
 # Credentials, delivered as one Kubernetes Secret. Either name a Secret that already exists with
 # these keys, or supply every value. REQUIRED one way or the other.
 credentials:

@@ -47,6 +47,11 @@ tasks.named<Test>("test") {
         .withPropertyName("deployFiles")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 
+    // LifecycleWiringTest reads the shutdown phase out of common-web's source.
+    inputs.dir(rootProject.file("common-web/src/main"))
+        .withPropertyName("commonWebSources")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+
     inputs.files(rootProject.fileTree("services") {
         include("*/src/main/resources/application.yml")
         include("*/src/main/java/**/*.java")

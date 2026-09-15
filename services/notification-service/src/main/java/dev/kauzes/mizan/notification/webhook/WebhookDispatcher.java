@@ -1,6 +1,7 @@
 package dev.kauzes.mizan.notification.webhook;
 
 import dev.kauzes.mizan.notification.NotificationMetrics;
+import jakarta.annotation.PreDestroy;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -41,6 +42,9 @@ public class WebhookDispatcher {
     private final NotificationMetrics metrics;
     private final TransactionTemplate transaction;
     private final ExecutorService workers;
+
+    /** Set once the service is stopping. A pass that has not started yet does not start. */
+    private volatile boolean stopping;
     private final int batchSize;
     private final int attemptLimit;
 
@@ -70,6 +74,9 @@ public class WebhookDispatcher {
 
     @Scheduled(fixedDelayString = "${mizan.webhooks.deliver-every:2s}")
     public void deliverWhatIsDue() {
+        if (stopping) {
+            return;
+        }
         try {
             // Claimed in a transaction that ends here, before any HTTP happens.
             List<WebhookDeliveries.Due> due =
@@ -98,6 +105,24 @@ public class WebhookDispatcher {
             // already recorded and backed off; this is for everything else.
             log.error("a pass of the webhook dispatcher failed", unexpected);
         }
+    }
+
+    /**
+     * Stops claiming, and lets the deliveries already on their way finish and be written down.
+     *
+     * <p>Nothing was ever lost without it: a claim leases a delivery for five minutes, so one cut
+     * off mid-call is retried by another pod once the lease runs out. What was lost was precision.
+     * The attempt was spent, the merchant might have received the webhook without the platform
+     * recording it and so receive it twice, and every rolling deploy produced a batch of both. The
+     * executor was also never closed at all.
+     *
+     * <p>Bounded without a timeout of its own: every attempt already times out on the merchant's
+     * endpoint well inside the shutdown phase (HowThisPlatformStops).
+     */
+    @PreDestroy
+    public void finishWhatIsInFlight() {
+        stopping = true;
+        workers.close();
     }
 
     /** One delivery, with its outcome written down whatever it was. */
