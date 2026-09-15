@@ -76,7 +76,11 @@ jobs:
   smoke:
     name: Smoke and browser
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
+    # Publishing is this job's last step, so it needs to write packages. Nothing else here does.
+    permissions:
+      contents: read
+      packages: write
     # Deliberately not needing the build job. This checks something the test suite
     # structurally cannot: services as real processes, in the images they are deployed as,
     # reached through the gateway. Three defects in this platform's history were visible only
@@ -146,6 +150,36 @@ jobs:
         # writers, none of which wrote anything in order to make this pass, and one check that
         # reads the tables and asks what has to be true of any ledger whatever wrote it.
         run: ./scripts/books-balance.sh
+
+      - name: Scan the images that were just tested
+        # These images, not a rebuild: the images the smoke check, the browser and the seed
+        # just ran against. Fails on any HIGH or CRITICAL finding that has a fix available.
+        run: ./scripts/scan-images.sh
+
+      - name: Sign in to the container registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish the images that were tested and scanned
+        # Main only. A pull request builds, tests and scans, and publishes nothing: an image in
+        # the registry is a claim that it passed everything, and a pull request has not merged.
+        # Tagged by commit and nothing else, because a moving tag like latest says which image
+        # was pushed last rather than which source it came from.
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          OWNER: ${{ github.repository_owner }}
+          SHA: ${{ github.sha }}
+        run: |
+          owner="$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')"
+          for service in gateway identity-service ledger-service payment-service risk-service                          notification-service settlement-service bank-simulator; do
+            target="ghcr.io/$owner/mizan-$service:$SHA"
+            docker tag "mizan-$service:latest" "$target"
+            docker push "$target"
+          done
 
       - name: What the services said
         if: failure()

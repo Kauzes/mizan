@@ -1,0 +1,35 @@
+# Findings this platform ships with anyway, each on purpose, each with an end date.
+#
+# The image scan in CI fails on any HIGH or CRITICAL finding that has a fix available. A finding
+# lands here only when a fix exists upstream and cannot be taken yet, and every entry must say
+# which finding, why it is accepted, who accepted it, and when that stops being true.
+#
+# expired_at is enforced by Trivy itself: past that date the entry no longer suppresses anything
+# and the build fails again, which is what makes an exception a decision with a deadline rather
+# than a place findings go to be forgotten. ExceptionsTest refuses an entry with no statement,
+# and one whose expiry is more than ninety days away.
+#
+# Scoped by id alone. An OS package reports no path, so a path filter on one silently matches
+# nothing — which is how the first version of this file suppressed nothing at all while looking
+# exactly right. A CVE id names one package's flaw, which is scope enough.
+#
+# The first thing to try is always the fix. Tomcat's three CRITICAL findings were fixed by a
+# version constraint in build.gradle.kts, not listed here.
+
+vulnerabilities:
+  - id: CVE-2026-76957
+    statement: >-
+      libexpat1 in the distroless Java 21 base. Debian has published 2.5.0-1+deb12u3 and the
+      distroless image has not been rebuilt on it yet; the package is not installable into a
+      distroless image by hand. The services do not parse XML with expat — the JVM has its own
+      parser — so the vulnerable code is present and not reachable from anything the platform
+      does. Accepted by Kauzes on 2026-09-15; revisit when distroless rebuilds.
+    expired_at: 2026-10-15
+
+  - id: CVE-2026-41254
+    statement: >-
+      liblcms2-2 in the distroless Java 21 base, a colour management library used by the JDK's
+      image handling. Fixed in Debian as 2.14-2+deb12u1, waiting on a distroless rebuild. No
+      service on this platform decodes an image. Accepted by Kauzes on 2026-09-15; revisit
+      when distroless rebuilds.
+    expired_at: 2026-10-15

@@ -113,6 +113,14 @@ other protected route.
   trace is kept for days and read by whoever is debugging, which makes it exactly the wrong
   place for any of them. The smoke check reads back a real trace and fails on an attribute that
   is named like a secret or holds anything card shaped.
+- CI publishes the image it tested, and a known fixable hole stops it. The images the smoke check,
+  the browser journey and the demo seed ran against are the ones scanned, and on main the ones
+  pushed to the GitHub container registry, tagged by commit. A pull request publishes nothing.
+  `scripts/scan-images.sh` fails on any HIGH or CRITICAL finding that has a fix available, and a
+  developer can run it before pushing. The first scan found three CRITICAL Tomcat findings, fixed
+  by pinning Tomcat 11.0.25 ahead of the Spring Boot BOM, and two in the distroless base that
+  cannot be fixed until upstream rebuilds. Those two are accepted in `.trivyignore.yaml`, each
+  with its reason, who accepted it and an expiry date that Trivy itself enforces. ADR 0047.
 - A service image holds the service and nothing an attacker could use. Every image runs on a
   distroless Java 21 base as a non root user, with no shell, no package manager and no curl.
   The one thing that used curl, the container healthcheck, is now a single compiled class run
