@@ -1,0 +1,61 @@
+name: Android app
+
+# The merchant app has its own Gradle build (android/) and its own toolchain, so its own workflow.
+# It runs on every push and pull request that changes the app or this file, and on demand. A change
+# to the platform alone does not rebuild an APK nobody changed.
+#
+# The Compose UI tests are compiled here but not run: running them needs an Android emulator, which a
+# hosted runner can only provide slowly and unreliably. They are run on an emulator locally before a
+# change to the app is merged, and the pull request says so.
+on:
+  push:
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  pull_request:
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Tests pass and an APK is built
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Unit tests
+        run: ./gradlew test --stacktrace
+
+      - name: Build the debug APK, and compile the UI tests
+        run: ./gradlew assembleDebug assembleDebugAndroidTest --stacktrace
+
+      - name: Test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-report
+          path: android/app/build/reports/tests/
+          if-no-files-found: ignore
+
+      # Every green build leaves an APK anyone can download from the run, as Sentinel Pay's does.
+      - name: The APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: mizan-merchant-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk

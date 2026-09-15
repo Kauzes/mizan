@@ -726,6 +726,28 @@ action to take — because it is the same question about a different subject.
   answers somebody who thought to look, and the failure worth guarding against is nobody
   looking.
 
+## The merchant app
+
+An Android app for merchants taking payments in person, in `android/`: Kotlin, Jetpack Compose,
+MVVM with coroutines and Flow, built the same way as the Sentinel Pay app (ADR 0057). It is being
+built one story at a time under MIZ-14; today it starts, shows which platform it talks to, and
+checks that the platform is answering.
+
+```sh
+cd android
+./gradlew test assembleDebug              # unit tests, and app/build/outputs/apk/debug/app-debug.apk
+./gradlew connectedDebugAndroidTest       # the Compose UI tests, on a running emulator
+```
+
+- **It talks only to the gateway**, at an address fixed at build time. The default,
+  `http://10.0.2.2:8080`, is how an Android emulator reaches the local Compose stack on the machine
+  running it. Anything else is `-Pmizan.gateway=...`.
+- **Plain HTTP is allowed to the emulator's host and to `localhost`, and nowhere else.** The local
+  stack is HTTP; a deployed gateway carries card numbers and tokens and must not be.
+- **Every push that changes the app builds an APK** (`.github/workflows/android.yml`), downloadable
+  from the run. The UI tests are compiled there and run on an emulator locally, because a hosted
+  runner's emulator is slow enough and flaky enough to be ignored.
+
 ## The console
 
 A React and TypeScript application, built with Vite, served by nginx beside the API rather than
