@@ -1,0 +1,13 @@
+# A local cluster to deploy the chart onto and roll it out under load (MIZ-86).
+#
+# One node. What is being tested is the rollout — probes, the preStop pause, graceful shutdown,
+# a Service routing only to ready pods — and all of that happens on one node exactly as on many.
+# More nodes would test a scheduler this platform does not own, on a laptop that cannot spare it.
+#
+# The node image is the one this kind release pins (build/tools/kind.exe, v0.33.0), which is new
+# enough for the kubelet's preStop sleep action the chart uses (Kubernetes 1.30+).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: mizan
+nodes:
+  - role: control-plane

@@ -27,6 +27,9 @@ metadata:
 data:
   MIZAN_LOG_FORMAT: {{ $root.Values.logFormat | quote }}
   MIZAN_OTLP: {{ $root.Values.dependencies.otlpEndpoint | quote }}
+  # A quarter of the container's memory is the JVM's default heap, which at a 512Mi limit is 128MiB
+  # for a Spring service. Measured, not assumed: MIZ-86 ran the image under the chart's limits.
+  JAVA_TOOL_OPTIONS: {{ printf "-XX:MaxRAMPercentage=%v" $root.Values.jvm.maxRamPercentage | quote }}
   {{- if $svc.database }}
   MIZAN_DB_URL: {{ printf "jdbc:postgresql://%s:%v/%s" $root.Values.dependencies.postgres.host $root.Values.dependencies.postgres.port $svc.database | quote }}
   MIZAN_DB_USERNAME: {{ $root.Values.dependencies.postgres.username | quote }}
@@ -70,11 +73,15 @@ spec:
         # next unrelated restart and nobody can say which configuration a pod is running.
         # Everything the ConfigMap is built from, not only the service's own env: a new Kafka
         # address is a configuration change too.
-        checksum/config: {{ list $svc.env $svc.database $svc.databasePool $svc.kafka $root.Values.dependencies $root.Values.logFormat | toYaml | sha256sum }}
+        checksum/config: {{ list $svc.env $svc.database $svc.databasePool $svc.kafka $root.Values.dependencies $root.Values.logFormat $root.Values.jvm | toYaml | sha256sum }}
     spec:
       # Longer than the preStop pause plus the application's shutdown phase, or the kubelet kills
       # the process while it is still answering. LifecycleWiringTest keeps it so.
       terminationGracePeriodSeconds: {{ $root.Values.lifecycle.terminationGracePeriodSeconds }}
+      # No variables named after every other Service in the namespace. Kubernetes injects them by
+      # default; they are noise to these services and a hazard to any image that reads configuration
+      # from its environment, which is how Kafka failed to start in the kind cluster (MIZ-86).
+      enableServiceLinks: false
       securityContext:
         # The image already runs as nonroot (MIZ-81). Said again here so the cluster refuses a
         # swapped image that does not.
@@ -110,19 +117,29 @@ spec:
           # it has started, so a slow migration is not mistaken for a hung process.
           startupProbe:
             httpGet: { path: /actuator/health/liveness, port: {{ $probePort }} }
+            # Every probe says how long it waits. Kubernetes' default is one second, and a JVM on a
+            # node busy starting other JVMs takes longer than that to answer a health check. The
+            # first rollout under load (MIZ-86) found it: slow-but-healthy pods failed their probes,
+            # were killed, and the rollout took down the version it was replacing.
+            timeoutSeconds: 5
             periodSeconds: 5
             failureThreshold: 36
           # Ready: can it do the work now, database included? No: no traffic, nothing else.
           readinessProbe:
             httpGet: { path: /actuator/health/readiness, port: {{ $probePort }} }
+            timeoutSeconds: 3
             periodSeconds: 5
             failureThreshold: 3
           # Alive: is the process itself stuck? No: restart. Never a dependency, or a database
           # outage restarts every pod of every service at once.
           livenessProbe:
             httpGet: { path: /actuator/health/liveness, port: {{ $probePort }} }
+            # A full minute without an answer before a restart. A false restart is a worse outcome
+            # than a slow one: it throws away a warm JVM and a connection pool, under load, at the
+            # moment the node is least able to start another.
+            timeoutSeconds: 5
             periodSeconds: 10
-            failureThreshold: 3
+            failureThreshold: 6
           lifecycle:
             preStop:
               # Leave the Service before stopping, so requests routed in the last moment do not

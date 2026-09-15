@@ -40,6 +40,12 @@ dependencies:
 # watching a terminal, which is the Compose stack's job.
 logFormat: ecs
 
+# How much of a container's memory limit the JVM may use for its heap. The JVM's own default is 25,
+# which under a 512Mi limit leaves a Spring service 128MiB. Seventy-five leaves the rest for metaspace,
+# thread stacks and direct buffers, which is what a service with a few hundred threads needs.
+jvm:
+  maxRamPercentage: 75
+
 # How a pod stops. The application gives in-flight work 20s (HowThisPlatformStops); the pod waits
 # preStopSeconds first so it has left the Service, and the grace period has to cover both with room
 # to spare or Kubernetes kills the process mid-answer. LifecycleWiringTest keeps them in order.

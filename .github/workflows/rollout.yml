@@ -1,0 +1,64 @@
+name: Rolling deploy under load
+
+# Its own workflow rather than a job in CI. It builds eight images, starts a Kubernetes cluster and
+# takes payments for minutes while the platform rolls out underneath them — about twenty minutes, too
+# long to put in front of every pull request. So it runs where it earns that time: on main, on
+# demand, and on any pull request that changes how the platform is deployed.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - "deploy/helm/**"
+      - "deploy/kind/**"
+      - "scripts/rollout-under-load.sh"
+      - ".github/workflows/rollout.yml"
+
+concurrency:
+  group: rollout-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rollout:
+    name: Rolls out under load within the error budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the images
+        # The same images Compose builds. The script tags and loads them into the cluster.
+        run: docker compose build
+
+      - name: Install kind
+        # The same release the script uses locally, verified against its published checksum.
+        run: |
+          curl -sSL -o kind https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-amd64
+          curl -sSL -o kind.sha256sum https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-amd64.sha256sum
+          echo "$(awk '{print $1}' kind.sha256sum)  kind" | sha256sum --check
+          chmod +x kind
+          sudo mv kind /usr/local/bin/kind
+
+      - name: Roll out while payments are taken
+        env:
+          KIND: kind
+          # Kept for the next step, which needs the platform already installed.
+          KEEP_CLUSTER: "true"
+        run: ./scripts/rollout-under-load.sh
+
+      - name: The autoscaler grows payment-service under load and shrinks it after
+        run: ./scripts/autoscaling-on-kind.sh
+
+      - name: Delete the cluster
+        if: always()
+        run: kind delete cluster --name mizan || true
+
+      - name: What the cluster looked like
+        if: failure()
+        run: |
+          kubectl --context kind-mizan get pods -o wide || true
+          kubectl --context kind-mizan get events --sort-by=.lastTimestamp | tail -40 || true
+          kubectl --context kind-mizan logs job/load --tail=60 || true

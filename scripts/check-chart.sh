@@ -115,6 +115,23 @@ print("\n".join(problems) or "-")')
 pass "every Deployment has startup, readiness and liveness probes, a preStop pause and a grace period"
 pass "and the gateway is probed on its management port, everybody else on http"
 
+probe_timeouts=$(printf '%s' "$rendered" | "$PYTHON" -c '
+import re, sys
+problems = []
+for d in sys.stdin.read().split("\n---"):
+    if not re.search(r"^kind: Deployment$", d, re.M):
+        continue
+    name = re.search(r"^  name: (\S+)", d, re.M).group(1)
+    for probe in ("startupProbe", "readinessProbe", "livenessProbe"):
+        block = re.search(probe + r":\n((?:            .*\n)+)", d)
+        timeout = re.search(r"timeoutSeconds: (\d+)", block.group(1)) if block else None
+        if not timeout or int(timeout.group(1)) < 3:
+            problems.append("%s %s waits %s" % (name, probe,
+                            "the default one second" if not timeout else timeout.group(1) + "s"))
+print("\n".join(problems) or "-")')
+[ "$probe_timeouts" = "-" ] || fail "$probe_timeouts"
+pass "and no probe gives a busy JVM only Kubernetes' default one second to answer"
+
 without_simulator=$(helm template mizan /chart "${supplied[@]}" \
     --set services.bank-simulator.enabled=false | grep -c '^kind: Deployment' || true)
 [ "$without_simulator" = "$((services - 1))" ] \
@@ -150,3 +167,23 @@ print("\n".join(problems) or "-")')
 [ "$scaling" = "-" ] || fail "$scaling"
 pass "only payment-service has an autoscaler, and its Deployment leaves the count to it"
 pass "and every service that owns a database has its pool sized against the budget"
+
+step "Every pod has a heap sized to its limit, and no variables it did not ask for"
+
+runtime=$(printf '%s' "$rendered" | "$PYTHON" -c '
+import re, sys
+docs = [d for d in sys.stdin.read().split("\n---") if d.strip()]
+problems = []
+for d in docs:
+    name_match = re.search(r"^  name: (\S+)", d, re.M)
+    name = name_match.group(1) if name_match else "?"
+    if re.search(r"^kind: ConfigMap$", d, re.M) and "MIZAN_LOG_FORMAT" in d:
+        if not re.search(r"JAVA_TOOL_OPTIONS: \"-XX:MaxRAMPercentage=\d+\"", d):
+            problems.append("%s leaves the JVM at a quarter of its memory limit" % name)
+    if re.search(r"^kind: Deployment$", d, re.M):
+        if not re.search(r"^      enableServiceLinks: false$", d, re.M):
+            problems.append("%s gets a variable for every Service in the namespace" % name)
+print("\n".join(problems) or "-")')
+[ "$runtime" = "-" ] || fail "$runtime"
+pass "every service's JVM may use most of its memory limit for heap"
+pass "and no pod is handed variables named after every other Service"
