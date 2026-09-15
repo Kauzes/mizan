@@ -189,6 +189,36 @@ class UnknownOutcomeTest extends MizanIntegrationTest {
     }
 
     @Test
+    void twoPodsResolvingAtTheSameMomentDecideOnce() throws Exception {
+        Merchant merchant = merchant();
+        UUID payment = create(merchant);
+        authorize(merchant, payment, SLOW_APPROVE).andExpect(status().isGatewayTimeout());
+
+        // Two replicas' sweeps, released together. More than one payment-service pod is the
+        // ordinary case once the chart runs it (MIZ-85), and then every sweep runs more than once.
+        // Nothing here locks the row: the version column is what makes the second one lose.
+        java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.Callable<Void> pod = () -> {
+            go.await();
+            resolve(merchant.id, payment);
+            return null;
+        };
+        try (java.util.concurrent.ExecutorService pods =
+                java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first = pods.submit(pod);
+            var second = pods.submit(pod);
+            go.countDown();
+            first.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            second.get(30, java.util.concurrent.TimeUnit.SECONDS);
+        }
+
+        assertThat(statusOf(payment)).isEqualTo("AUTHORIZED");
+        assertThat(transitionsTo(payment, "AUTHORIZED"))
+                .as("two pods asking at once is harmless; both answering would not be")
+                .isEqualTo(1L);
+    }
+
+    @Test
     void resolvingAPaymentThatIsAlreadyDecidedChangesNothing() throws Exception {
         Merchant merchant = merchant();
         UUID payment = create(merchant);

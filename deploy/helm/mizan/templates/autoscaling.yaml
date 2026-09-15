@@ -1,0 +1,69 @@
+{{- /*
+The services that grow under load, rendered only for a service whose values ask for it.
+
+Only payment-service does, and ADR 0050 says why the numbers are what they are. The short version:
+an authorization holds a database connection across the acquirer call, so a payment-service pod
+saturates on connections long before it saturates on CPU. CPU is here because every cluster can
+measure it; connections in use is the signal that actually means load, and is turned on by one
+value once a metrics adapter can see it (MIZ-86).
+
+A Deployment with an autoscaler has no replicas field of its own (services.yaml): with one, every
+helm upgrade resets the count the autoscaler chose, and a deploy under load shrinks the service it
+is deploying.
+*/ -}}
+{{- $root := . }}
+{{- range $name, $svc := .Values.services }}
+{{- if and (ne (toString $svc.enabled) "false") $svc.autoscaling }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "mizan.labels" $root | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $name }}
+  minReplicas: {{ $svc.autoscaling.minReplicas }}
+  # Bounded by the Postgres connection budget, not by taste: every extra pod opens its whole pool.
+  # ChartTest fails if maxReplicas times the pool no longer fits.
+  maxReplicas: {{ $svc.autoscaling.maxReplicas }}
+  behavior:
+    scaleUp:
+      # At once, and two pods at a time: load that has arrived has arrived.
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 30
+    scaleDown:
+      # Slowly, one pod a minute after a quiet window. Payment traffic comes in bursts, and a pod
+      # removed between two bursts is a cold JVM and a fresh connection pool for the second one.
+      stabilizationWindowSeconds: {{ $svc.autoscaling.scaleDownAfterSeconds }}
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+  metrics:
+    {{- if $svc.autoscaling.connectionsInUse.enabled }}
+    # The number that means load for this service. Needs a metrics adapter exposing Micrometer's
+    # hikaricp_connections_active to the autoscaler; without one it would report as unavailable.
+    - type: Pods
+      pods:
+        metric:
+          name: hikaricp_connections_active
+        target:
+          type: AverageValue
+          averageValue: {{ $svc.autoscaling.connectionsInUse.averagePerPod | quote }}
+    {{- end }}
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $svc.autoscaling.cpuPercent }}
+{{- end }}
+{{- end }}

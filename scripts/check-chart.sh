@@ -91,7 +91,9 @@ step "Every pod knows when it is starting, ready and alive, and leaves before it
 
 lifecycle=$(printf '%s' "$rendered" | "$PYTHON" -c '
 import re, sys
-deployments = [d for d in sys.stdin.read().split("\n---") if "kind: Deployment" in d]
+# kind is matched at the start of a line: an autoscaler names its target as an indented
+# "kind: Deployment", and matching the substring read it as a Deployment with no probes.
+deployments = [d for d in sys.stdin.read().split("\n---") if re.search(r"^kind: Deployment$", d, re.M)]
 problems = []
 for d in deployments:
     name = re.search(r"^  name: (\S+)", d, re.M).group(1)
@@ -113,3 +115,33 @@ without_simulator=$(helm template mizan /chart "${supplied[@]}" \
 [ "$without_simulator" = "$((services - 1))" ] \
     || fail "disabling bank-simulator still rendered $without_simulator Deployments"
 pass "and a service set to enabled: false is not installed"
+
+step "The payment service grows under load, and nothing grows past what Postgres can serve"
+
+scaling=$(printf '%s' "$rendered" | "$PYTHON" -c '
+import re, sys
+docs = [d for d in sys.stdin.read().split("\n---") if d.strip()]
+problems = []
+scaled = [re.search(r"^  name: (\S+)", d, re.M).group(1) for d in docs
+          if re.search(r"^kind: HorizontalPodAutoscaler$", d, re.M)]
+if scaled != ["payment-service"]:
+    problems.append("autoscalers rendered for %s, expected payment-service only" % scaled)
+for d in docs:
+    if not re.search(r"^kind: Deployment$", d, re.M):
+        continue
+    name = re.search(r"^  name: (\S+)", d, re.M).group(1)
+    has_replicas = re.search(r"^  replicas: ", d, re.M) is not None
+    if name == "payment-service" and has_replicas:
+        problems.append("payment-service sets replicas, so helm upgrade would fight its autoscaler")
+    if name != "payment-service" and not has_replicas:
+        problems.append("%s has no replica count" % name)
+for d in docs:
+    if not re.search(r"^kind: ConfigMap$", d, re.M) or "MIZAN_DB_URL" not in d:
+        continue
+    name = re.search(r"^  name: (\S+)", d, re.M).group(1)
+    if "SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE" not in d:
+        problems.append("%s owns a database and its pool is left at the default" % name)
+print("\n".join(problems) or "-")')
+[ "$scaling" = "-" ] || fail "$scaling"
+pass "only payment-service has an autoscaler, and its Deployment leaves the count to it"
+pass "and every service that owns a database has its pool sized against the budget"

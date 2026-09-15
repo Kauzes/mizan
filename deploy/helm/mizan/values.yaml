@@ -25,6 +25,12 @@ dependencies:
     host: postgres
     port: 5432
     username: mizan
+    # What the chart may use of Postgres's own limit (max_connections, 100 by default). Every pod
+    # opens its pool, so the sum of replicas times pool across the chart has to fit, counted at an
+    # autoscaler's maximum. ChartTest fails if it does not. Raise both together, never one.
+    maxConnections: 100
+    # Kept back for migrations, monitoring and a person with psql during an incident.
+    reservedConnections: 10
   kafka:
     bootstrapServers: kafka:9092
   # The collector that decides which traces are kept (ADR 0043).
@@ -77,6 +83,8 @@ services:
     replicas: 2
     port: 8081
     database: identity
+    # Five, not Hikari's ten. See maxConnections above.
+    databasePool: 5
     resources:
       requests: { cpu: 250m, memory: 384Mi }
       limits: { memory: 512Mi }
@@ -87,6 +95,8 @@ services:
     replicas: 2
     port: 8082
     database: ledger
+    # Five, not Hikari's ten. See maxConnections above.
+    databasePool: 5
     resources:
       requests: { cpu: 250m, memory: 384Mi }
       limits: { memory: 512Mi }
@@ -94,9 +104,28 @@ services:
     credentials: [databasePassword, internalServiceToken]
 
   payment-service:
+    # The floor the autoscaler starts from. With autoscaling on, the Deployment itself carries no
+    # replica count, so helm upgrade does not reset what the autoscaler chose.
     replicas: 2
+    # ADR 0050. An authorization holds a database connection across the acquirer call, so a pod
+    # saturates on connections well before CPU. CPU is what every cluster can measure; connections
+    # in use is the signal that means load, and needs a metrics adapter to turn on.
+    autoscaling:
+      minReplicas: 2
+      # Six pods at five connections is 30 of the budget. More pods needs more Postgres first.
+      maxReplicas: 6
+      cpuPercent: 60
+      # Five minutes without load before a pod is removed: payment traffic arrives in bursts.
+      scaleDownAfterSeconds: 300
+      connectionsInUse:
+        enabled: false
+        # Four of a pool of five busy on average: scale before the fifth is taken and requests
+        # start waiting for a connection rather than for the acquirer.
+        averagePerPod: 4
     port: 8083
     database: payment
+    # Five, not Hikari's ten. See maxConnections above.
+    databasePool: 5
     kafka: true
     resources:
       requests: { cpu: 500m, memory: 512Mi }
@@ -111,6 +140,8 @@ services:
     replicas: 2
     port: 8084
     database: risk
+    # Five, not Hikari's ten. See maxConnections above.
+    databasePool: 5
     kafka: true
     resources:
       requests: { cpu: 250m, memory: 384Mi }
@@ -122,6 +153,8 @@ services:
     replicas: 2
     port: 8085
     database: notification
+    # Five, not Hikari's ten. See maxConnections above.
+    databasePool: 5
     kafka: true
     resources:
       requests: { cpu: 250m, memory: 384Mi }
@@ -133,6 +166,8 @@ services:
     replicas: 2
     port: 8087
     database: settlement
+    # Five, not Hikari's ten. See maxConnections above.
+    databasePool: 5
     kafka: true
     resources:
       requests: { cpu: 250m, memory: 384Mi }

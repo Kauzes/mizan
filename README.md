@@ -113,6 +113,16 @@ other protected route.
   trace is kept for days and read by whoever is debugging, which makes it exactly the wrong
   place for any of them. The smoke check reads back a real trace and fails on an attribute that
   is named like a secret or holds anything card shaped.
+- The payment service grows under load, inside a written connection budget. The chart as first
+  merged could not start all its pods against a default Postgres: every service opened Hikari's
+  default pool of ten, which at two replicas is 120 connections against a limit of 100. Every pool
+  is now five, and `ChartTest` counts replicas times pool at an autoscaler's maximum against the
+  budget in `values.yaml`, failing when it no longer fits. Payment service autoscales between two and
+  six replicas. An authorization holds a database connection across the acquirer call, so a pod
+  runs out of connections long before CPU. CPU is the default metric because every cluster has it,
+  and connections in use, the signal that actually means load, is one value away once a metrics
+  adapter can see it. Running sweeps on several pods at once is proven harmless rather than locked:
+  two pods finishing the same interrupted refund at the same moment reverse the money once. ADR 0050.
 - A pod is sent traffic only when it can do the work, and finishes what it started before it stops.
   Starting, ready and alive are three probes with three consequences. Liveness never depends on
   the database or Kafka, because a probe that does restarts every pod of every service during the

@@ -319,6 +319,47 @@ class RefundSagaTest extends MizanIntegrationTest {
     }
 
     @Test
+    void twoPodsFinishingTheSameRefundAtTheSameMomentReverseTheMoneyOnce() throws Exception {
+        Merchant merchant = merchantWithASettlementAccount();
+        UUID payment = captured(merchant);
+        ledger.broken.set(new MizanException(ErrorCode.UPSTREAM_UNAVAILABLE, "no ledger"));
+        assertThatThrownBy(() -> refundService.refund(merchant.id, payment, asked(25000, "r2")))
+                .isInstanceOf(MizanException.class);
+        ledger.broken.set(null);
+        makeDue();
+
+        // Two payment-service replicas' sweeps, released together, which is the ordinary case
+        // once the chart runs more than one (MIZ-85). This is the sweep that moves money. What
+        // stops it moving twice is three things at once: the acquirer answers a repeated refund
+        // reference with what it already did, the ledger posts once per external reference, and
+        // the refund's version column refuses the second write.
+        java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.Callable<Void> pod = () -> {
+            go.await();
+            resolver.finishWhatWasInterrupted();
+            return null;
+        };
+        try (java.util.concurrent.ExecutorService pods =
+                java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first = pods.submit(pod);
+            var second = pods.submit(pod);
+            go.countDown();
+            first.get(60, java.util.concurrent.TimeUnit.SECONDS);
+            second.get(60, java.util.concurrent.TimeUnit.SECONDS);
+        }
+        // Whichever of the two lost may have left the refund for the next pass rather than
+        // finished it. Once more, alone, is what the next tick of either pod would do.
+        makeDue();
+        resolver.finishWhatWasInterrupted();
+
+        assertThat(entriesOf(merchant))
+                .as("two pods at once must not reverse the money twice")
+                .isEqualTo(2);
+        assertThat(refundedAmountOf(payment)).isEqualTo(25000);
+        assertThat(booksBalance()).isTrue();
+    }
+
+    @Test
     void oneNobodyCanFinishStopsBeingRetriedAndBecomesSomebodysProblem() throws Exception {
         Merchant merchant = merchantWithASettlementAccount();
         UUID payment = captured(merchant);
