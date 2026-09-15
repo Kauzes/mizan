@@ -57,7 +57,9 @@ call 200 GET "$GATEWAY/actuator/health" > /dev/null
     printf 'docker     %s\n' "$(docker info --format '{{.OperatingSystem}}, {{.NCPU}} CPUs, {{.MemTotal}} bytes' 2>/dev/null)"
     printf 'k6         %s\n' "$K6_IMAGE"
     printf 'merchants  %s\n' "$MERCHANTS"
-    printf 'rate       %s\n' "${RATE:-each profile's own}"
+    # No apostrophe in the default: inside "${...}" bash reads one as the start of a quoted string,
+    # and the script failed to parse thirty lines further down. CI's parse check now catches it.
+    printf 'rate       %s\n' "${RATE:-the profile default}"
     printf 'note       every service, Postgres, Kafka, Redis, the collector and k6 share this one machine\n'
     # What was measured is the images running, which need not be what is checked out: a stack
     # started from one branch keeps its images after switching to another. So each image is named

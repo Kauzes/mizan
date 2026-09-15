@@ -29,6 +29,14 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Every script parses
+        # First, because it takes a second and the build takes minutes. The scripts are how the
+        # platform is smoke tested, load tested, rolled out and broken on purpose, and several run
+        # only in their own workflows or by hand, so a syntax error in one can wait a long time to
+        # be noticed. One did: an apostrophe inside "${...}" in load-profiles.sh reached a pull
+        # request and failed its load workflow before k6 had started.
+        run: for script in scripts/*.sh; do bash -n "$script"; done
+
       - name: Build
         run: ./gradlew build
 
