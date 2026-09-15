@@ -371,6 +371,13 @@ other protected route.
   with Retry-After before any service does work, so one merchant's retry loop cannot become every
   merchant's outage. It is keyed on the merchant the gateway verified, never on the path, and if
   Redis is down it refuses nothing: a rate limit that fails closed is a cache outage for everyone.
+- A capture writes down that it began, and commits that, before the acquirer is asked (ADR 0055).
+  It takes the money first and records it second, so anything that stops it in between, a ledger
+  that is down or a pod that is killed, leaves money taken and not in the books. That used to leave
+  no trace at all: only a merchant retrying would ever finish it, and the books still balanced,
+  because nothing had been written. Now a sweep finds captures begun and never finished and asks
+  the acquirer what it did. Captured: record it. Still only held: nothing moved, clear the mark.
+  Anything else: ask a person. It never guesses what happened to money.
 - A held payment charges nobody and is not a decline. If nobody rules on it, it expires
   refused rather than approved: letting a hold resolve to "take the money" makes the
   safe-looking answer the default and turns a review queue into a delay before approving.

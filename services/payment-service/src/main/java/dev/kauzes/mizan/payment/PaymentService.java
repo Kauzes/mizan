@@ -16,7 +16,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** Starting payments, and reading where they have got to. */
 @Service
@@ -33,6 +36,12 @@ public class PaymentService {
     private final PaymentSearch search;
     private final PaymentMetrics metrics;
 
+    /**
+     * Each step of a capture commits on its own, whatever transaction a caller is already in.
+     * The mark that a capture began has to survive the capture failing, or nothing can find it.
+     */
+    private final TransactionTemplate step;
+
     public PaymentService(
             PaymentRepository payments,
             AcquirerClient acquirer,
@@ -41,7 +50,8 @@ public class PaymentService {
             UnknownOutcomes unknownOutcomes,
             PaymentEvents events,
             PaymentSearch search,
-            PaymentMetrics metrics) {
+            PaymentMetrics metrics,
+            PlatformTransactionManager transactions) {
 
         this.payments = payments;
         this.acquirer = acquirer;
@@ -51,6 +61,8 @@ public class PaymentService {
         this.events = events;
         this.search = search;
         this.metrics = metrics;
+        this.step = new TransactionTemplate(transactions);
+        this.step.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     /**
@@ -67,26 +79,69 @@ public class PaymentService {
      * already taken, the ledger answers with the entry it already wrote, and the payment ends
      * captured pointing at that same entry. Nothing is taken twice and nothing is recorded
      * twice.
+     *
+     * <p>But sending it again used to be the only thing that finished it. A capture stopped
+     * between the acquirer and the ledger left the payment authorized with nothing on it to say
+     * a capture had begun, so unless the merchant tried again the money stayed taken and
+     * unrecorded, and no sweep and no operator view could see it. MIZ-90 found that before
+     * killing the ledger under load would have. So the start is now written down and committed
+     * first, and {@link CaptureResolver} finishes anything that was started and never finished.
      */
-    @Transactional
     public PaymentResponse capture(UUID merchantId, UUID paymentId) {
-        Payment payment = mine(merchantId, paymentId);
-        refuseUnless(payment, PaymentStatus.CAPTURED, "captured");
+        // One: refuse, or write down that a capture has begun. Committed before the acquirer is
+        // asked, so that it outlives anything that goes wrong after.
+        Payment started = step.execute(status -> {
+            Payment payment = mine(merchantId, paymentId);
+            refuseUnless(payment, PaymentStatus.CAPTURED, "captured");
+            payment.captureStarted();
+            return payment;
+        });
 
-        acquirer.capture(payment.acquirerReference());
+        // Two: take the money.
+        try {
+            acquirer.capture(started.acquirerReference());
+        } catch (MizanException notTaken) {
+            if (notTaken.errorCode() == ErrorCode.UNPROCESSABLE) {
+                // A refusal is an answer: no money was taken, so nothing began after all.
+                step.executeWithoutResult(status -> mine(merchantId, paymentId).captureNotReached());
+            }
+            // A timeout, or the acquirer being unavailable, is not knowing. The mark stays, and
+            // the sweep asks the acquirer what it did.
+            throw notTaken;
+        }
 
-        // If this throws, the transaction rolls back and the payment stays authorized while
-        // the acquirer holds a capture. That is the honest state: the money is taken and not
-        // yet recorded, the caller is told which, and sending the capture again finishes it.
-        UUID entry = ledger.recordCapture(merchantId, payment);
+        // Three: record it, and only then say so.
+        return finishCapture(merchantId, paymentId);
+    }
 
-        payment.captured(entry);
-        // In this transaction, so the capture and the announcement of it commit together or
-        // not at all. Nothing is published here; a row is written and MIZ-48 drains it.
-        events.record(payment, null);
+    /**
+     * Records a capture the acquirer has already made, and marks the payment captured.
+     *
+     * <p>What {@link #capture} does once the money is taken, and what {@link CaptureResolver} does
+     * once the acquirer has confirmed a capture nobody finished. Repeatable: the entry carries the
+     * payment's id, so the ledger answers a repeat with the entry it already wrote, and a payment
+     * already captured is returned as it is.
+     *
+     * <p>If the ledger fails, this step rolls back and the mark from step one remains. The payment
+     * stays authorized, which is honest, and is now findable.
+     */
+    public PaymentResponse finishCapture(UUID merchantId, UUID paymentId) {
+        return step.execute(status -> {
+            Payment payment = mine(merchantId, paymentId);
+            if (payment.status() == PaymentStatus.CAPTURED) {
+                return PaymentResponse.of(payment);
+            }
 
-        log.info("captured payment {} and recorded it as entry {}", paymentId, entry);
-        return PaymentResponse.of(payment);
+            UUID entry = ledger.recordCapture(merchantId, payment);
+
+            payment.captured(entry);
+            // In this transaction, so the capture and the announcement of it commit together or
+            // not at all. Nothing is published here; a row is written and MIZ-48 drains it.
+            events.record(payment, null);
+
+            log.info("captured payment {} and recorded it as entry {}", paymentId, entry);
+            return PaymentResponse.of(payment);
+        });
     }
 
     /**

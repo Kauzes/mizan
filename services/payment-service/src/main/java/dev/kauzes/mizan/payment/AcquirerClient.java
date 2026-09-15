@@ -352,13 +352,40 @@ public class AcquirerClient {
         }
     }
 
-    /** What the acquirer decided, in this service's own words. */
+    /**
+     * What the acquirer decided, in this service's own words.
+     *
+     * @param state where the authorization is now at the acquirer, in the acquirer's words:
+     *     {@code HELD} (approved, money reserved, not taken), {@code CAPTURED}, {@code VOIDED} or
+     *     {@code REFUSED}. What a capture sweep needs, because a decision says only what was
+     *     decided and not whether the money was later taken.
+     */
     public record AcquirerDecision(
             String acquirerReference,
             boolean approved,
             String reason,
             String cardLastFour,
-            Instant decidedAt) {
+            Instant decidedAt,
+            String state) {
+
+        /** The acquirer's word for money taken. */
+        static final String CAPTURED = "CAPTURED";
+
+        /**
+         * The acquirer's word for an approval whose money is reserved and not yet taken. Not this
+         * platform's AUTHORIZED: the first version of the capture sweep assumed it was, and every
+         * capture that never reached the acquirer went to a person instead of being cleared.
+         * AcquirerStatesTest holds the two services' words together.
+         */
+        static final String HELD = "HELD";
+
+        public boolean captured() {
+            return CAPTURED.equals(state);
+        }
+
+        public boolean stillOnlyAuthorized() {
+            return HELD.equals(state);
+        }
     }
 
     private record AcquirerRequest(
@@ -388,7 +415,8 @@ public class AcquirerClient {
                     "APPROVED".equals(outcome),
                     reason,
                     cardLastFour,
-                    decidedAt);
+                    decidedAt,
+                    state);
         }
     }
 }

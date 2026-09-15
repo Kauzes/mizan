@@ -82,6 +82,12 @@ mizan:
     # How long one is left alone first, so a refund whose original call is still in flight is
     # not raced for no benefit.
     resolve-after: ${MIZAN_REFUND_RESOLVE_AFTER:10s}
+  captures:
+    # How often captures that were started and never finished are looked for. One stopped between
+    # the acquirer and the ledger is money taken and not recorded, so, like refunds, not slow.
+    resolve-every: ${MIZAN_CAPTURE_RESOLVE_EVERY:15s}
+    # Left alone first, so a capture still in flight is not raced.
+    resolve-after: ${MIZAN_CAPTURE_RESOLVE_AFTER:10s}
   outbox:
     # This service owns an outbox table (V7) and publishes what is written to it. Declared
     # rather than inferred from having a database and a producer, which two other services
