@@ -3,6 +3,7 @@
 - Status: accepted
 - Date: 2026-09-16
 - Jira: MIZ-99
+- Narrowed: 2026-09-17 by ADR 0060, which lets a payment queued with no signal keep its card, encrypted and for at most a day, until its authorization is answered.
 
 ## Context
 
