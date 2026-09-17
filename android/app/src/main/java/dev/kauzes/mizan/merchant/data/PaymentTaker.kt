@@ -36,6 +36,7 @@ interface AttemptStore {
 class PaymentTaker(
     private val api: PaymentsApi,
     private val store: AttemptStore,
+    private val vault: CardVault = NoCardKept,
     private val now: () -> Long = System::currentTimeMillis,
     private val newId: () -> String = { UUID.randomUUID().toString() },
 ) {
@@ -71,7 +72,8 @@ class PaymentTaker(
      */
     suspend fun proceed(attemptId: String, card: String? = null): ProceedOutcome {
         var attempt = requireNotNull(store.find(attemptId)) { "no payment attempt $attemptId" }
-        var cardInHand = card
+        // A payment taken with no signal kept its card, so continuing it needs nothing from the merchant.
+        var cardInHand = card ?: vault.read(attemptId)
 
         // Each pass either finishes, waits, or moves to another step. Bounded, so two steps that keep
         // handing the payment to each other (a capture the books refuse, read back as still authorized)
@@ -85,30 +87,30 @@ class PaymentTaker(
                 )) {
                     is ApiResult.Ok -> attempt = save(attempt.copy(paymentId = created.value.id, step = AttemptStep.AUTHORIZING))
                     is ApiResult.Refused -> return waitingOrRefused(attempt, created)
-                    is ApiResult.Unavailable -> return ProceedOutcome.Waiting(attempt, unreachable(created))
-                    ApiResult.SignedOut -> return ProceedOutcome.SignedOut(attempt)
+                    is ApiResult.Unavailable -> return queued(attempt, cardInHand, unreachable(created))
+                    // Signed out: the card is forgotten rather than kept for a session that may not return.
+                    ApiResult.SignedOut -> return ProceedOutcome.SignedOut(forgetCard(attempt))
                 }
 
                 AttemptStep.AUTHORIZING -> {
                     val cardNow = cardInHand ?: return ProceedOutcome.NeedsCard(attempt)
-                    cardInHand = null
                     when (val authorized = api.authorize(attempt.paymentId!!, attempt.authorizeKey, cardNow)) {
                         is ApiResult.Ok -> attempt = afterAuthorization(attempt, authorized.value)
                         is ApiResult.Refused -> when {
-                            authorized.code == "IDEMPOTENCY_KEY_REUSED" -> return ProceedOutcome.CardDiffers(attempt)
+                            authorized.code == "IDEMPOTENCY_KEY_REUSED" -> return forgetCard(attempt).let { ProceedOutcome.CardDiffers(it) }
                             // The payment moved on without this request being the one that moved it: a
                             // lost answer to an earlier try. Read what it is now.
                             authorized.status == 422 -> attempt = save(attempt.copy(step = AttemptStep.CONFIRMING_AUTHORIZATION))
-                            else -> return waitingOrRefused(attempt, authorized)
+                            else -> return waitingOrRefused(forgetCard(attempt), authorized)
                         }
                         is ApiResult.Unavailable ->
                             if (authorized.code == "UPSTREAM_TIMEOUT") {
                                 attempt = save(attempt.copy(step = AttemptStep.CONFIRMING_AUTHORIZATION))
                                 return ProceedOutcome.Waiting(attempt, "The bank did not answer in time. Whether the card was authorized is being worked out.")
                             } else {
-                                return ProceedOutcome.Waiting(attempt, unreachable(authorized))
+                                return queued(attempt, cardNow, unreachable(authorized))
                             }
-                        ApiResult.SignedOut -> return ProceedOutcome.SignedOut(attempt)
+                        ApiResult.SignedOut -> return ProceedOutcome.SignedOut(forgetCard(attempt))
                     }
                 }
 
@@ -162,7 +164,8 @@ class PaymentTaker(
     }
 
     private suspend fun afterAuthorization(attempt: PaymentAttempt, payment: RemotePayment): PaymentAttempt {
-        val withCard = attempt.copy(cardLastFour = payment.cardLastFour ?: attempt.cardLastFour)
+        // Answered, so the card has done its one job and is forgotten before anything else happens.
+        val withCard = forgetCard(attempt).copy(cardLastFour = payment.cardLastFour ?: attempt.cardLastFour)
         return save(
             when (payment.status) {
                 "AUTHORIZED" -> withCard.copy(step = AttemptStep.CAPTURING, detail = null)
@@ -181,11 +184,28 @@ class PaymentTaker(
         },
     )
 
+    /**
+     * Keeps the card for this payment, if there is one in hand, and says it is waiting.
+     *
+     * This is the one case where a card is written down: the platform could not be reached, so the payment
+     * is queued, and sending it later needs the card the merchant has already put away. It is encrypted,
+     * kept for this payment alone, expires, and is forgotten the moment the authorization is answered.
+     */
+    private suspend fun queued(attempt: PaymentAttempt, card: String?, because: String): ProceedOutcome {
+        if (card != null) vault.keep(attempt.id, card, now() + CARD_KEPT_FOR_MILLIS)
+        return ProceedOutcome.Waiting(attempt, because)
+    }
+
+    private suspend fun forgetCard(attempt: PaymentAttempt): PaymentAttempt {
+        vault.forget(attempt.id)
+        return attempt
+    }
+
     /** A refusal that may pass (busy, too many requests) waits; any other ends the payment. */
     private suspend fun waitingOrRefused(attempt: PaymentAttempt, refused: ApiResult.Refused): ProceedOutcome = when {
         refused.status == 429 -> ProceedOutcome.Waiting(attempt, "Too many payments at once. Try again in a moment.")
         refused.code == "CONTENDED" -> ProceedOutcome.Waiting(attempt, "The platform is still working on this payment. Try again in a moment.")
-        else -> ProceedOutcome.Finished(save(attempt.finish(AttemptResult.REFUSED, refused.detail ?: "The platform refused it (${refused.status}).")))
+        else -> ProceedOutcome.Finished(save(forgetCard(attempt).finish(AttemptResult.REFUSED, refused.detail ?: "The platform refused it (${refused.status}).")))
     }
 
     private fun unreachable(unavailable: ApiResult.Unavailable) =
@@ -202,5 +222,12 @@ class PaymentTaker(
 
     private companion object {
         const val MAX_STEPS = 8
+
+        /**
+         * How long a queued payment's card is kept. A day: long enough for a till that spent an evening
+         * with no signal, short enough that a card is not sitting on a phone for a week. After it, the
+         * payment is still queued and still charged once — it just asks for the card again.
+         */
+        const val CARD_KEPT_FOR_MILLIS = 24L * 60 * 60 * 1000
     }
 }

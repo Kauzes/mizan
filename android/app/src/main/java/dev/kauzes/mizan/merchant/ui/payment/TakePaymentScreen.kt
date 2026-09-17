@@ -32,6 +32,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.kauzes.mizan.merchant.MizanApp
+import dev.kauzes.mizan.merchant.data.Conflict
+import dev.kauzes.mizan.merchant.data.Connectivity
+import dev.kauzes.mizan.merchant.data.PaymentSync
 import dev.kauzes.mizan.merchant.data.PaymentTaker
 import dev.kauzes.mizan.merchant.domain.AttemptResult
 import dev.kauzes.mizan.merchant.domain.AttemptStep
@@ -55,9 +58,17 @@ data class TakePaymentState(
     val message: String? = null,
     /** The interrupted payment the card field is for, when the merchant is finishing one. */
     val continuing: PaymentAttempt? = null,
+    /** What the phone believes about its network. Only ever used to explain, never to judge a payment. */
+    val online: Boolean = true,
+    /** Payments the queue could not send by itself, and why. */
+    val conflicts: List<Conflict> = emptyList(),
 )
 
-class TakePaymentViewModel(private val payments: PaymentTaker) : ViewModel() {
+class TakePaymentViewModel(
+    private val payments: PaymentTaker,
+    private val sync: PaymentSync,
+    connectivity: Connectivity,
+) : ViewModel() {
 
     private val mutableState = MutableStateFlow(TakePaymentState())
     val state: StateFlow<TakePaymentState> = mutableState.asStateFlow()
@@ -66,6 +77,16 @@ class TakePaymentViewModel(private val payments: PaymentTaker) : ViewModel() {
     val unfinished: StateFlow<List<PaymentAttempt>> = payments.recent()
         .map { attempts -> attempts.filter { it.step != AttemptStep.FINISHED } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    init {
+        // Signal coming back starts a pass; the sync itself decides what is actually sendable.
+        viewModelScope.launch {
+            connectivity.online.collect { online ->
+                mutableState.update { it.copy(online = online) }
+                if (online) runSync()
+            }
+        }
+    }
 
     fun onAmount(text: String) = mutableState.update { it.copy(amount = text, message = null) }
     fun onCard(text: String) = mutableState.update { it.copy(card = text.filter(Char::isDigit), message = null) }
@@ -85,7 +106,7 @@ class TakePaymentViewModel(private val payments: PaymentTaker) : ViewModel() {
         mutableState.update { it.copy(running = true, message = null) }
         viewModelScope.launch {
             val attemptId = continuing?.id ?: payments.start(amount!!, CURRENCY, typed.description).id
-            // The card leaves the screen's state the moment it is handed over. It is never written down.
+            // The card leaves the screen's state the moment it is handed over.
             val card = typed.card
             mutableState.update { it.copy(card = "") }
             show(payments.proceed(attemptId, card))
@@ -99,11 +120,38 @@ class TakePaymentViewModel(private val payments: PaymentTaker) : ViewModel() {
         viewModelScope.launch { show(payments.proceed(attempt.id)) }
     }
 
+    /** Sends everything queued now, rather than waiting for the network to say something changed. */
+    fun sendQueued() {
+        if (mutableState.value.running) return
+        mutableState.update { it.copy(running = true, message = null) }
+        viewModelScope.launch { runSync() }
+    }
+
+    private suspend fun runSync() {
+        val report = sync.sync()
+        mutableState.update { current ->
+            current.copy(
+                running = false,
+                conflicts = report.conflicts,
+                message = when {
+                    report.signedOut -> "Signed out while offline. Sign in again to send what is waiting."
+                    report.conflicts.isNotEmpty() -> "Some payments need you before they can be sent."
+                    report.finished > 0 -> "Sent ${report.finished} payment${if (report.finished == 1) "" else "s"} that were waiting."
+                    else -> current.message
+                },
+            )
+        }
+    }
+
     private fun show(outcome: ProceedOutcome) {
         val money = "${MoneyInput.format(outcome.attempt.amount)} ${outcome.attempt.currency}"
         mutableState.update {
             when (outcome) {
-                is ProceedOutcome.Finished -> TakePaymentState(message = finished(outcome.attempt, money))
+                is ProceedOutcome.Finished -> TakePaymentState(
+                    online = it.online,
+                    conflicts = it.conflicts,
+                    message = finished(outcome.attempt, money),
+                )
                 is ProceedOutcome.NeedsCard -> it.copy(
                     running = false,
                     continuing = outcome.attempt,
@@ -114,7 +162,12 @@ class TakePaymentViewModel(private val payments: PaymentTaker) : ViewModel() {
                     continuing = outcome.attempt,
                     message = "This payment of $money was started with a different card. Enter that card to finish it; nothing has been charged to this one.",
                 )
-                is ProceedOutcome.Waiting -> it.copy(running = false, continuing = null, message = outcome.because)
+                // Queued: the card was kept, so this one needs nothing further from the merchant.
+                is ProceedOutcome.Waiting -> TakePaymentState(
+                    online = it.online,
+                    conflicts = it.conflicts,
+                    message = if (it.online) outcome.because else "$money is waiting to be sent. It will go by itself when there is signal.",
+                )
                 is ProceedOutcome.SignedOut -> it.copy(running = false, message = "Signed out. Sign in again to finish this payment.")
             }
         }
@@ -134,7 +187,10 @@ class TakePaymentViewModel(private val payments: PaymentTaker) : ViewModel() {
         const val CURRENCY = "TRY"
 
         val Factory = viewModelFactory {
-            initializer { TakePaymentViewModel((this[APPLICATION_KEY] as MizanApp).payments) }
+            initializer {
+                val app = this[APPLICATION_KEY] as MizanApp
+                TakePaymentViewModel(app.payments, app.sync, app.connectivity)
+            }
         }
     }
 }
@@ -151,6 +207,7 @@ fun TakePaymentScreen(viewModel: TakePaymentViewModel = viewModel(factory = Take
         onDescription = viewModel::onDescription,
         onSubmit = viewModel::submit,
         onResume = viewModel::resume,
+        onSendQueued = viewModel::sendQueued,
     )
 }
 
@@ -163,6 +220,7 @@ fun TakePaymentContent(
     onDescription: (String) -> Unit,
     onSubmit: () -> Unit,
     onResume: (PaymentAttempt) -> Unit,
+    onSendQueued: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
@@ -174,6 +232,15 @@ fun TakePaymentContent(
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
         )
+
+        if (!state.online) {
+            Text(
+                "No signal. Payments can still be taken; they are sent when signal returns.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag("offline"),
+            )
+        }
 
         if (state.continuing == null) {
             OutlinedTextField(
@@ -226,9 +293,23 @@ fun TakePaymentContent(
             Text(it, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.testTag("result"))
         }
 
+        state.conflicts.forEach { conflict ->
+            Text(
+                "${MoneyInput.format(conflict.attempt.amount)} ${conflict.attempt.currency}: ${conflict.because}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.testTag("conflict-${conflict.attempt.id}"),
+            )
+        }
+
         if (unfinished.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            Text("Not finished", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Waiting to be sent (${unfinished.size})",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.testTag("waiting"),
+            )
             unfinished.forEach { attempt ->
                 OutlinedButton(
                     onClick = { onResume(attempt) },
@@ -237,6 +318,13 @@ fun TakePaymentContent(
                 ) {
                     Text("Continue ${MoneyInput.format(attempt.amount)} ${attempt.currency}")
                 }
+            }
+            OutlinedButton(
+                onClick = onSendQueued,
+                enabled = !state.running && state.online,
+                modifier = Modifier.fillMaxWidth().testTag("send-queued"),
+            ) {
+                Text("Send all now")
             }
         }
         Spacer(Modifier.height(24.dp))
