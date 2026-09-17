@@ -83,13 +83,29 @@ class HomeViewModel(private val merchants: MerchantService, private val sessions
 }
 
 @Composable
-fun HomeScreen(onTakePayment: () -> Unit, viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory)) {
+fun HomeScreen(
+    onTakePayment: () -> Unit,
+    onSeePayments: () -> Unit,
+    viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    HomeContent(state = state, onTakePayment = onTakePayment, onReload = viewModel::reload, onSignOut = viewModel::signOut)
+    HomeContent(
+        state = state,
+        onTakePayment = onTakePayment,
+        onSeePayments = onSeePayments,
+        onReload = viewModel::reload,
+        onSignOut = viewModel::signOut,
+    )
 }
 
 @Composable
-fun HomeContent(state: HomeState, onTakePayment: () -> Unit, onReload: () -> Unit, onSignOut: () -> Unit) {
+fun HomeContent(
+    state: HomeState,
+    onTakePayment: () -> Unit,
+    onSeePayments: () -> Unit,
+    onReload: () -> Unit,
+    onSignOut: () -> Unit,
+) {
     Column(
         modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -113,6 +129,7 @@ fun HomeContent(state: HomeState, onTakePayment: () -> Unit, onReload: () -> Uni
 
         Spacer(Modifier.height(8.dp))
         Button(onClick = onTakePayment, modifier = Modifier.fillMaxWidth()) { Text("Take a payment") }
+        OutlinedButton(onClick = onSeePayments, modifier = Modifier.fillMaxWidth()) { Text("Payments") }
         OutlinedButton(onClick = onReload, enabled = !state.loading, modifier = Modifier.fillMaxWidth()) { Text("Reload") }
         OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
     }

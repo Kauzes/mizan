@@ -6,15 +6,21 @@ import dev.kauzes.mizan.merchant.data.CardVault
 import dev.kauzes.mizan.merchant.data.Connectivity
 import dev.kauzes.mizan.merchant.data.HttpMerchantService
 import dev.kauzes.mizan.merchant.data.HttpPaymentsApi
+import dev.kauzes.mizan.merchant.data.AndroidHeldNotifier
+import dev.kauzes.mizan.merchant.data.HeldPaymentsWorker
+import dev.kauzes.mizan.merchant.data.HeldWatcher
 import dev.kauzes.mizan.merchant.data.HttpPlatformClient
 import dev.kauzes.mizan.merchant.data.HttpTokenService
 import dev.kauzes.mizan.merchant.data.KeystoreSessionStore
 import dev.kauzes.mizan.merchant.data.MerchantService
 import dev.kauzes.mizan.merchant.data.KeystoreCardVault
 import dev.kauzes.mizan.merchant.data.MizanDatabase
+import dev.kauzes.mizan.merchant.data.PaymentFeed
 import dev.kauzes.mizan.merchant.data.PaymentSync
 import dev.kauzes.mizan.merchant.data.PaymentTaker
+import dev.kauzes.mizan.merchant.data.PaymentsApi
 import dev.kauzes.mizan.merchant.data.PlatformClient
+import dev.kauzes.mizan.merchant.data.PrefsSeenHeld
 import dev.kauzes.mizan.merchant.data.RoomAttemptStore
 import dev.kauzes.mizan.merchant.data.SessionManager
 import java.util.concurrent.TimeUnit
@@ -47,16 +53,29 @@ class MizanApp : Application() {
 
     val cards: CardVault by lazy { KeystoreCardVault(this) }
 
+    val paymentsApi: PaymentsApi by lazy { HttpPaymentsApi(BuildConfig.GATEWAY_URL, http, sessions) }
+
     val payments: PaymentTaker by lazy {
-        PaymentTaker(
-            HttpPaymentsApi(BuildConfig.GATEWAY_URL, http, sessions),
-            RoomAttemptStore(MizanDatabase.get(this).attempts()),
-            cards,
-        )
+        PaymentTaker(paymentsApi, RoomAttemptStore(MizanDatabase.get(this).attempts()), cards)
+    }
+
+    /** The merchant's payments, kept up to date while a screen is watching them. */
+    val feed: PaymentFeed by lazy { PaymentFeed(paymentsApi) }
+
+    /** The check that tells the merchant about a payment held for review, on a schedule and on launch. */
+    val heldPayments: HeldWatcher by lazy {
+        HeldWatcher(paymentsApi, PrefsSeenHeld(this), AndroidHeldNotifier(this))
     }
 
     val connectivity: Connectivity by lazy { AndroidConnectivity(this) }
 
     /** One queue for the whole app, so the screen and the network coming back ask the same pass to run. */
     val sync: PaymentSync by lazy { PaymentSync(payments, cards) }
+
+    override fun onCreate() {
+        super.onCreate()
+        // Scheduled here rather than after signing in: the schedule outlives the app, and the check
+        // itself does nothing when nobody is signed in.
+        HeldPaymentsWorker.keepScheduled(this)
+    }
 }

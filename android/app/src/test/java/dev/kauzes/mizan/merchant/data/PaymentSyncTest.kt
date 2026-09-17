@@ -120,6 +120,9 @@ class PaymentSyncTest {
                 ApiResult.Ok(remote(payment))
             }
 
+        override suspend fun list(statuses: List<String>, size: Int) =
+            ApiResult.Ok(payments.values.map(::remote).filter { statuses.isEmpty() || it.status in statuses })
+
         override suspend fun find(paymentId: String) = when {
             signedOut -> ApiResult.SignedOut
             offline -> ApiResult.Unavailable(null, null, "no route to host")

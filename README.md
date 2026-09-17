@@ -731,8 +731,8 @@ action to take — because it is the same question about a different subject.
 An Android app for merchants taking payments in person, in `android/`: Kotlin, Jetpack Compose,
 MVVM with coroutines and Flow, built the same way as the Sentinel Pay app (ADR 0057). It is being
 built one story at a time under MIZ-14; today a merchant signs in, stays signed in across launches,
-takes card payments that are charged once however the app is interrupted, and keeps taking them with no
-signal. It can also check that
+takes card payments that are charged once however the app is interrupted, keeps taking them with no
+signal, and watches payments as they happen. It can also check that
 the platform is answering.
 
 ```sh
@@ -768,6 +768,13 @@ cd android
   keeping expired, and a session that ended while offline are all shown to the merchant. Driven on the
   emulator with its radio off: two payments queued, the app killed, the radio back on — both sent in the
   order taken, each captured exactly once, and no card left on the device.
+- **The payments list updates while the merchant watches it, and the phone says when one is held for
+  review — by asking, not by being told** (ADR 0061). **There is no push in this app.** Firebase Cloud
+  Messaging needs a project and credentials this repository does not have, so an open screen reads the
+  list every five seconds and a WorkManager job asks every fifteen minutes whether anything is held and
+  raises a local notification. A held payment is therefore announced within minutes, not instantly —
+  seconds if the merchant is watching the list. Refusing the notification permission only means seeing it
+  on the screen instead.
 - **Every push that changes the app builds an APK** (`.github/workflows/android.yml`), downloadable
   from the run. The UI tests are compiled there and run on an emulator locally, because a hosted
   runner's emulator is slow enough and flaky enough to be ignored.

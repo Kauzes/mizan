@@ -28,6 +28,8 @@ kotlinxSerialization = "1.11.0"
 # extends the same table (MIZ-100). Sentinel Pay's versions; room-runtime 2.8.4 asks for compileSdk 34.
 room = "2.8.4"
 ksp = "2.3.11"
+# The background check that raises a held-for-review notification (MIZ-101). 2.11.2 asks for compileSdk 35.
+work = "2.11.2"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -55,6 +57,7 @@ okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver3", version
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+androidx-work-runtime = { module = "androidx.work:work-runtime", version.ref = "work" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }
