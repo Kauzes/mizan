@@ -47,7 +47,36 @@ public class DeadLetters {
             String payload,
             int attempts,
             Instant firstFailedAt,
-            Instant redeliveredAt) {
+            Instant redeliveredAt,
+            /** Set when somebody decided nothing more will be done about this one. */
+            Instant closedAt,
+            String closedBy,
+            String closedWhy) {
+
+        /**
+         * One as it is being recorded, which is nothing anybody has closed yet.
+         *
+         * <p>Only a reader ever fills the closing in, so the two places that set a letter aside
+         * should not have to say "not closed, by nobody, for no reason" to do it.
+         */
+        public DeadLetter(
+                UUID id,
+                UUID eventId,
+                String type,
+                String handler,
+                String topic,
+                Integer partition,
+                Long offset,
+                String messageKey,
+                String reason,
+                String correlationId,
+                String payload,
+                int attempts,
+                Instant firstFailedAt,
+                Instant redeliveredAt) {
+            this(id, eventId, type, handler, topic, partition, offset, messageKey, reason,
+                    correlationId, payload, attempts, firstFailedAt, redeliveredAt, null, null, null);
+        }
     }
 
     private final JdbcTemplate jdbc;
@@ -64,9 +93,14 @@ public class DeadLetters {
      * rather than a growing pile that hides how many distinct things are wrong.
      */
     public void record(DeadLetter letter) {
+        // A closing is reopened here on purpose. Closing says nothing more will be done about
+        // what was set aside; it cannot say anything about the next time the same event fails,
+        // and a failure that stays invisible because of a decision taken last month is the
+        // failure mode that closing must not introduce.
         int updated = jdbc.update(
                 "update dead_letter set attempts = attempts + 1, reason = ?, "
-                        + "redelivered_at = null, last_failed_at = ? "
+                        + "redelivered_at = null, last_failed_at = ?, "
+                        + "closed_at = null, closed_by = null, closed_why = null "
                         + "where event_id = ? and handler = ?",
                 letter.reason(),
                 Timestamp.from(Instant.now()),
@@ -105,10 +139,10 @@ public class DeadLetters {
                 letter.reason());
     }
 
-    /** What is set aside and not yet dealt with, worst first. */
+    /** What is set aside and not yet dealt with, worst first. Neither redelivered nor closed. */
     public List<DeadLetter> outstanding() {
         return jdbc.query(
-                "select * from dead_letter where redelivered_at is null "
+                "select * from dead_letter where redelivered_at is null and closed_at is null "
                         + "order by attempts desc, first_failed_at asc limit 200",
                 DeadLetters::read);
     }
@@ -132,15 +166,40 @@ public class DeadLetters {
                 id);
     }
 
+    /**
+     * Records that nothing more will be done about this one, and why.
+     *
+     * <p>For the event whose cause cannot be fixed: a payload poisoned by a test, an event
+     * naming something that never existed. Not a delete — the row, the reason and the payload
+     * stay, because this is the only record that a merchant was never told something. What
+     * changes is that somebody has put their name to the decision, and that the count the alert
+     * watches can reach zero again.
+     */
+    public void close(UUID id, String closedBy, String why) {
+        int closed = jdbc.update(
+                "update dead_letter set closed_at = ?, closed_by = ?, closed_why = ? "
+                        + "where id = ? and closed_at is null",
+                Timestamp.from(Instant.now()),
+                closedBy,
+                why,
+                id);
+
+        if (closed > 0) {
+            log.warn("{} closed dead letter {}: {}", closedBy, id, why);
+        }
+    }
+
     /** How many are outstanding, per handler, for anything that wants to notice. */
     public List<java.util.Map<String, Object>> summary() {
         return jdbc.queryForList(
                 "select handler, type, count(*) as outstanding from dead_letter "
-                        + "where redelivered_at is null group by handler, type order by 3 desc");
+                        + "where redelivered_at is null and closed_at is null "
+                        + "group by handler, type order by 3 desc");
     }
 
     private static DeadLetter read(java.sql.ResultSet row, int index) throws java.sql.SQLException {
         Timestamp redelivered = row.getTimestamp("redelivered_at");
+        Timestamp closed = row.getTimestamp("closed_at");
         return new DeadLetter(
                 row.getObject("id", UUID.class),
                 row.getObject("event_id", UUID.class),
@@ -155,6 +214,9 @@ public class DeadLetters {
                 row.getString("payload"),
                 row.getInt("attempts"),
                 row.getTimestamp("first_failed_at").toInstant(),
-                redelivered == null ? null : redelivered.toInstant());
+                redelivered == null ? null : redelivered.toInstant(),
+                closed == null ? null : closed.toInstant(),
+                row.getString("closed_by"),
+                row.getString("closed_why"));
     }
 }
