@@ -11,7 +11,8 @@ platform is always zero.
 **[Design rules](#design-rules)** · [How it fits together](#how-it-fits-together) ·
 [Services](#services) · [Testing](#testing) · [Performance](#performance) ·
 [API documentation](#api-documentation) · [The merchant app](#the-merchant-app) ·
-[The console](#the-console) · [Running](#running) · [Decisions](docs/adr/README.md)
+[The console](#the-console) · [Running](#running) · [Runbook](docs/RUNBOOK.md) ·
+[Decisions](docs/adr/README.md)
 
 ## Status
 
@@ -1097,6 +1098,11 @@ Both scripts need only `curl` and Python, which is why they are shell rather tha
 Gradle task: the point is that someone who has not built the project can still run them.
 
 ## Documentation
+
+When something is wrong, [docs/RUNBOOK.md](docs/RUNBOOK.md) is the one to open: starting and stopping,
+what healthy looks like, every alert with how to confirm it and what to do, the queues that need a
+person, and how to inspect and redeliver a dead letter. Every command in it was run against the platform
+while it was written, and the output shown is what that command printed.
 
 Every architecture decision is indexed in [docs/adr/README.md](docs/adr/README.md): the
 number, the decision, the story it came from, and — for the ones something later narrowed,
