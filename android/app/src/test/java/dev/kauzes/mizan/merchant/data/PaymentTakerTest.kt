@@ -104,6 +104,9 @@ class PaymentTakerTest {
                 ApiResult.Ok(remote(p))
             }
 
+        override suspend fun list(statuses: List<String>, size: Int) =
+            ApiResult.Ok(payments.values.map(::remote).filter { statuses.isEmpty() || it.status in statuses })
+
         override suspend fun find(paymentId: String): ApiResult<RemotePayment> =
             nextUnavailable?.let { nextUnavailable = null; it } ?: ApiResult.Ok(remote(payments.getValue(paymentId)))
     }

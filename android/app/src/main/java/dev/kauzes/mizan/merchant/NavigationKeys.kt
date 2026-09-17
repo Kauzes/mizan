@@ -14,3 +14,6 @@ import kotlinx.serialization.Serializable
 
 /** Taking a payment, and finishing one that was interrupted. */
 @Serializable data object TakePayment : NavKey
+
+/** The merchant's payments, kept up to date while this screen is open. */
+@Serializable data object Payments : NavKey

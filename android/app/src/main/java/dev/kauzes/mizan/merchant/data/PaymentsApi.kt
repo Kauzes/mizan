@@ -5,6 +5,7 @@ import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -14,12 +15,22 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-/** A payment as the platform describes it: only what taking one needs. */
+/**
+ * A payment as the platform describes it.
+ *
+ * The fields a list needs are nullable and default to nothing, because taking a payment only ever reads
+ * the first four and a client that asked for one payment should not depend on the rest being there.
+ */
 data class RemotePayment(
     val id: String,
     val status: String,
     val declineReason: String?,
     val cardLastFour: String?,
+    val amount: Long? = null,
+    val currency: String? = null,
+    val reference: String? = null,
+    val riskVerdict: String? = null,
+    val createdAt: String? = null,
 )
 
 /** What one request to the platform came to, in terms the payment steps can act on. */
@@ -45,6 +56,9 @@ interface PaymentsApi {
     suspend fun authorize(paymentId: String, key: String, card: String): ApiResult<RemotePayment>
     suspend fun capture(paymentId: String, key: String): ApiResult<RemotePayment>
     suspend fun find(paymentId: String): ApiResult<RemotePayment>
+
+    /** This merchant's payments, most recent first. [statuses] narrows to those statuses when given. */
+    suspend fun list(statuses: List<String> = emptyList(), size: Int = 25): ApiResult<List<RemotePayment>>
 }
 
 /**
@@ -72,8 +86,26 @@ class HttpPaymentsApi(
 
     override suspend fun find(paymentId: String) = send("/$paymentId", key = null, body = null)
 
+    override suspend fun list(statuses: List<String>, size: Int): ApiResult<List<RemotePayment>> {
+        val query = buildString {
+            append("?size=").append(size)
+            statuses.forEach { append("&status=").append(it) }
+        }
+        return request(query, key = null, body = null) { text ->
+            json.decodeFromString(ListSerializer(PaymentBody.serializer()), text).map { it.toRemote() }
+        }
+    }
+
+    private suspend fun send(path: String, key: String?, body: String?): ApiResult<RemotePayment> =
+        request(path, key, body) { paymentFrom(it) }
+
     /** POST when there is a key, GET when there is not; the answer classified the same way for both. */
-    private suspend fun send(path: String, key: String?, body: String?): ApiResult<RemotePayment> {
+    private suspend fun <T> request(
+        path: String,
+        key: String?,
+        body: String?,
+        parse: (String) -> T,
+    ): ApiResult<T> {
         val merchantId = sessions.current.value?.merchantId ?: return ApiResult.SignedOut
         val token = when (val access = sessions.accessToken()) {
             is AccessOutcome.Valid -> access.token
@@ -98,7 +130,7 @@ class HttpPaymentsApi(
                 http.newCall(request).execute().use { response ->
                     val text = response.body.string()
                     when {
-                        response.isSuccessful -> ApiResult.Ok(paymentFrom(text))
+                        response.isSuccessful -> ApiResult.Ok(parse(text))
                         response.code == 401 -> {
                             sessions.signOut()
                             ApiResult.SignedOut
@@ -115,10 +147,8 @@ class HttpPaymentsApi(
         }
     }
 
-    private fun paymentFrom(text: String): RemotePayment {
-        val payment = json.decodeFromString(PaymentBody.serializer(), text)
-        return RemotePayment(payment.id, payment.status, payment.declineReason, payment.cardLastFour)
-    }
+    private fun paymentFrom(text: String): RemotePayment =
+        json.decodeFromString(PaymentBody.serializer(), text).toRemote()
 
     /** The platform's problem detail: its code and its sentence, when it sent one. */
     private fun problem(text: String): Pair<String?, String?> = runCatching {
@@ -140,7 +170,14 @@ class HttpPaymentsApi(
         val status: String,
         val declineReason: String? = null,
         val cardLastFour: String? = null,
-    )
+        val amount: Long? = null,
+        val currency: String? = null,
+        val reference: String? = null,
+        val riskVerdict: String? = null,
+        val createdAt: String? = null,
+    ) {
+        fun toRemote() = RemotePayment(id, status, declineReason, cardLastFour, amount, currency, reference, riskVerdict, createdAt)
+    }
 
     private companion object {
         val JSON = "application/json".toMediaType()

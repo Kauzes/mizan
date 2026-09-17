@@ -4,6 +4,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Only to notice signal coming back, so queued payments are sent. Never to judge a payment. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- To tell the merchant a payment is held for review. Asked for at runtime; refusing it only
+         means the held payment is seen on the screen instead. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Plain HTTP is allowed to the local stack only, never anywhere else. See
          res/xml/network_security_config.xml. -->
