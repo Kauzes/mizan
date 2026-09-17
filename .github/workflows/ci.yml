@@ -92,6 +92,21 @@ jobs:
         working-directory: console
         run: npm test
 
+      - name: Build the API documentation site
+        # From the committed specifications, which each service's own test already compares against what
+        # it serves. Built on every push so the documentation for a commit is the documentation that
+        # commit's code produced, and kept as an artifact rather than published: this platform runs on a
+        # laptop, and a page claiming to be a live API reference would be the one untrue thing here.
+        run: ./scripts/api-docs.sh
+
+      - name: Keep it
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-docs
+          path: build/api-docs
+          retention-days: 7
+          if-no-files-found: error
+
   smoke:
     name: Smoke and browser
     runs-on: ubuntu-latest
@@ -123,6 +138,12 @@ jobs:
 
       - name: Smoke check
         run: ./scripts/smoke.sh
+
+      - name: The worked example is what the platform answers
+        # The document in docs/api is made of real requests and real responses. Running it here against
+        # this stack is what stops it drifting: rename a field without regenerating it and this fails,
+        # rather than a merchant finding out by following it.
+        run: ./scripts/worked-example.sh --check
 
       - name: Set up Node
         uses: actions/setup-node@v6

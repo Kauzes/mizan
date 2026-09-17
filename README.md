@@ -674,6 +674,18 @@ mismatch. The fix is to throw the local data away rather than repair it:
 
 ## API documentation
 
+**Start here: [taking a payment, and giving part of it back](docs/api/worked-example.md).** Register,
+sign in, open the account the money is owed into, create, authorize, capture and refund — every request
+and response in it was made against a running platform by `./scripts/worked-example.sh`, which writes
+that file. CI runs the same script with `--check` against the stack it starts, so the example cannot
+drift from the API: rename a field without regenerating it and the build fails. It is also where
+idempotency keys, problem details and rate limiting are explained, at the point a merchant meets them.
+
+`./scripts/api-docs.sh` builds the specifications into a documentation site — one page per service and an
+index — which CI builds on every push and keeps as an artifact on the run. It is not published anywhere:
+this platform runs on a laptop, and a page claiming to be a live API reference would be the one untrue
+thing here.
+
 Every service generates its own OpenAPI specification from the code, and the generated files
 are committed under [docs/api](docs/api). A test in each service compares the committed file
 against the one the running service produces, so a spec cannot go stale: change an endpoint
