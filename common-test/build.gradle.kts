@@ -56,7 +56,17 @@ tasks.named<Test>("test") {
         include("*/src/main/resources/application.yml")
         include("*/src/main/java/**/*.java")
         include("*/src/test/java/**/*.java")
+        // OutboxOwnershipTest decides who owns an outbox by reading the migrations. Without these,
+        // adding the table to a service that does not publish leaves that test UP-TO-DATE: the same
+        // hole as the two above, found again while wiring up AdrIndexTest.
+        include("*/src/main/resources/db/migration/**/*.sql")
     })
         .withPropertyName("serviceFiles")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+
+    // AdrIndexTest reads every decision and the index of them. An ADR added without an entry has to
+    // fail this build, and it cannot do that from a task Gradle believes is up to date.
+    inputs.dir(rootProject.file("docs/adr"))
+        .withPropertyName("decisions")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
