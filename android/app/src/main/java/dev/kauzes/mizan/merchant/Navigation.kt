@@ -9,6 +9,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import dev.kauzes.mizan.merchant.ui.home.HomeScreen
+import dev.kauzes.mizan.merchant.ui.payment.TakePaymentScreen
 import dev.kauzes.mizan.merchant.ui.signin.SignInScreen
 import dev.kauzes.mizan.merchant.ui.welcome.WelcomeScreen
 
@@ -21,7 +22,7 @@ fun MainNavigation() {
     // However a session ends (signing out, or the platform refusing to renew it) the merchant lands on
     // sign in, rather than on a screen whose every request will now fail.
     LaunchedEffect(session == null) {
-        if (session == null && backStack.lastOrNull() == Home) {
+        if (session == null && backStack.lastOrNull() != SignIn && backStack.lastOrNull() != Welcome) {
             backStack.clear()
             backStack.add(SignIn)
         }
@@ -44,7 +45,10 @@ fun MainNavigation() {
                 WelcomeScreen()
             }
             entry<Home> {
-                HomeScreen()
+                HomeScreen(onTakePayment = { backStack.add(TakePayment) })
+            }
+            entry<TakePayment> {
+                TakePaymentScreen()
             }
         },
     )

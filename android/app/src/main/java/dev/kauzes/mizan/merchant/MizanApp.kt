@@ -2,11 +2,15 @@ package dev.kauzes.mizan.merchant
 
 import android.app.Application
 import dev.kauzes.mizan.merchant.data.HttpMerchantService
+import dev.kauzes.mizan.merchant.data.HttpPaymentsApi
 import dev.kauzes.mizan.merchant.data.HttpPlatformClient
 import dev.kauzes.mizan.merchant.data.HttpTokenService
 import dev.kauzes.mizan.merchant.data.KeystoreSessionStore
 import dev.kauzes.mizan.merchant.data.MerchantService
+import dev.kauzes.mizan.merchant.data.MizanDatabase
+import dev.kauzes.mizan.merchant.data.PaymentTaker
 import dev.kauzes.mizan.merchant.data.PlatformClient
+import dev.kauzes.mizan.merchant.data.RoomAttemptStore
 import dev.kauzes.mizan.merchant.data.SessionManager
 import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
@@ -35,4 +39,11 @@ class MizanApp : Application() {
     }
 
     val merchants: MerchantService by lazy { HttpMerchantService(BuildConfig.GATEWAY_URL, http, sessions) }
+
+    val payments: PaymentTaker by lazy {
+        PaymentTaker(
+            HttpPaymentsApi(BuildConfig.GATEWAY_URL, http, sessions),
+            RoomAttemptStore(MizanDatabase.get(this).attempts()),
+        )
+    }
 }
