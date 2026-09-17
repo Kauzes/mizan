@@ -20,7 +20,10 @@ import dev.kauzes.mizan.merchant.data.PaymentSync
 import dev.kauzes.mizan.merchant.data.PaymentTaker
 import dev.kauzes.mizan.merchant.data.PaymentsApi
 import dev.kauzes.mizan.merchant.data.PlatformClient
+import dev.kauzes.mizan.merchant.data.HttpReviewsApi
 import dev.kauzes.mizan.merchant.data.PrefsSeenHeld
+import dev.kauzes.mizan.merchant.data.ReviewQueue
+import dev.kauzes.mizan.merchant.data.ReviewsApi
 import dev.kauzes.mizan.merchant.data.RoomAttemptStore
 import dev.kauzes.mizan.merchant.data.SessionManager
 import java.util.concurrent.TimeUnit
@@ -61,6 +64,11 @@ class MizanApp : Application() {
 
     /** The merchant's payments, kept up to date while a screen is watching them. */
     val feed: PaymentFeed by lazy { PaymentFeed(paymentsApi) }
+
+    /** The review queue, the same one the console rules on. */
+    val reviews: ReviewsApi by lazy { HttpReviewsApi(BuildConfig.GATEWAY_URL, http, sessions) }
+
+    val reviewQueue: ReviewQueue by lazy { ReviewQueue(reviews) }
 
     /** The check that tells the merchant about a payment held for review, on a schedule and on launch. */
     val heldPayments: HeldWatcher by lazy {

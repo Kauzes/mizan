@@ -17,3 +17,6 @@ import kotlinx.serialization.Serializable
 
 /** The merchant's payments, kept up to date while this screen is open. */
 @Serializable data object Payments : NavKey
+
+/** Held payments waiting for a person: the same queue the console rules on. */
+@Serializable data object Reviews : NavKey

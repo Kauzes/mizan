@@ -1,19 +1,38 @@
 package dev.kauzes.mizan.merchant.data
 
-import dev.kauzes.mizan.merchant.domain.AccessOutcome
-import java.io.IOException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+
+/** Reading the platform's payments, shared by everything here that is sent one. */
+internal object Payments {
+
+    private val json = Json { ignoreUnknownKeys = true }
+
+    fun one(text: String): RemotePayment = json.decodeFromString(Body.serializer(), text).toRemote()
+
+    fun many(text: String): List<RemotePayment> =
+        json.decodeFromString(ListSerializer(Body.serializer()), text).map { it.toRemote() }
+
+    @Serializable
+    private data class Body(
+        val id: String,
+        val status: String,
+        val declineReason: String? = null,
+        val cardLastFour: String? = null,
+        val amount: Long? = null,
+        val currency: String? = null,
+        val reference: String? = null,
+        val riskVerdict: String? = null,
+        val riskReasons: String? = null,
+        val createdAt: String? = null,
+    ) {
+        fun toRemote() = RemotePayment(
+            id, status, declineReason, cardLastFour, amount, currency, reference, riskVerdict, riskReasons, createdAt,
+        )
+    }
+}
 
 /**
  * A payment as the platform describes it.
@@ -30,6 +49,8 @@ data class RemotePayment(
     val currency: String? = null,
     val reference: String? = null,
     val riskVerdict: String? = null,
+    /** Why risk held or scored it, in the platform's own words. */
+    val riskReasons: String? = null,
     val createdAt: String? = null,
 )
 
@@ -68,93 +89,44 @@ interface PaymentsApi {
  * allows, and nowhere else: not a log, not storage, not a field of any object that outlives the call.
  */
 class HttpPaymentsApi(
-    private val gatewayUrl: String,
-    private val http: OkHttpClient,
-    private val sessions: SessionManager,
+    gatewayUrl: String,
+    http: OkHttpClient,
+    sessions: SessionManager,
 ) : PaymentsApi {
 
+    private val calls = MerchantCalls(gatewayUrl, http, sessions)
     private val json = Json { ignoreUnknownKeys = true }
 
     override suspend fun create(
         key: String, amount: Long, currency: String, reference: String, description: String?,
-    ) = send("", key, json.encodeToString(CreateBody.serializer(), CreateBody(amount, currency, reference, description)))
+    ) = calls.post(
+        "/payments",
+        json.encodeToString(CreateBody.serializer(), CreateBody(amount, currency, reference, description)),
+        key,
+    ) { paymentFrom(it) }
 
-    override suspend fun authorize(paymentId: String, key: String, card: String) =
-        send("/$paymentId/authorize", key, json.encodeToString(AuthorizeBody.serializer(), AuthorizeBody(card)))
+    override suspend fun authorize(paymentId: String, key: String, card: String) = calls.post(
+        "/payments/$paymentId/authorize",
+        json.encodeToString(AuthorizeBody.serializer(), AuthorizeBody(card)),
+        key,
+    ) { paymentFrom(it) }
 
-    override suspend fun capture(paymentId: String, key: String) = send("/$paymentId/capture", key, null)
+    override suspend fun capture(paymentId: String, key: String) =
+        calls.post("/payments/$paymentId/capture", body = null, key = key) { paymentFrom(it) }
 
-    override suspend fun find(paymentId: String) = send("/$paymentId", key = null, body = null)
+    override suspend fun find(paymentId: String) = calls.get("/payments/$paymentId") { paymentFrom(it) }
 
     override suspend fun list(statuses: List<String>, size: Int): ApiResult<List<RemotePayment>> {
         val query = buildString {
-            append("?size=").append(size)
+            append("/payments?size=").append(size)
             statuses.forEach { append("&status=").append(it) }
         }
-        return request(query, key = null, body = null) { text ->
-            json.decodeFromString(ListSerializer(PaymentBody.serializer()), text).map { it.toRemote() }
-        }
+        return calls.get(query) { paymentsFrom(it) }
     }
 
-    private suspend fun send(path: String, key: String?, body: String?): ApiResult<RemotePayment> =
-        request(path, key, body) { paymentFrom(it) }
+    private fun paymentFrom(text: String) = Payments.one(text)
 
-    /** POST when there is a key, GET when there is not; the answer classified the same way for both. */
-    private suspend fun <T> request(
-        path: String,
-        key: String?,
-        body: String?,
-        parse: (String) -> T,
-    ): ApiResult<T> {
-        val merchantId = sessions.current.value?.merchantId ?: return ApiResult.SignedOut
-        val token = when (val access = sessions.accessToken()) {
-            is AccessOutcome.Valid -> access.token
-            AccessOutcome.SignedOut -> return ApiResult.SignedOut
-            is AccessOutcome.Unreachable -> return ApiResult.Unavailable(null, null, access.because)
-        }
-
-        return withContext(Dispatchers.IO) {
-            val request = Request.Builder()
-                .url("${gatewayUrl.trimEnd('/')}/api/v1/merchants/$merchantId/payments$path")
-                .header("Authorization", "Bearer $token")
-                .apply {
-                    if (key == null) {
-                        get()
-                    } else {
-                        header("Idempotency-Key", key)
-                        post((body ?: "").toRequestBody(JSON))
-                    }
-                }
-                .build()
-            try {
-                http.newCall(request).execute().use { response ->
-                    val text = response.body.string()
-                    when {
-                        response.isSuccessful -> ApiResult.Ok(parse(text))
-                        response.code == 401 -> {
-                            sessions.signOut()
-                            ApiResult.SignedOut
-                        }
-                        response.code in 400..499 -> problem(text).let { ApiResult.Refused(response.code, it.first, it.second) }
-                        else -> problem(text).let {
-                            ApiResult.Unavailable(response.code, it.first, it.second ?: "the platform answered ${response.code}")
-                        }
-                    }
-                }
-            } catch (noAnswer: IOException) {
-                ApiResult.Unavailable(null, null, noAnswer.message ?: noAnswer.javaClass.simpleName)
-            }
-        }
-    }
-
-    private fun paymentFrom(text: String): RemotePayment =
-        json.decodeFromString(PaymentBody.serializer(), text).toRemote()
-
-    /** The platform's problem detail: its code and its sentence, when it sent one. */
-    private fun problem(text: String): Pair<String?, String?> = runCatching {
-        val body: JsonObject = json.parseToJsonElement(text).jsonObject
-        body["code"]?.jsonPrimitive?.content to body["detail"]?.jsonPrimitive?.content
-    }.getOrDefault(null to null)
+    private fun paymentsFrom(text: String) = Payments.many(text)
 
     @Serializable
     private data class CreateBody(val amount: Long, val currency: String, val reference: String, val description: String?)
@@ -164,22 +136,6 @@ class HttpPaymentsApi(
         override fun toString() = "AuthorizeBody(card=****)"
     }
 
-    @Serializable
-    private data class PaymentBody(
-        val id: String,
-        val status: String,
-        val declineReason: String? = null,
-        val cardLastFour: String? = null,
-        val amount: Long? = null,
-        val currency: String? = null,
-        val reference: String? = null,
-        val riskVerdict: String? = null,
-        val createdAt: String? = null,
-    ) {
-        fun toRemote() = RemotePayment(id, status, declineReason, cardLastFour, amount, currency, reference, riskVerdict, createdAt)
-    }
 
-    private companion object {
-        val JSON = "application/json".toMediaType()
-    }
+
 }

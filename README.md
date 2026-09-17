@@ -732,7 +732,7 @@ An Android app for merchants taking payments in person, in `android/`: Kotlin, J
 MVVM with coroutines and Flow, built the same way as the Sentinel Pay app (ADR 0057). It is being
 built one story at a time under MIZ-14; today a merchant signs in, stays signed in across launches,
 takes card payments that are charged once however the app is interrupted, keeps taking them with no
-signal, and watches payments as they happen. It can also check that
+signal, watches payments as they happen, and rules on the ones risk held. It can also check that
 the platform is answering.
 
 ```sh
@@ -775,6 +775,12 @@ cd android
   raises a local notification. A held payment is therefore announced within minutes, not instantly —
   seconds if the merchant is watching the list. Refusing the notification permission only means seeing it
   on the screen instead.
+- **Held payments are approved or declined from the phone, in the console's queue** (ADR 0062). The app
+  calls the console's own endpoints — no phone-shaped review API was added — so the permission, the
+  required reason and "a payment is ruled on once" are the platform's rules, not the app's. Verified with
+  both open: a payment approved on the phone was gone from the console's queue, one declined in the console
+  left the phone's by itself, and a payment ruled on elsewhere came back to the phone as the platform's own
+  sentence rather than a second ruling.
 - **Every push that changes the app builds an APK** (`.github/workflows/android.yml`), downloadable
   from the run. The UI tests are compiled there and run on an emulator locally, because a hosted
   runner's emulator is slow enough and flaky enough to be ignored.
