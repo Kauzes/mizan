@@ -37,6 +37,12 @@ jobs:
         # request and failed its load workflow before k6 had started.
         run: for script in scripts/*.sh; do bash -n "$script"; done
 
+      - name: The diagrams still describe the platform
+        # Cheap, and it catches the thing architecture diagrams always eventually get wrong: a service
+        # added to docker-compose.yml and not to the picture. Also fails if the README's copy has
+        # drifted from docs/architecture, which is what makes the source the source.
+        run: ./scripts/diagrams.sh --check
+
       - name: Build
         run: ./gradlew build
 

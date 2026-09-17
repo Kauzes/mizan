@@ -1,0 +1,74 @@
+%% Every container in docker-compose.yml, and what talks to what. Generated into the README by
+%% scripts/diagrams.sh, which fails if a compose service is missing from here.
+flowchart TB
+    phone["<b>Merchant app</b><br/>Android, Kotlin, Compose"]
+    browser["<b>console</b><br/>React and TypeScript, served by nginx"]
+
+    subgraph edge["The only door"]
+        gateway["<b>gateway</b><br/>Spring Cloud Gateway<br/>routes, validates tokens, rate limits per merchant"]
+    end
+
+    subgraph services["Services, one database each"]
+        identity["<b>identity-service</b><br/>merchants, users, roles, tokens"]
+        payment["<b>payment-service</b><br/>payment lifecycle, saga, idempotency, outbox"]
+        ledger["<b>ledger-service</b><br/>double entry accounts, journal, reconciliation"]
+        risk["<b>risk-service</b><br/>scores a payment and says why"]
+        notification["<b>notification-service</b><br/>events to signed webhooks"]
+        settlement["<b>settlement-service</b><br/>batches a day, takes the fee, pays out"]
+    end
+
+    subgraph state["State"]
+        postgres[("<b>postgres</b><br/>one database per service")]
+        kafka[["<b>kafka</b><br/>payment events"]]
+        redis[("<b>redis</b><br/>rate limit buckets")]
+    end
+
+    subgraph watching["What it reports"]
+        otel["<b>otel-collector</b><br/>receives every span"]
+        tempo[("<b>tempo</b><br/>keeps sampled traces")]
+        prometheus[("<b>prometheus</b><br/>scrapes every service")]
+        grafana["<b>grafana</b><br/>two provisioned dashboards"]
+    end
+
+    acquirer["<b>bank-simulator</b><br/>an acquirer that approves, declines,<br/>times out and disagrees"]
+
+    phone --> gateway
+    browser --> gateway
+    gateway --> identity
+    gateway --> payment
+    gateway --> ledger
+    gateway --> notification
+    gateway --> settlement
+    gateway --> redis
+
+    payment --> risk
+    payment --> ledger
+    payment --> acquirer
+    settlement --> ledger
+    settlement --> acquirer
+    risk --> payment
+
+    payment -->|"outbox relay"| kafka
+    kafka --> notification
+    kafka --> settlement
+    kafka --> risk
+
+    %% Drawn from the group rather than from each service: every one of them has its own database on
+    %% that Postgres, and every one of them sends spans. Thirteen edges saying so is not thirteen facts.
+    services ==>|"one database each"| postgres
+    services -.->|"spans"| otel
+    gateway -.->|"spans"| otel
+    otel --> tempo
+    prometheus -.->|"scrapes"| services
+    prometheus -.->|"scrapes"| gateway
+    grafana --> prometheus
+    grafana --> tempo
+
+    classDef client fill:#1f6feb,stroke:#0b3d91,color:#ffffff
+    classDef service fill:#0b3d91,stroke:#0b3d91,color:#ffffff
+    classDef store fill:#6e7781,stroke:#424a53,color:#ffffff
+    classDef external fill:#8250df,stroke:#5a32a3,color:#ffffff
+    class phone,browser client
+    class gateway,identity,payment,ledger,risk,notification,settlement service
+    class postgres,kafka,redis,tempo,prometheus,otel,grafana store
+    class acquirer external

@@ -1,0 +1,26 @@
+%% Who uses this platform and what it depends on. Generated into the README by scripts/diagrams.sh.
+flowchart TB
+    merchant["<b>Merchant</b><br/>takes payments at a counter<br/>or from their own software"]
+    analyst["<b>Analyst</b><br/>rules on payments risk held"]
+    operator["<b>Operator</b><br/>runs the platform, reads what it reports"]
+
+    mizan["<b>Mizan</b><br/>Authorizes, captures, refunds and settles card payments.<br/>Every movement of money is a balanced journal entry."]
+
+    acquirer["<b>Acquiring bank</b><br/>authorizes and captures cards,<br/>and sends a statement that may disagree"]
+    merchantSystems["<b>The merchant's own software</b><br/>receives signed webhooks"]
+
+    merchant -->|"takes a payment, on the phone or through the API"| mizan
+    analyst -->|"approves or declines a held payment"| mizan
+    operator -->|"reads dashboards, traces and alerts"| mizan
+
+    mizan -->|"authorize, capture, void, refund"| acquirer
+    acquirer -->|"a daily statement to reconcile against"| mizan
+    mizan -->|"payment events, signed"| merchantSystems
+    mizan -->|"pays out what is owed"| merchant
+
+    classDef person fill:#1f6feb,stroke:#0b3d91,color:#ffffff
+    classDef system fill:#0b3d91,stroke:#0b3d91,color:#ffffff
+    classDef external fill:#6e7781,stroke:#424a53,color:#ffffff
+    class merchant,analyst,operator person
+    class mizan system
+    class acquirer,merchantSystems external
