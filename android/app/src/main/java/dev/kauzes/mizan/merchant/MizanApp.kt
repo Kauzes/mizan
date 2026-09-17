@@ -1,13 +1,18 @@
 package dev.kauzes.mizan.merchant
 
 import android.app.Application
+import dev.kauzes.mizan.merchant.data.AndroidConnectivity
+import dev.kauzes.mizan.merchant.data.CardVault
+import dev.kauzes.mizan.merchant.data.Connectivity
 import dev.kauzes.mizan.merchant.data.HttpMerchantService
 import dev.kauzes.mizan.merchant.data.HttpPaymentsApi
 import dev.kauzes.mizan.merchant.data.HttpPlatformClient
 import dev.kauzes.mizan.merchant.data.HttpTokenService
 import dev.kauzes.mizan.merchant.data.KeystoreSessionStore
 import dev.kauzes.mizan.merchant.data.MerchantService
+import dev.kauzes.mizan.merchant.data.KeystoreCardVault
 import dev.kauzes.mizan.merchant.data.MizanDatabase
+import dev.kauzes.mizan.merchant.data.PaymentSync
 import dev.kauzes.mizan.merchant.data.PaymentTaker
 import dev.kauzes.mizan.merchant.data.PlatformClient
 import dev.kauzes.mizan.merchant.data.RoomAttemptStore
@@ -40,10 +45,18 @@ class MizanApp : Application() {
 
     val merchants: MerchantService by lazy { HttpMerchantService(BuildConfig.GATEWAY_URL, http, sessions) }
 
+    val cards: CardVault by lazy { KeystoreCardVault(this) }
+
     val payments: PaymentTaker by lazy {
         PaymentTaker(
             HttpPaymentsApi(BuildConfig.GATEWAY_URL, http, sessions),
             RoomAttemptStore(MizanDatabase.get(this).attempts()),
+            cards,
         )
     }
+
+    val connectivity: Connectivity by lazy { AndroidConnectivity(this) }
+
+    /** One queue for the whole app, so the screen and the network coming back ask the same pass to run. */
+    val sync: PaymentSync by lazy { PaymentSync(payments, cards) }
 }

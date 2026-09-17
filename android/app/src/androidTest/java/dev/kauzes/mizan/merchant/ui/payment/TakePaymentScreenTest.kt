@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import dev.kauzes.mizan.merchant.data.Conflict
 import dev.kauzes.mizan.merchant.domain.AttemptStep
 import dev.kauzes.mizan.merchant.domain.PaymentAttempt
 import dev.kauzes.mizan.merchant.theme.MizanTheme
@@ -41,7 +42,7 @@ class TakePaymentScreenTest {
     fun whileAPaymentIsBeingTakenNothingCanBeSentAgain() {
         compose.setContent {
             MizanTheme {
-                TakePaymentContent(TakePaymentState(running = true), emptyList(), {}, {}, {}, {}, {})
+                TakePaymentContent(TakePaymentState(running = true), emptyList(), {}, {}, {}, {}, {}, {})
             }
         }
 
@@ -53,7 +54,7 @@ class TakePaymentScreenTest {
         var resumed: PaymentAttempt? = null
         compose.setContent {
             MizanTheme {
-                TakePaymentContent(TakePaymentState(), listOf(interrupted), {}, {}, {}, {}, { resumed = it })
+                TakePaymentContent(TakePaymentState(), listOf(interrupted), {}, {}, {}, {}, { resumed = it }, {})
             }
         }
 
@@ -62,12 +63,39 @@ class TakePaymentScreenTest {
     }
 
     @Test
+    fun withNoSignalTheScreenSaysPaymentsCanStillBeTakenAndNothingCanBeSentNow() {
+        compose.setContent {
+            MizanTheme {
+                TakePaymentContent(TakePaymentState(online = false), listOf(interrupted), {}, {}, {}, {}, {}, {})
+            }
+        }
+
+        compose.onNodeWithTag("offline").assertTextContains("sent when signal returns", substring = true)
+        compose.onNodeWithTag("send-queued").assertIsNotEnabled()
+        compose.onNodeWithTag("waiting").assertTextContains("Waiting to be sent (1)")
+    }
+
+    @Test
+    fun aPaymentTheQueueCouldNotSendIsShownWithItsReason() {
+        compose.setContent {
+            MizanTheme {
+                TakePaymentContent(
+                    TakePaymentState(conflicts = listOf(Conflict(interrupted, "This payment needs the card again before it can be sent."))),
+                    listOf(interrupted), {}, {}, {}, {}, {}, {},
+                )
+            }
+        }
+
+        compose.onNodeWithTag("conflict-attempt-1").assertTextContains("needs the card again", substring = true)
+    }
+
+    @Test
     fun finishingAPaymentShowsItsAmountAndAsksOnlyForTheCard() {
         compose.setContent {
             MizanTheme {
                 TakePaymentContent(
                     TakePaymentState(continuing = interrupted, message = "Enter the card again to finish the payment of 125.50 TRY."),
-                    emptyList(), {}, {}, {}, {}, {},
+                    emptyList(), {}, {}, {}, {}, {}, {},
                 )
             }
         }

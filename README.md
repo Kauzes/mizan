@@ -731,7 +731,8 @@ action to take — because it is the same question about a different subject.
 An Android app for merchants taking payments in person, in `android/`: Kotlin, Jetpack Compose,
 MVVM with coroutines and Flow, built the same way as the Sentinel Pay app (ADR 0057). It is being
 built one story at a time under MIZ-14; today a merchant signs in, stays signed in across launches,
-and takes card payments that are charged once however the app is interrupted. It can also check that
+takes card payments that are charged once however the app is interrupted, and keeps taking them with no
+signal. It can also check that
 the platform is answering.
 
 ```sh
@@ -757,9 +758,16 @@ cd android
   database before anything is sent, and resuming sends the same requests with the same keys. An
   interrupted payment is offered to continue when the app is next opened. Killed on the emulator while
   the acquirer withheld an authorization, then reopened: one payment, authorized once, captured once.
-- **The card number is never stored.** A payment interrupted before its authorization was answered asks
-  for the card again; a different card under the same key is refused by the platform, and the app says
-  nothing was charged to it.
+- **The card number is never stored**, with one exception, and it is the one a till needs: a payment
+  taken with no signal keeps its card encrypted under its own Keystore key, for that payment alone, for at
+  most a day, and forgets it the moment the authorization is answered (ADR 0060). Any other interruption
+  asks for the card again; a different card under the same key is refused by the platform, and the app
+  says nothing was charged to it.
+- **Payments taken with no signal are sent when it returns**, oldest first, one at a time, each charged
+  once. Nothing is resolved quietly: a refusal, a reference the platform has already seen, a card whose
+  keeping expired, and a session that ended while offline are all shown to the merchant. Driven on the
+  emulator with its radio off: two payments queued, the app killed, the radio back on — both sent in the
+  order taken, each captured exactly once, and no card left on the device.
 - **Every push that changes the app builds an APK** (`.github/workflows/android.yml`), downloadable
   from the run. The UI tests are compiled there and run on an emulator locally, because a hosted
   runner's emulator is slow enough and flaky enough to be ignored.
