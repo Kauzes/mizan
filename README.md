@@ -12,7 +12,14 @@ platform is always zero.
 [Services](#services) · [Testing](#testing) · [Performance](#performance) ·
 [API documentation](#api-documentation) · [The merchant app](#the-merchant-app) ·
 [The console](#the-console) · [Running](#running) · [Runbook](docs/RUNBOOK.md) ·
+[Demo](docs/demo/SHOT-LIST.md) ·
 [Decisions](docs/adr/README.md)
+
+> **The demo recording does not exist yet.** The end-to-end walkthrough — a payment taken, refunded,
+> one held by risk and ruled on by a person, and the same platform from the phone — is planned shot by
+> shot in [docs/demo/SHOT-LIST.md](docs/demo/SHOT-LIST.md). Recording it needs somebody at a screen, so
+> this is a blank rather than a link to something that was never made. Until then,
+> [`./scripts/seed.sh`](scripts/seed.sh) puts the same story into a running platform in about a minute.
 
 ## Status
 
@@ -493,7 +500,8 @@ other protected route.
   the database pool (ADR 0052). A slow bank would otherwise take every connection, and a merchant
   reading a payment would wait behind it. Both refuse without sending, as a 503 rather than a 504:
   a request never sent leaves nothing unknown to resolve, and every write is safe to retry.
-- Each merchant has an allowance at the edge: 100 requests a second, bursts up to 200, counted in
+- Each merchant has an allowance at the edge: 100 requests a second, bursts up to 200
+  (`mizan.rate-limit.requests-per-second` and `.burst`, both settable per deployment), counted in
   Redis so every gateway pod spends from the same one (ADR 0053). Beyond it the gateway answers 429
   with Retry-After before any service does work, so one merchant's retry loop cannot become every
   merchant's outage. It is keyed on the merchant the gateway verified, never on the path, and if
@@ -609,23 +617,29 @@ per JVM and are shared across test classes.
 the same values into the test JVM, so the containers a test starts and the containers
 Compose starts cannot drift apart. A test asserts that wiring rather than trusting it.
 
-Runtime budget, measured on a developer machine with the images already pulled and the
-compose stack running. A full build serialises every test task, so its wall clock is roughly
-the sum of them and moves with whatever else the machine is doing; the stable number
-underneath is about 150 seconds of in JVM test time.
+Runtime budget, measured on 2026-09-17 on the machine in
+[docs/performance](docs/performance/README.md) with the images already pulled and the compose
+stack running, by timing each command. Wall clock depends on what Gradle can reuse, so the
+command that reuses nothing is the one worth comparing; the stable number underneath it is the
+in-JVM test time, which is what the test reports say the tests themselves cost.
 
-| Command | Time |
-|---|---|
-| `./gradlew build` | three to four minutes |
-| `./gradlew build -PfastTests` | about 70 seconds |
-| `./gradlew :common-test:test` | about 20 seconds |
+| Command | Time | Measured by |
+|---|---|---|
+| `./gradlew build --rerun-tasks` | 8m 45s | timing the command; nothing reused |
+| `./gradlew build` | seconds, when nothing changed | the same, run again |
+| `./gradlew build -PfastTests` | about a minute | timing the command |
+| `./gradlew :common-test:test --rerun-tasks` | 17s | timing the command |
+| 798 tests, 437s of in-JVM test time | | summing `time=` across `**/build/test-results/**/*.xml` |
 
 Every service owns a database, so proving that a service starts means starting Postgres, and
 those tests are tagged integration. `-PfastTests` no longer covers a service starting up.
 Test tasks take turns rather than racing each other for the Docker daemon, which is most of
 why the full build costs what it does.
 
-If the full build passes five minutes, something has regressed and is worth looking at.
+A build that reuses nothing costs most of nine minutes here, and the suite itself is seven of
+them; the rest is compiling. The figure to watch is the in-JVM total, because it is the one
+that does not move with the machine: if it grows faster than the number of tests, something has
+started waiting rather than testing.
 
 Above all of it sits [`scripts/smoke.sh`](scripts/smoke.sh), which is not a test task and is
 not run by Gradle. It checks what the suite structurally cannot: the services as real
@@ -761,7 +775,8 @@ failure from payments being down.
   and somebody would be paid it.
 - **The fee adds up twice.** The percentage is worked out once on the batch total and then
   allocated across the payments by amount, so the fees on the payments come to exactly the fee
-  on the batch. Charging 2.9% of each payment and summing loses a fraction at every rounding,
+  on the batch. Charging 2.9% (`mizan.settlement.fee-basis-points`, 290) of each payment and
+  summing loses a fraction at every rounding,
   nothing notices, and a merchant adding up their own statement gets a different number from
   the one they were charged.
 - **All three figures are stored**, along with the fee rule as it was applied. A figure derived
@@ -1088,11 +1103,27 @@ To have something to look at rather than only something that passed:
 
     ./scripts/seed.sh
 
-That creates two merchants with real books and payments in every state one can be in —
-captured, voided, authorized and waiting, declined, a bare intent, and one the acquirer never
-answered about, which the sweep resolves a few seconds later. It prints the credentials it
-made, so you can sign in as either merchant. The APIs are browsable at
+That creates two merchants who look like they trade: a week of ordinary takings each, and
+payments in every state one can be in — captured, voided, authorized and waiting, declined, a
+bare intent, and one the acquirer never answered about, which the sweep resolves a few seconds
+later. On top of that it leaves the things a console with nothing in it cannot show:
+
+- **a partial refund**, so the books have a movement that reverses another and names it;
+- **a payment risk held for a person**, with its three reasons on the screen beside it — far
+  larger than that merchant's usual, on a card declined here a minute ago, for an exactly round
+  amount. Nobody has been charged, and it is waiting in the review queue;
+- **a settled day and the bank's statement compared with it**, so the reconciliation queue has
+  real differences in it to rule on.
+
+It prints the credentials it made, so you can sign in as either merchant; the first one,
+Karaköy Kahve, is the one carrying the refund and the held payment. The APIs are browsable at
 <http://localhost:8080/swagger-ui.html>.
+
+One thing in that script writes to a database directly, and says so while it does it: payments
+are moved back between one and six days, because the API cannot create a payment in the past
+and a console showing one tall column does not look like a business. It moves nothing in the
+ledger — the books say when the money actually moved, and a ledger rewritten to make a
+screenshot look better is not a ledger.
 
 Both scripts need only `curl` and Python, which is why they are shell rather than another
 Gradle task: the point is that someone who has not built the project can still run them.
