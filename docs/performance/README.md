@@ -84,6 +84,20 @@ it is the platform.
 What overload looks like, then, is slow rather than broken. Requests queue, and k6 reports the ones it
 could not start rather than quietly sending fewer.
 
+### soak: thirty minutes
+
+| | |
+|---|---|
+| Requests | — |
+| Failed | — |
+| Payments captured | — |
+| Books afterwards | — |
+
+**Not measured yet.** The profile exists and the thresholds below apply to it, but nobody has run
+`./scripts/load-profiles.sh soak` on this machine and written the numbers down. The blanks are
+deliberate: a soak profile is for finding what degrades over half an hour — a leak, a pool that never
+returns a connection, a queue that grows — and none of that can be guessed from a three minute run.
+
 ## In CI
 
 `.github/workflows/load.yml` runs steady and spike on main and on changes to the load profiles. A
