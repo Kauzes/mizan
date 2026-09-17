@@ -8,19 +8,145 @@ flow, and every movement of money lands as a balanced journal entry.
 books balance. That is this system's core invariant: the sum of every posting in the
 platform is always zero.
 
+**[Design rules](#design-rules)** · [How it fits together](#how-it-fits-together) ·
+[Services](#services) · [Testing](#testing) · [Performance](#performance) ·
+[API documentation](#api-documentation) · [The merchant app](#the-merchant-app) ·
+[The console](#the-console) · [Running](#running) · [Decisions](docs/adr)
+
 ## Status
 
-Early construction. Features land one Jira issue at a time and this README grows with
-them. Nothing below is claimed until it is in the repo and covered by a test.
+Features land one Jira issue at a time and this README grows with them. Nothing below is
+claimed until it is in the repo and covered by a test.
 
 | Milestone | Scope | State |
 |---|---|---|
 | M1 | Foundation, identity, ledger core, payment happy path | complete |
 | M2 | Kafka outbox, risk scoring, refunds and saga compensation | complete |
 | M3 | Merchant webhooks, React merchant console | complete |
-| M4 | Settlement, reconciliation, observability | in progress |
-| M5 | Kubernetes delivery, load and chaos testing | not started |
-| M6 | Android merchant app, documentation | not started |
+| M4 | Settlement, reconciliation, observability | complete |
+| M5 | Kubernetes delivery, load and chaos testing | complete |
+| M6 | Android merchant app, documentation | app complete, documentation in progress |
+
+## How it fits together
+
+Two pictures, kept in `docs/architecture` and copied into this README by
+`./scripts/diagrams.sh`. That script also reads `docker-compose.yml`: a service that exists
+and is not in the container diagram fails the check in CI, so the picture cannot quietly
+stop being true.
+
+Who uses the platform, and what it depends on:
+
+<!-- diagram: context -->
+```mermaid
+%% Who uses this platform and what it depends on. Generated into the README by scripts/diagrams.sh.
+flowchart TB
+    merchant["<b>Merchant</b><br/>takes payments at a counter<br/>or from their own software"]
+    analyst["<b>Analyst</b><br/>rules on payments risk held"]
+    operator["<b>Operator</b><br/>runs the platform, reads what it reports"]
+
+    mizan["<b>Mizan</b><br/>Authorizes, captures, refunds and settles card payments.<br/>Every movement of money is a balanced journal entry."]
+
+    acquirer["<b>Acquiring bank</b><br/>authorizes and captures cards,<br/>and sends a statement that may disagree"]
+    merchantSystems["<b>The merchant's own software</b><br/>receives signed webhooks"]
+
+    merchant -->|"takes a payment, on the phone or through the API"| mizan
+    analyst -->|"approves or declines a held payment"| mizan
+    operator -->|"reads dashboards, traces and alerts"| mizan
+
+    mizan -->|"authorize, capture, void, refund"| acquirer
+    acquirer -->|"a daily statement to reconcile against"| mizan
+    mizan -->|"payment events, signed"| merchantSystems
+    mizan -->|"pays out what is owed"| merchant
+
+    classDef person fill:#1f6feb,stroke:#0b3d91,color:#ffffff
+    classDef system fill:#0b3d91,stroke:#0b3d91,color:#ffffff
+    classDef external fill:#6e7781,stroke:#424a53,color:#ffffff
+    class merchant,analyst,operator person
+    class mizan system
+    class acquirer,merchantSystems external
+```
+<!-- end diagram -->
+
+Every container, and what talks to what:
+
+<!-- diagram: containers -->
+```mermaid
+%% Every container in docker-compose.yml, and what talks to what. Generated into the README by
+%% scripts/diagrams.sh, which fails if a compose service is missing from here.
+flowchart TB
+    phone["<b>Merchant app</b><br/>Android, Kotlin, Compose"]
+    browser["<b>console</b><br/>React and TypeScript, served by nginx"]
+
+    subgraph edge["The only door"]
+        gateway["<b>gateway</b><br/>Spring Cloud Gateway<br/>routes, validates tokens, rate limits per merchant"]
+    end
+
+    subgraph services["Services, one database each"]
+        identity["<b>identity-service</b><br/>merchants, users, roles, tokens"]
+        payment["<b>payment-service</b><br/>payment lifecycle, saga, idempotency, outbox"]
+        ledger["<b>ledger-service</b><br/>double entry accounts, journal, reconciliation"]
+        risk["<b>risk-service</b><br/>scores a payment and says why"]
+        notification["<b>notification-service</b><br/>events to signed webhooks"]
+        settlement["<b>settlement-service</b><br/>batches a day, takes the fee, pays out"]
+    end
+
+    subgraph state["State"]
+        postgres[("<b>postgres</b><br/>one database per service")]
+        kafka[["<b>kafka</b><br/>payment events"]]
+        redis[("<b>redis</b><br/>rate limit buckets")]
+    end
+
+    subgraph watching["What it reports"]
+        otel["<b>otel-collector</b><br/>receives every span"]
+        tempo[("<b>tempo</b><br/>keeps sampled traces")]
+        prometheus[("<b>prometheus</b><br/>scrapes every service")]
+        grafana["<b>grafana</b><br/>two provisioned dashboards"]
+    end
+
+    acquirer["<b>bank-simulator</b><br/>an acquirer that approves, declines,<br/>times out and disagrees"]
+
+    phone --> gateway
+    browser --> gateway
+    gateway --> identity
+    gateway --> payment
+    gateway --> ledger
+    gateway --> notification
+    gateway --> settlement
+    gateway --> redis
+
+    payment --> risk
+    payment --> ledger
+    payment --> acquirer
+    settlement --> ledger
+    settlement --> acquirer
+    risk --> payment
+
+    payment -->|"outbox relay"| kafka
+    kafka --> notification
+    kafka --> settlement
+    kafka --> risk
+
+    %% Drawn from the group rather than from each service: every one of them has its own database on
+    %% that Postgres, and every one of them sends spans. Thirteen edges saying so is not thirteen facts.
+    services ==>|"one database each"| postgres
+    services -.->|"spans"| otel
+    gateway -.->|"spans"| otel
+    otel --> tempo
+    prometheus -.->|"scrapes"| services
+    prometheus -.->|"scrapes"| gateway
+    grafana --> prometheus
+    grafana --> tempo
+
+    classDef client fill:#1f6feb,stroke:#0b3d91,color:#ffffff
+    classDef service fill:#0b3d91,stroke:#0b3d91,color:#ffffff
+    classDef store fill:#6e7781,stroke:#424a53,color:#ffffff
+    classDef external fill:#8250df,stroke:#5a32a3,color:#ffffff
+    class phone,browser client
+    class gateway,identity,payment,ledger,risk,notification,settlement service
+    class postgres,kafka,redis,tempo,prometheus,otel,grafana store
+    class acquirer external
+```
+<!-- end diagram -->
 
 ## Services
 
@@ -962,7 +1088,10 @@ Gradle task: the point is that someone who has not built the project can still r
 
 Architecture decisions live in [docs/adr](docs/adr). The feature by feature plan is in
 [docs/ROADMAP.md](docs/ROADMAP.md). The generated API specifications are in
-[docs/api](docs/api).
+[docs/api](docs/api). The diagrams above are generated from
+[docs/architecture](docs/architecture) by `./scripts/diagrams.sh`, which CI runs with
+`--check` so that a service missing from the picture fails a build rather than misleading a
+reader (ADR 0063).
 
 ## License
 
