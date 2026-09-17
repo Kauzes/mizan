@@ -1,5 +1,6 @@
 package dev.kauzes.mizan.notification;
 
+import dev.kauzes.mizan.common.error.UnprocessableException;
 import dev.kauzes.mizan.common.web.inbox.DeadLetters;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,7 @@ import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
 import org.springframework.boot.actuate.endpoint.annotation.Selector;
 import org.springframework.boot.actuate.endpoint.annotation.WriteOperation;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -80,6 +82,53 @@ public class DeadLetterEndpoint {
                             "redelivered", letter.eventId(),
                             "to", letter.topic(),
                             "afterFailures", letter.attempts());
+                })
+                .orElse(Map.of("error", "no dead letter with that id"));
+    }
+
+    /**
+     * Records that nothing more will be done about one, and why.
+     *
+     * <p>For the event whose cause cannot be fixed — a payload poisoned by a test, an event
+     * naming something that never existed, a handler that no longer exists. Redelivering it
+     * only puts it back; before this, such a letter stayed outstanding forever and the alert
+     * watching the count could never clear, which is how an alert becomes one people ignore.
+     *
+     * <p>Not a delete. The row, its reason and its payload stay readable: it is the only record
+     * that a merchant was never told something. And a name and a reason are required, because a
+     * decision nobody can account for later is not a decision, it is a disappearance.
+     *
+     * <p>If the same event fails again afterwards, it comes back. Closing speaks about what was
+     * set aside, not about the future.
+     */
+    @WriteOperation
+    public Map<String, Object> close(
+            @Selector String id,
+            @Selector String verb,
+            @Nullable String closedBy,
+            @Nullable String why) {
+
+        if (!"close".equals(verb)) {
+            throw new UnprocessableException(
+                    "A dead letter can be redelivered or closed: " + verb + " is neither.");
+        }
+        if (closedBy == null || closedBy.isBlank() || why == null || why.isBlank()) {
+            throw new UnprocessableException(
+                    "Closing a dead letter needs closedBy and why: it is the record that nobody "
+                            + "will do anything more about an event a merchant was never told.");
+        }
+
+        UUID deadLetterId = UUID.fromString(id);
+        return deadLetters
+                .find(deadLetterId)
+                .map(letter -> {
+                    deadLetters.close(deadLetterId, closedBy.trim(), why.trim());
+                    return Map.<String, Object>of(
+                            "closed", letter.eventId(),
+                            "closedBy", closedBy.trim(),
+                            "why", why.trim(),
+                            "afterFailures", letter.attempts(),
+                            "kept", "the letter, its reason and its payload stay readable");
                 })
                 .orElse(Map.of("error", "no dead letter with that id"));
     }

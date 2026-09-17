@@ -1,7 +1,9 @@
 package dev.kauzes.mizan.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.kauzes.mizan.common.error.UnprocessableException;
 import dev.kauzes.mizan.common.web.inbox.DeadLetters;
 import dev.kauzes.mizan.test.MizanContainers;
 import dev.kauzes.mizan.test.MizanIntegrationTest;
@@ -264,6 +266,88 @@ class DeadLetterTest extends MizanIntegrationTest {
 
     private List<Map<String, Object>> notificationsFor(UUID payment) {
         return jdbc.queryForList("select * from notification where payment_id = ?", payment);
+    }
+
+    @Test
+    @Timeout(180)
+    void oneNobodyCanEverHandleIsClosedWithAReason() {
+        publish(UUID.randomUUID().toString(), "{\"poison\":\"forever\"}");
+        eventuallyOneDeadLetter();
+        UUID id = deadLetters.outstanding().getFirst().id();
+
+        Map<String, Object> answer = endpoint.close(
+                id.toString(), "close", "ada", "left by a live check; the payload names a currency that does not exist");
+
+        assertThat(answer).containsEntry("closedBy", "ada");
+        assertThat(deadLetters.outstanding())
+                .as("closing is what lets the count the alert watches reach zero again")
+                .isEmpty();
+        assertThat(endpoint.outstanding()).containsEntry("outstanding", 0);
+    }
+
+    @Test
+    @Timeout(180)
+    void closingKeepsTheRecordThatSomethingWasNeverTold() {
+        publish(UUID.randomUUID().toString(), "{\"poison\":\"kept\"}");
+        Map<String, Object> before = eventuallyOneDeadLetter();
+        UUID id = deadLetters.outstanding().getFirst().id();
+
+        endpoint.close(id.toString(), "close", "ada", "the event names a payment that never existed");
+
+        DeadLetters.DeadLetter closed = deadLetters.find(id).orElseThrow();
+        assertThat(closed.payload())
+                .as("a closing is not a delete: this is the only record a merchant was never told")
+                .isEqualTo(before.get("payload"));
+        assertThat(closed.reason()).isEqualTo(before.get("reason"));
+        assertThat(closed.closedBy()).isEqualTo("ada");
+        assertThat(closed.closedWhy()).contains("never existed");
+        assertThat(closed.closedAt()).isNotNull();
+    }
+
+    @Test
+    @Timeout(180)
+    void closingWithoutANameOrAReasonIsRefused() {
+        publish(UUID.randomUUID().toString(), "{\"poison\":\"unaccounted\"}");
+        eventuallyOneDeadLetter();
+        String id = deadLetters.outstanding().getFirst().id().toString();
+
+        assertThatThrownBy(() -> endpoint.close(id, "close", "ada", "  "))
+                .isInstanceOf(UnprocessableException.class)
+                .hasMessageContaining("closedBy and why");
+        assertThatThrownBy(() -> endpoint.close(id, "close", null, "a reason"))
+                .isInstanceOf(UnprocessableException.class);
+        assertThatThrownBy(() -> endpoint.close(id, "discard", "ada", "a reason"))
+                .as("only the two things that can be done to a dead letter")
+                .isInstanceOf(UnprocessableException.class);
+
+        assertThat(deadLetters.outstanding())
+                .as("nothing was closed by any of those")
+                .hasSize(1);
+    }
+
+    @Test
+    @Timeout(180)
+    void oneThatFailsAgainAfterBeingClosedComesBack() {
+        UUID eventId = UUID.randomUUID();
+        deadLetters.record(new DeadLetters.DeadLetter(
+                null, eventId, "payment.captured", PaymentNotifications.HANDLER, TOPIC,
+                0, 0L, eventId.toString(), "IllegalStateException: the first time", "a-request",
+                "{}", 0, null, null));
+        UUID id = deadLetters.outstanding().getFirst().id();
+        endpoint.close(id.toString(), "close", "ada", "nothing more to be done about this one");
+        assertThat(deadLetters.outstanding()).isEmpty();
+
+        // The same event, failing again. Closing spoke about what was set aside, not about the future.
+        deadLetters.record(new DeadLetters.DeadLetter(
+                null, eventId, "payment.captured", PaymentNotifications.HANDLER, TOPIC,
+                0, 0L, eventId.toString(), "IllegalStateException: and again", "a-request",
+                "{}", 0, null, null));
+
+        assertThat(deadLetters.outstanding())
+                .as("a failure that happens again is not covered by last month's decision")
+                .hasSize(1);
+        assertThat(deadLetters.outstanding().getFirst().closedAt()).isNull();
+        assertThat(deadLetters.outstanding().getFirst().attempts()).isEqualTo(2);
     }
 
     private long handledCount(UUID eventId) {

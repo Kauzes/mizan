@@ -92,7 +92,8 @@ public class NotificationMetrics {
             initialDelayString = "${mizan.metrics.count-first-after:10s}")
     public void countWhatIsWaiting() {
         deadLetters.set(countOf(
-                "select count(*) from dead_letter where redelivered_at is null"));
+                "select count(*) from dead_letter "
+                        + "where redelivered_at is null and closed_at is null"));
         waitingToBeDelivered.set(countOf(
                 "select count(*) from webhook_delivery where status = 'PENDING'"));
         givenUpOn.set(countOf(

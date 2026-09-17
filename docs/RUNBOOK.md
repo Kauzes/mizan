@@ -280,13 +280,29 @@ The old record is marked redelivered and a new one takes its place, with the fai
 "the queue is empty" immediately after a redelivery means the event is in flight, not that it worked:
 wait, then look again.
 
-**A dead letter whose cause cannot be fixed** — a poisoned payload from a test, an event referring to
-something that never existed — has nowhere to go today. There is no way to close one without
-redelivering it, so it stays outstanding and `AnEventWasSetAside` keeps firing. One such letter has been
-outstanding here since 2026-09-02, from a live check that published a payload with the currency
-`NOTACURRENCY`. MIZ-103 adds closing it with a reason — recorded like any other operator decision, and
-not a delete: an alert that cannot be cleared is an alert people learn to ignore, which costs more than
-the gap it was covering.
+**A dead letter whose cause cannot be fixed** — a poisoned payload from a test, an event naming
+something that never existed — is closed instead, with your name and a reason:
+
+```sh
+curl -s -X POST localhost:8085/actuator/deadletters/<dead-letter-id>/close \
+  -H 'Content-Type: application/json' \
+  -d '{"closedBy":"your name","why":"what you found, and why nothing more will be done"}'
+```
+
+```json
+{"closed":"4269f8a5-9726-474c-870c-95cfebad6551","closedBy":"claude","afterFailures":3,
+ "why":"left by the MIZ-53 live check on 2026-09-02: the payload carries the currency NOTACURRENCY, so no
+        version of this service could ever have handled it",
+ "kept":"the letter, its reason and its payload stay readable"}
+```
+
+Both are required, and a closing without either is refused — a decision nobody can account for later is
+not a decision, it is a disappearance. **Closing is not deleting**: the row, its reason and its payload
+stay exactly where they were, because they are the only record that a merchant was never told something.
+What changes is that it stops counting as outstanding, so `AnEventWasSetAside` can clear.
+
+If the same event fails again afterwards, it comes back, outstanding, with its failure count raised.
+Closing speaks about what was set aside, not about the future.
 
 ## Payments that need a person
 
