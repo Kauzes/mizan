@@ -54,8 +54,7 @@ the outbox. Payments are started at a fixed rate whether or not the last one fin
 
 The median is fast and the tail is long. A payment typically completes in 76ms, and one in twenty
 takes more than a second: p95 is sixteen times p50. A tail that much wider than the middle is
-something stalling occasionally, not everything being slow. Not yet explained; it is the first thing
-to look at before tuning anything.
+something stalling occasionally, not everything being slow. **It is explained below.**
 
 ### spike: 10 a second, to 120 in 10 seconds, held a minute, back to 10
 
@@ -84,19 +83,90 @@ it is the platform.
 What overload looks like, then, is slow rather than broken. Requests queue, and k6 reports the ones it
 could not start rather than quietly sending fewer.
 
-### soak: thirty minutes
+### soak: 20 payments a second for 30 minutes
 
 | | |
 |---|---|
-| Requests | — |
-| Failed | — |
-| Payments captured | — |
-| Books afterwards | — |
+| Requests | 108,833, 60.3 a second |
+| Failed | **none** |
+| Payments captured | 36,001, **19.9 a second** of 20 offered |
+| Iterations dropped | 0 |
+| Books afterwards | balanced: 71,048 entries, 142,096 postings |
 
-**Not measured yet.** The profile exists and the thresholds below apply to it, but nobody has run
-`./scripts/load-profiles.sh soak` on this machine and written the numbers down. The blanks are
-deliberate: a soak profile is for finding what degrades over half an hour — a leak, a pool that never
-returns a connection, a queue that grows — and none of that can be guessed from a three minute run.
+| Latency | p50 | p95 | p99 | max |
+|---|---|---|---|---|
+| create | 8ms | 28ms | 60ms | 1,022ms |
+| authorize | 14ms | 35ms | 64ms | 779ms |
+| capture | 19ms | 53ms | 104ms | 1,080ms |
+| **one payment, end to end** | **42ms** | **101ms** | **239ms** | |
+
+Nothing degraded over the half hour. Heap was where it started — the JVMs were between 47 and 124 MB
+at fifteen minutes and between 50 and 108 MB at the end — thread counts moved by single digits, no pool
+grew a queue, and the outbox never fell behind. The occasional one-second maximum appears evenly
+throughout rather than more often as the run goes on: stalls, not drift.
+
+The interesting number is **p95 at 101ms against a p50 of 42ms — two and a half times**. Steady, at
+thirty a second, showed sixteen times. Whatever the tail is, it is not present at twenty a second on
+this machine, which is what turned the next section from a guess into a measurement.
+
+## Why the tail was wide
+
+Measured on 2026-09-17, after the soak, on the same machine. The soak had already shown that the tail is
+not there at twenty payments a second, so whatever causes it starts between twenty and thirty.
+
+**Every service now publishes latency as buckets** (ADR 0065), which made it possible to ask where the
+time went rather than to guess. Running steady again at thirty a second:
+
+| | k6, from outside | the service, from inside |
+|---|---|---|
+| create, p95 | 514ms | 444ms |
+| authorize, p95 | 529ms | 456ms |
+| capture, p95 | 705ms | 624ms |
+
+About seven parts in eight of the time was inside payment-service. It was not spent on anybody else:
+risk answered in 19ms at p95, the acquirer in 5ms, the ledger in 93ms. It was not garbage collection
+either — 0.49 seconds of pauses across five minutes.
+
+It was spent **waiting for a database connection**:
+
+| During the same run | |
+|---|---|
+| payment-service pool | 10 connections |
+| Threads waiting for one, at the peak | **47** |
+| Connections in use, at the peak | 10 — the whole pool |
+
+A request holds its connection for its whole life, including while it is waiting on risk, on the
+acquirer and on the ledger. This is known and was already reasoned about: the acquirer bulkhead is
+sized at eight concurrent calls precisely because "each holds a database connection, so this stays below
+the pool" (ADR 0052). What the measurement adds is that at thirty a second the pool, not the acquirer,
+is the binding constraint — and that the queue in front of it is where the tail comes from.
+
+### The confirmation, and its catch
+
+The same profile, on the same machine, minutes apart, with only the pool changed:
+
+| | pool of 10 | pool of 40 |
+|---|---|---|
+| one payment, p50 | 96ms | 68ms |
+| **one payment, p95** | **1,792ms** | **239ms** |
+| one payment, p99 | 2,621ms | 885ms |
+| create, p95 | 514ms | 51ms |
+| authorize, p95 | 529ms | 59ms |
+| capture, p95 | 705ms | 97ms |
+| Threads waiting for a connection | 47 | **0** |
+| Connections ever in use | 10 | 15 |
+| Thresholds | missed | passed |
+
+Seven and a half times better at p95, from one number. **And it is not the fix.** Postgres reached 99 of
+its 100 allowed connections during that run: raising one service's pool spent the platform's whole
+connection budget, which is exactly the failure the Helm chart already counts replicas times pool to
+avoid. Fifteen connections were ever in use, so the pool needed for this rate is closer to twenty than
+to forty — but the demand scales with how long the outbound calls take, which is the property worth
+removing rather than sizing around.
+
+The fix is therefore not a bigger number: it is not holding a database connection across a call to
+another service. That is a change to transaction boundaries in payment-service, with real consequences
+for the payment state machine, and it is **MIZ-105** rather than something to slip into a measurement.
 
 ## In CI
 

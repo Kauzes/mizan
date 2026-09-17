@@ -1,21 +1,34 @@
 {
   "uid": "mizan-platform-up",
-  "title": "Mizan — is the platform up?",
+  "title": "Mizan \u2014 is the platform up?",
   "description": "The question somebody asks first, at the moment something is wrong: is anything down, is anything failing, and is anything about to be. Six panels, because a dashboard of forty is one nobody reads during an incident. The money is a different question, asked by a different person, and it has its own dashboard.",
-  "tags": ["mizan"],
+  "tags": [
+    "mizan"
+  ],
   "timezone": "browser",
   "editable": true,
   "schemaVersion": 41,
   "refresh": "30s",
-  "time": { "from": "now-6h", "to": "now" },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "panels": [
     {
       "id": 1,
       "type": "stat",
       "title": "Services answering",
       "description": "Eight, or something is down. A scrape that stops covering a service looks exactly like a service with nothing wrong, so this counts what answered rather than what was configured.",
-      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "mizan-prometheus" },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mizan-prometheus"
+      },
       "targets": [
         {
           "refId": "A",
@@ -24,7 +37,13 @@
         }
       ],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "colorMode": "value",
         "graphMode": "none",
         "textMode": "value"
@@ -35,8 +54,14 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "green", "value": 8 }
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 8
+              }
             ]
           }
         },
@@ -47,9 +72,17 @@
       "id": 2,
       "type": "state-timeline",
       "title": "Which one, and since when",
-      "description": "A count says something is down. This says which, and how long it has been — the two things the count leaves out and the two things anybody asks next.",
-      "gridPos": { "h": 5, "w": 18, "x": 6, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "mizan-prometheus" },
+      "description": "A count says something is down. This says which, and how long it has been \u2014 the two things the count leaves out and the two things anybody asks next.",
+      "gridPos": {
+        "h": 5,
+        "w": 18,
+        "x": 6,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mizan-prometheus"
+      },
       "targets": [
         {
           "refId": "A",
@@ -60,20 +93,42 @@
       "options": {
         "mergeValues": true,
         "showValue": "never",
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": false }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        }
       },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "green", "value": 1 }
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
             ]
           },
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "not answering" }, "1": { "text": "answering" } } }
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "not answering"
+                },
+                "1": {
+                  "text": "answering"
+                }
+              }
+            }
           ]
         },
         "overrides": []
@@ -84,8 +139,16 @@
       "type": "timeseries",
       "title": "Requests the platform could not answer",
       "description": "Fives only. A four hundred is a caller being told no, which is the platform working; a five hundred is the platform failing, and they are not the same event however similar the number looks.",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
-      "datasource": { "type": "prometheus", "uid": "mizan-prometheus" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mizan-prometheus"
+      },
       "targets": [
         {
           "refId": "A",
@@ -94,15 +157,28 @@
         }
       ],
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
           "min": 0,
-          "color": { "mode": "palette-classic" },
-          "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never" }
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never"
+          }
         },
         "overrides": []
       }
@@ -112,8 +188,16 @@
       "type": "timeseries",
       "title": "The slowest request each service saw",
       "description": "The worst one in the window, not the average. An average is reassuring during exactly the incident worth noticing, because the requests that are stuck are the ones that have not finished yet and are therefore in no average at all.",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
-      "datasource": { "type": "prometheus", "uid": "mizan-prometheus" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mizan-prometheus"
+      },
       "targets": [
         {
           "refId": "A",
@@ -122,15 +206,28 @@
         }
       ],
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "fieldConfig": {
         "defaults": {
           "unit": "s",
           "min": 0,
-          "color": { "mode": "palette-classic" },
-          "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never" }
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never"
+          }
         },
         "overrides": []
       }
@@ -140,8 +237,16 @@
       "type": "timeseries",
       "title": "Errors being logged",
       "description": "What the services themselves think is wrong, which is often true before anything external has noticed. A rising line here with every other panel flat is the early half of an incident.",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
-      "datasource": { "type": "prometheus", "uid": "mizan-prometheus" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mizan-prometheus"
+      },
       "targets": [
         {
           "refId": "A",
@@ -150,15 +255,28 @@
         }
       ],
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
           "min": 0,
-          "color": { "mode": "palette-classic" },
-          "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never" }
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never"
+          }
         },
         "overrides": []
       }
@@ -168,8 +286,16 @@
       "type": "timeseries",
       "title": "Threads waiting for a database connection",
       "description": "The panel that explains a slow platform when nothing is down and nothing is erroring. A pool with everything checked out makes every service behind it look broken and none of them is.",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
-      "datasource": { "type": "prometheus", "uid": "mizan-prometheus" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mizan-prometheus"
+      },
       "targets": [
         {
           "refId": "A",
@@ -178,15 +304,82 @@
         }
       ],
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
           "min": 0,
-          "color": { "mode": "palette-classic" },
-          "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never" }
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "The slow end: p95 and p99 of a request",
+      "description": "What the slow requests look like, rather than the worst one or the average. Computed from buckets so it can be summed across instances: the p95 of four services is not the mean of their p95s. This platform's tail is wide under load \u2014 p95 sixteen times p50 in the steady load profile \u2014 and until these buckets existed that was only visible to k6, from outside, during a load run.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mizan-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (service, le) (rate(http_server_requests_seconds_bucket{job=\"mizan\", uri!~\"/actuator.*\"}[5m])))",
+          "legendFormat": "{{service}} p95"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum by (service, le) (rate(http_server_requests_seconds_bucket{job=\"mizan\", uri!~\"/actuator.*\"}[5m])))",
+          "legendFormat": "{{service}} p99"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never"
+          }
         },
         "overrides": []
       }

@@ -657,10 +657,18 @@ running everything (Ryzen 5 5600H, Docker Desktop with 7.4 GiB):
 |---|---|---|---|---|
 | steady, 3 minutes | 30/s | 29.1/s | 0.012% | 76ms / 1,254ms / 2,160ms |
 | spike, 10 → 120 → 10/s | up to 120/s | 51.7/s averaged | none | 2,295ms / 3,801ms / 4,327ms |
+| soak, 30 minutes | 20/s | 19.9/s | none | 42ms / 101ms / 239ms |
 
-Steady is fast in the middle with a long tail. Spike saturates this laptop: latency rises to seconds and
-341 payments could not be started at the peak, but nothing failed and the books balanced. Overload
-here is slow, not broken.
+Spike saturates this laptop: latency rises to seconds and 341 payments could not be started at the peak,
+but nothing failed and the books balanced. Overload here is slow, not broken. The soak ran half an hour
+without a single failure and without drifting — heap, threads and queues ended where they started.
+
+**Steady's long tail is explained**, and it was worth chasing: a request holds its database connection
+while it waits on risk, the acquirer and the ledger, so at thirty a second 47 threads were queued for a
+pool of 10, and that queue was the tail. The same profile with a larger pool goes from p95 1,792ms to
+239ms — which is the diagnosis, not the fix, because that pool took Postgres to 99 of its 100
+connections. Not holding a connection across somebody else's network call is MIZ-105. The measurement,
+the numbers on both sides and the catch are in [docs/performance](docs/performance/README.md).
 
 ```sh
 ./scripts/load-profiles.sh              # steady, then spike; fails on a missed threshold or books that do not balance

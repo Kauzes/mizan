@@ -655,6 +655,14 @@ print(answer[0]["value"][1] if answer else "")'
         || fail "the ledger drift gauge says $sound, so either the books moved or nothing checked"
     pass "the ledger checks itself on a timer, and the answer leaves the process"
 
+    # Latency as a distribution, which is the only form of it worth having. A count and a sum
+    # give a mean, and a mean hides a tail by construction: one request in twenty taking two
+    # seconds moves it by a tenth of a second. This platform has a wide tail under load, and
+    # until these buckets existed it was visible only to k6, from outside, during a load run.
+    slowEnd=$(promql 'histogram_quantile%280.95%2C%20sum%20by%20%28le%29%20%28rate%28http_server_requests_seconds_bucket%5B5m%5D%29%29%29')
+    [ -n "$slowEnd" ] && [ "$slowEnd" != "NaN" ]         || fail "no latency buckets are collected, so the slow end of this platform is invisible"
+    pass "latency is published as buckets, so a p95 can be asked for at any time and not only under load"
+
     # The one that is not about any single metric. Cardinality is how a monitoring system
     # falls over, and it falls over at the moment somebody needs it.
     offending=$(call 200 GET \
