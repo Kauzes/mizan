@@ -11,6 +11,7 @@ import androidx.navigation3.ui.NavDisplay
 import dev.kauzes.mizan.merchant.ui.home.HomeScreen
 import dev.kauzes.mizan.merchant.ui.payment.TakePaymentScreen
 import dev.kauzes.mizan.merchant.ui.payments.PaymentsScreen
+import dev.kauzes.mizan.merchant.ui.reviews.ReviewsScreen
 import dev.kauzes.mizan.merchant.ui.signin.SignInScreen
 import dev.kauzes.mizan.merchant.ui.welcome.WelcomeScreen
 
@@ -49,6 +50,7 @@ fun MainNavigation() {
                 HomeScreen(
                     onTakePayment = { backStack.add(TakePayment) },
                     onSeePayments = { backStack.add(Payments) },
+                    onReview = { backStack.add(Reviews) },
                 )
             }
             entry<TakePayment> {
@@ -56,6 +58,9 @@ fun MainNavigation() {
             }
             entry<Payments> {
                 PaymentsScreen()
+            }
+            entry<Reviews> {
+                ReviewsScreen()
             }
         },
     )

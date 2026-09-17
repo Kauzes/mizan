@@ -86,6 +86,7 @@ class HomeViewModel(private val merchants: MerchantService, private val sessions
 fun HomeScreen(
     onTakePayment: () -> Unit,
     onSeePayments: () -> Unit,
+    onReview: () -> Unit,
     viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -93,6 +94,7 @@ fun HomeScreen(
         state = state,
         onTakePayment = onTakePayment,
         onSeePayments = onSeePayments,
+        onReview = onReview,
         onReload = viewModel::reload,
         onSignOut = viewModel::signOut,
     )
@@ -103,6 +105,7 @@ fun HomeContent(
     state: HomeState,
     onTakePayment: () -> Unit,
     onSeePayments: () -> Unit,
+    onReview: () -> Unit,
     onReload: () -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -130,6 +133,7 @@ fun HomeContent(
         Spacer(Modifier.height(8.dp))
         Button(onClick = onTakePayment, modifier = Modifier.fillMaxWidth()) { Text("Take a payment") }
         OutlinedButton(onClick = onSeePayments, modifier = Modifier.fillMaxWidth()) { Text("Payments") }
+        OutlinedButton(onClick = onReview, modifier = Modifier.fillMaxWidth()) { Text("Review queue") }
         OutlinedButton(onClick = onReload, enabled = !state.loading, modifier = Modifier.fillMaxWidth()) { Text("Reload") }
         OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
     }
