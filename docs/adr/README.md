@@ -74,5 +74,6 @@ and later decided differently, is the part worth reading.
 | 0062 | [One review queue, two clients, no phone-shaped copy of it](0062-one-review-queue-two-clients.md) | MIZ-102 | accepted | — |
 | 0063 | [The architecture diagram is generated from source and checked against the platform](0063-the-picture-is-checked-against-the-platform.md) | MIZ-92 | accepted | — |
 | 0064 | [The worked example is a recording of the platform, not a description of it](0064-the-example-is-a-recording-not-a-description.md) | MIZ-94 | accepted | — |
+| 0065 | [Latency is published as buckets, so the platform can see its own tail](0065-latency-is-published-as-buckets.md) | MIZ-104 | accepted | — |
 
-64 decisions. The template for a new one is [0000-template.md](0000-template.md).
+65 decisions. The template for a new one is [0000-template.md](0000-template.md).

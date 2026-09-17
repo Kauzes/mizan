@@ -2,4 +2,5 @@
 # by the time beans exist, the first lines have been written and the shutdown behaviour chosen.
 org.springframework.boot.EnvironmentPostProcessor=\
   dev.kauzes.mizan.common.web.logging.HowThisPlatformLogs,\
-  dev.kauzes.mizan.common.web.lifecycle.HowThisPlatformStops
+  dev.kauzes.mizan.common.web.lifecycle.HowThisPlatformStops,\
+  dev.kauzes.mizan.common.web.metrics.WhatEveryServiceMeasures
