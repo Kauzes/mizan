@@ -48,8 +48,10 @@ mizan:
     # ten in a row means the acquirer, not a merchant's customers.
     failures-before-giving-up: ${MIZAN_ACQUIRER_FAILURES_BEFORE_GIVING_UP:10}
     leave-alone-for: ${MIZAN_ACQUIRER_LEAVE_ALONE_FOR:10s}
-    # How many calls may wait on the acquirer at once. Each holds a database connection, so this
-    # stays below the pool, leaving connections for everything that is not waiting on the bank.
+    # How many calls may wait on the acquirer at once. This used to say "each holds a database
+    # connection, so this stays below the pool"; since MIZ-105 none of them does. The number is
+    # still the limit on how many requests may be waiting on a slow bank at once, which is what
+    # ADR 0052 was really about.
     max-concurrent-calls: ${MIZAN_ACQUIRER_MAX_CONCURRENT_CALLS:8}
     wait-for-a-turn: ${MIZAN_ACQUIRER_WAIT_FOR_A_TURN:100ms}
   ledger:
@@ -57,6 +59,13 @@ mizan:
     # is not a merchant's request being forwarded, it is the platform recording what it did.
     base-url: ${MIZAN_LEDGER_URL:http://localhost:8082}
     timeout: ${MIZAN_LEDGER_TIMEOUT:5s}
+    # How many captures may be waiting on the books at once. This limit used to exist by
+    # accident: a capture held a database connection while it called the ledger, so the pool
+    # was the limit. MIZ-105 stopped holding the connection, and the first run without a
+    # stated limit sent the ledger everything at once and lost a quarter of the captures to
+    # its timeout. Chosen, now, rather than inherited from a pool size.
+    max-concurrent-calls: ${MIZAN_LEDGER_MAX_CONCURRENT_CALLS:12}
+    wait-for-a-turn: ${MIZAN_LEDGER_WAIT_FOR_A_TURN:250ms}
   internal:
     # What proves to the ledger that this is a service and not a merchant. There is no
     # default: a blank one would make the internal endpoints open, and this service refuses

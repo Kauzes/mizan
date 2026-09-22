@@ -102,6 +102,16 @@ public class Payment {
     private Instant captureStartedAt;
 
     /**
+     * Written before risk or the acquirer is asked, cleared when their answer is recorded.
+     *
+     * <p>What the short transactions of an authorization hand to each other now that they no longer
+     * hand each other a held database connection (MIZ-105). While it is set, this payment has an
+     * authorization in flight and a second one is refused rather than sent.
+     */
+    @Column(name = "authorization_started_at")
+    private Instant authorizationStartedAt;
+
+    /**
      * What has been given back so far.
      *
      * <p>Kept here rather than summed from the refunds on every request, because it is the
@@ -216,6 +226,9 @@ public class Payment {
 
         history.add(new PaymentTransition(this, status, next, reason));
         this.status = next;
+        // Whatever it became — authorized, declined, held, unknown — the authorization that was in
+        // flight is over, and the mark that says one is must not outlive it.
+        this.authorizationStartedAt = null;
         this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 
@@ -374,6 +387,39 @@ public class Payment {
      * <p>The count of attempts starts again, because it now counts attempts to finish this
      * capture, not whatever was once tried while working out the authorization.
      */
+    /**
+     * Writes down that an authorization has begun, before risk or the acquirer is asked.
+     *
+     * <p>Committed on its own, so it outlives the request that wrote it. A second authorization
+     * arriving while this one is out finds the mark and is refused: the point of the mark is that
+     * nobody is asked twice about the same payment.
+     */
+    public void authorizationStarted() {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        this.authorizationStartedAt = now;
+        this.updatedAt = now;
+    }
+
+    /**
+     * The authorization got nowhere: risk could not be asked, or the acquirer refused to be.
+     *
+     * <p>Nothing was decided and nothing moved, so the payment is exactly where it was and the next
+     * attempt may start. Not a state change, because none happened.
+     */
+    public void authorizationNotReached() {
+        this.authorizationStartedAt = null;
+        this.updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+    }
+
+    public Instant authorizationStartedAt() {
+        return authorizationStartedAt;
+    }
+
+    /** True while an authorization of this payment is out with risk or the acquirer. */
+    public boolean isBeingAuthorized() {
+        return authorizationStartedAt != null;
+    }
+
     public void captureStarted() {
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
         this.captureStartedAt = now;

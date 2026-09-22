@@ -9,10 +9,15 @@ import java.util.function.Supplier;
  * A limit on how many calls to one dependency may be waiting on it at once.
  *
  * <p>A breaker notices a dependency that fails. It does not notice one that is merely slow and
- * still answering, and a slow dependency is the more dangerous of the two: every call to it holds
- * a request thread and, on this platform, a database connection, for as long as it waits. With
- * nothing in the way, a slow acquirer takes every connection the pool has, and then a merchant
- * reading a payment waits too, for a connection, behind calls that have nothing to do with them.
+ * still answering, and a slow dependency is the more dangerous of the two: every call to it holds a
+ * request thread for as long as it waits.
+ *
+ * <p>It used to hold a database connection too, and that sentence was the reason this class was sized
+ * against the pool (ADR 0052). Since MIZ-105 no outbound call holds a connection, which removed the
+ * accidental limit the pool had been providing: the first run of a capture without a stated limit sent
+ * the ledger everything at once and lost a quarter of the captures to its timeout. So the number still
+ * matters, for the original reason rather than for connections — a few calls may wait on a dependency
+ * at once, and the rest are refused.
  *
  * <p>So a few calls may wait on it at once, and the rest are refused. A caller that is refused was
  * never sent, which is a different and safer fact than a call that was sent and not answered.

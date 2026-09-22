@@ -2,6 +2,7 @@ package dev.kauzes.mizan.payment;
 
 import dev.kauzes.mizan.common.error.ErrorCode;
 import dev.kauzes.mizan.common.error.MizanException;
+import dev.kauzes.mizan.common.web.Bulkhead;
 import dev.kauzes.mizan.common.identity.ServiceCredential;
 import java.time.Duration;
 import java.time.Instant;
@@ -53,12 +54,31 @@ public class LedgerClient {
     private static final String SETTLEMENT = "settlement.";
 
     private final RestClient http;
+    private final Bulkhead bulkhead;
 
+    /**
+     * How many captures may be waiting on the books at once.
+     *
+     * <p>Until MIZ-105 this number existed without anybody choosing it. A capture held a database
+     * connection while it called the ledger, so the pool of ten was the limit, and the ledger was
+     * never asked more than ten things at a time. Taking the transaction off that call removed the
+     * queue in front of it — and the first run without a limit sent the ledger everything at once:
+     * 28% of captures failed on its five second timeout, against none before.
+     *
+     * <p>So the limit is stated rather than inherited. Sized the way ADR 0052 sizes the acquirer:
+     * enough that ordinary traffic never waits — thirty payments a second against a ledger that
+     * answers in under a tenth of a second needs about three — with room for a slow moment, and
+     * below what the ledger itself can hold open.
+     */
     public LedgerClient(
             RestClient.Builder builder,
             @Value("${mizan.ledger.base-url:http://localhost:8082}") String baseUrl,
             @Value("${mizan.ledger.timeout:5s}") Duration timeout,
+            @Value("${mizan.ledger.max-concurrent-calls:12}") int maxConcurrentCalls,
+            @Value("${mizan.ledger.wait-for-a-turn:250ms}") Duration waitForATurn,
             @Value("${mizan.internal.service-token:}") String serviceToken) {
+
+        this.bulkhead = new Bulkhead("the ledger", maxConcurrentCalls, waitForATurn);
 
         if (serviceToken.isBlank()) {
             throw new IllegalStateException(
@@ -135,8 +155,8 @@ public class LedgerClient {
 
     private UUID post(Entry entry) {
         try {
-            Written written =
-                    http.post().uri("/internal/entries").body(entry).retrieve().body(Written.class);
+            Written written = bulkhead.call(() ->
+                    http.post().uri("/internal/entries").body(entry).retrieve().body(Written.class));
 
             if (written == null || written.id() == null) {
                 throw new MizanException(
@@ -167,6 +187,18 @@ public class LedgerClient {
                     ErrorCode.UNPROCESSABLE,
                     "The books would not accept this movement: " + detailOf(refused),
                     refused);
+
+        } catch (Bulkhead.FullException tooMany) {
+            // Not sent, which is a different and safer fact than sent and unanswered: no money
+            // moved and no entry exists, so this capture is simply unfinished and can be sent
+            // again. Without this limit the ledger was handed everything at once and answered a
+            // quarter of it with timeouts, which is the same failure wearing a worse mask.
+            log.warn("{}", tooMany.getMessage());
+            throw new MizanException(
+                    ErrorCode.UPSTREAM_UNAVAILABLE,
+                    "The books are busy and this was not sent. Nothing moved; send this capture "
+                            + "again in a moment.",
+                    tooMany);
 
         } catch (MizanException already) {
             throw already;

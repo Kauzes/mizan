@@ -168,6 +168,29 @@ The fix is therefore not a bigger number: it is not holding a database connectio
 another service. That is a change to transaction boundaries in payment-service, with real consequences
 for the payment state machine, and it is **MIZ-105** rather than something to slip into a measurement.
 
+### What MIZ-105 changed, and what is still unmeasured
+
+Authorizing is now four short transactions with the calls to risk and the acquirer between them, and the
+capture records its entry outside the transaction that writes it (ADR 0066). A test holds the acquirer
+still mid-authorization and asks the pool what it is doing: nothing.
+
+Removing the hold also removed a limit nobody had chosen. The ten connections had been rationing calls to
+the ledger; without them, the first run sent it everything at once and **28% of captures failed on its
+five second timeout**. The ledger now has a stated bulkhead of twelve, and a full one refuses with
+"nothing moved, send it again" rather than timing out.
+
+**The before and after numbers are not here yet.** The machine these figures were measured on is now
+transcoding video at 96% of its CPU, and a rerun of the *unchanged* code on a fresh database reported
+create alone at three seconds — thirty times the figure above. Publishing anything measured against that
+would be publishing a number about HandBrake. The rows to fill, on an idle machine, are:
+
+| steady, 30/s | before MIZ-105 | after MIZ-105 |
+|---|---|---|
+| one payment, p95 | 1,792ms | — |
+| threads waiting for a connection | 47 | — |
+| connections ever in use | 10 | — |
+| captures refused, and why | 0.07% | — |
+
 ## In CI
 
 `.github/workflows/load.yml` runs steady and spike on main and on changes to the load profiles. A

@@ -74,7 +74,9 @@ class CaptureResolverTest extends MizanIntegrationTest {
                 String baseUrl,
                 java.time.Duration timeout,
                 String serviceToken) {
-            super(builder, baseUrl, timeout, serviceToken);
+            // A limit wide enough that nothing here waits for a turn: what these tests break is the
+            // ledger itself, not the queue in front of it (MIZ-105).
+            super(builder, baseUrl, timeout, 32, java.time.Duration.ofSeconds(1), serviceToken);
         }
 
         @Override

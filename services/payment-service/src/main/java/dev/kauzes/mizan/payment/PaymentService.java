@@ -126,13 +126,24 @@ public class PaymentService {
      * stays authorized, which is honest, and is now findable.
      */
     public PaymentResponse finishCapture(UUID merchantId, UUID paymentId) {
+        // Read, then ask the ledger with nothing held, then write. The books are another service over
+        // HTTP — 93ms at p95 under load — and a connection held across that call is a connection doing
+        // nothing but waiting (MIZ-105).
+        Payment reading = step.execute(status -> mine(merchantId, paymentId));
+        if (reading.status() == PaymentStatus.CAPTURED) {
+            return PaymentResponse.of(reading);
+        }
+
+        // Repeatable, which is what makes it safe to do outside the transaction that records it: the
+        // entry carries the payment id, so the ledger answers a second call with the entry it already
+        // wrote rather than writing another.
+        UUID entry = ledger.recordCapture(merchantId, reading);
+
         return step.execute(status -> {
             Payment payment = mine(merchantId, paymentId);
             if (payment.status() == PaymentStatus.CAPTURED) {
                 return PaymentResponse.of(payment);
             }
-
-            UUID entry = ledger.recordCapture(merchantId, payment);
 
             payment.captured(entry);
             // In this transaction, so the capture and the announcement of it commit together or
@@ -213,7 +224,32 @@ public class PaymentService {
      * <p>The acquirer is asked with the payment's own id, so asking again after a lost answer
      * returns the first decision rather than reserving the money twice.
      */
-    @Transactional
+    /**
+     * Asks risk, asks the acquirer, and records what they said — holding a database connection for
+     * none of it.
+     *
+     * <p>This was one transaction around the whole method, and the connection it held was doing two
+     * jobs: keeping the payment state consistent, and keeping two authorizations of one payment from
+     * interleaving. It was also the platform latency tail — at thirty payments a second, 47 request
+     * threads queued for a pool of ten while those threads sat waiting on somebody else network
+     * (MIZ-104, docs/performance).
+     *
+     * <p>So it is the capture arrangement now (MIZ-90): short transactions with the outbound calls
+     * between them, and a mark on the payment carrying the intent across them.
+     *
+     * <ol>
+     *   <li><b>Claim.</b> Check what can be checked and write down that an authorization has begun.
+     *       Committed before anybody outside is asked, so a second authorization finds the mark.
+     *   <li><b>Ask risk</b>, with no connection held. A verdict that ends the payment — blocked or
+     *       held — is recorded in a transaction of its own and stops here.
+     *   <li><b>Ask the acquirer</b>, with no connection held.
+     *   <li><b>Record</b> the decision and the event together, which clears the mark.
+     * </ol>
+     *
+     * <p>A crash between two steps leaves the mark, which says an authorization began and did not
+     * finish: the same state a timeout leaves, and the one {@link AuthorizationResolver} already
+     * resolves by asking the acquirer what it did.
+     */
     public PaymentResponse authorize(UUID merchantId, UUID paymentId, AuthorizeRequest request) {
         // Checked here rather than by an annotation on the request, and that is a decision
         // about logs rather than about validation. Bean Validation reports a failure by
@@ -224,84 +260,125 @@ public class PaymentService {
         // The message says the rule and never the value. MIZ-79.
         refuseACardThatIsNotOne(request.card());
 
-        Payment payment = mine(merchantId, paymentId);
+        // One: refuse, or write down that an authorization has begun.
+        Payment claimed = step.execute(status -> {
+            Payment payment = mine(merchantId, paymentId);
 
-        // Checked before the acquirer is troubled, so a payment that cannot be authorized is
-        // refused in terms of where it already is rather than after somebody else's system
-        // has done work for us.
-        refuseUnless(payment, PaymentStatus.AUTHORIZED, "authorized");
+            // Checked before the acquirer is troubled, so a payment that cannot be authorized is
+            // refused in terms of where it already is rather than after somebody else has done
+            // work for us.
+            refuseUnless(payment, PaymentStatus.AUTHORIZED, "authorized");
 
-        // A held payment goes no further until a person has ruled on it. Without this, the
-        // review is decoration: the merchant whose payment was held could simply send the
-        // authorization again, and the second attempt would skip the scorer entirely on the
-        // grounds that the payment was already held. Being held has to mean stopped.
-        if (payment.isWaitingForAPerson()) {
-            throw new UnprocessableException(
-                    "This payment is held for review. It cannot be authorized until somebody "
-                            + "has released it.");
+            // A held payment goes no further until a person has ruled on it. Without this, the
+            // review is decoration: the merchant whose payment was held could simply send the
+            // authorization again, and the second attempt would skip the scorer entirely on the
+            // grounds that the payment was already held. Being held has to mean stopped.
+            if (payment.isWaitingForAPerson()) {
+                throw new UnprocessableException(
+                        "This payment is held for review. It cannot be authorized until somebody "
+                                + "has released it.");
+            }
+
+            // The mark the long transaction used to stand in for. Two authorizations of one payment
+            // cannot both be out: the second finds this and is told to wait for the first, rather
+            // than asking the acquirer about a payment somebody is already asking about.
+            if (payment.isBeingAuthorized()) {
+                throw new MizanException(
+                        ErrorCode.CONTENDED,
+                        "This payment is already being authorized. Wait for that answer rather "
+                                + "than sending a second one: they would be the same payment.");
+            }
+
+            payment.authorizationStarted();
+            return payment;
+        });
+
+        // Two: risk, with nothing held. A payment released by an analyst is not scored again — they
+        // have overruled the scorer, and asking it a second time would let it overrule them back.
+        if (!claimed.wasReleased()) {
+            RiskClient.Assessment assessment;
+            try {
+                assessment = risk.assess(claimed, request.card());
+            } catch (RuntimeException couldNotAsk) {
+                // Nothing was decided, so the payment is where it was and the next attempt may
+                // start. Without this the mark would outlive the attempt it stands for.
+                step.executeWithoutResult(
+                        status -> mine(merchantId, paymentId).authorizationNotReached());
+                throw couldNotAsk;
+            }
+
+            PaymentResponse ruled = step.execute(status -> {
+                Payment payment = mine(merchantId, paymentId);
+                payment.scored(
+                        assessment.verdict(),
+                        assessment.score(),
+                        String.join("; ", assessment.reasons()),
+                        assessment.at());
+
+                if (assessment.isBlock()) {
+                    // Refused without troubling the acquirer. Nobody is contacted and no money is
+                    // reserved, which is the entire point of scoring before rather than after.
+                    payment.refusedByRisk(
+                            "This payment was refused: " + String.join("; ", assessment.reasons()));
+                    events.record(payment, payment.declineReason());
+                    log.info("payment {} was refused by risk: {}", paymentId, assessment.reasons());
+                    return PaymentResponse.of(payment);
+                }
+                if (assessment.isReview()) {
+                    payment.heldForReview(String.join("; ", assessment.reasons()));
+                    events.record(payment, payment.riskReasons());
+                    metrics.heldForReview();
+                    log.info("payment {} is held for review: {}", paymentId, assessment.reasons());
+                    return PaymentResponse.of(payment);
+                }
+                return null;
+            });
+
+            if (ruled != null) {
+                return ruled;
+            }
         }
 
-        // Risk first, because a payment cannot be scored after it has been authorized: the
-        // point of scoring is to not authorize it. A payment held and released by an analyst
-        // is not scored again — they have overruled the scorer, and asking it a second time
-        // would let it overrule them back.
-        if (!payment.wasReleased()) {
-            RiskClient.Assessment assessment = risk.assess(payment, request.card());
-            payment.scored(
-                    assessment.verdict(),
-                    assessment.score(),
-                    String.join("; ", assessment.reasons()),
-                    assessment.at());
-
-            if (assessment.isBlock()) {
-                // Refused without troubling the acquirer. Nobody is contacted and no money is
-                // reserved, which is the entire point of scoring before rather than after.
-                payment.refusedByRisk(
-                        "This payment was refused: " + String.join("; ", assessment.reasons()));
-                events.record(payment, payment.declineReason());
-                log.info("payment {} was refused by risk: {}", paymentId, assessment.reasons());
-                return PaymentResponse.of(payment);
-            }
-            if (assessment.isReview()) {
-                payment.heldForReview(String.join("; ", assessment.reasons()));
-                events.record(payment, payment.riskReasons());
-                metrics.heldForReview();
-                log.info("payment {} is held for review: {}", paymentId, assessment.reasons());
-                return PaymentResponse.of(payment);
-            }
-        }
-
+        // Three: the acquirer, with nothing held.
         AcquirerClient.AcquirerDecision decision;
         try {
             decision = acquirer.authorize(
-                    payment.id(),
-                    payment.money().amount(),
-                    payment.money().currency().getCurrencyCode(),
+                    claimed.id(),
+                    claimed.money().amount(),
+                    claimed.money().currency().getCurrencyCode(),
                     request.card());
         } catch (MizanException noAnswer) {
             if (noAnswer.errorCode() == ErrorCode.UPSTREAM_TIMEOUT) {
-                // Recorded in a transaction of its own, because this one is about to roll
-                // back: the caller is told by an exception being thrown, and a note written
-                // here would go with it. The same lesson as MIZ-33 and MIZ-36.
+                // The acquirer may have reserved the money. The payment is moved to say so, which
+                // clears the mark, and the resolver asks the acquirer what it did.
                 unknownOutcomes.record(merchantId, paymentId, noAnswer.getMessage());
                 metrics.noAnswer();
+            } else {
+                // Refused to be asked at all: nothing was reserved, so the next attempt may start.
+                step.executeWithoutResult(
+                        status -> mine(merchantId, paymentId).authorizationNotReached());
             }
             throw noAnswer;
         }
 
-        if (decision.approved()) {
-            payment.authorized(decision.acquirerReference(), decision.cardLastFour());
-            metrics.authorized();
-            log.info("authorized payment {} as {}", paymentId, decision.acquirerReference());
-        } else {
-            payment.declined(
-                    decision.acquirerReference(), decision.cardLastFour(), decision.reason());
-            metrics.declined(decision.reason());
-            log.info("payment {} was declined: {}", paymentId, decision.reason());
-        }
+        // Four: record what it said, and the event, together.
+        return step.execute(status -> {
+            Payment payment = mine(merchantId, paymentId);
 
-        events.record(payment, decision.reason());
-        return PaymentResponse.of(payment);
+            if (decision.approved()) {
+                payment.authorized(decision.acquirerReference(), decision.cardLastFour());
+                metrics.authorized();
+                log.info("authorized payment {} as {}", paymentId, decision.acquirerReference());
+            } else {
+                payment.declined(
+                        decision.acquirerReference(), decision.cardLastFour(), decision.reason());
+                metrics.declined(decision.reason());
+                log.info("payment {} was declined: {}", paymentId, decision.reason());
+            }
+
+            events.record(payment, decision.reason());
+            return PaymentResponse.of(payment);
+        });
     }
 
     /**
