@@ -66,6 +66,15 @@ mistyped card — or one an attacker was probing with — was in a log line verb
   identifier that happens to satisfy Luhn. The answer then is to look, not to loosen the rule.
   It is tuned to be quiet enough that a hit is worth reading — "any run of digits" flags every
   epoch timestamp, and a check that cries wolf is a check somebody deletes.
+  - **It happened, on 2026-09-17** (MIZ-106). The correlation id
+    `32554113-4101-4442-8b44-7485977c445b`: its first three groups are all decimal, which is sixteen
+    digits with the dashes out, starting with a 3 and passing Luhn. Four lines, one per service, and
+    the smoke check failed on all four. Somebody looked, as this said to; it was an id.
+  - A uuid is now taken out of a line before the scan reads it, in the smoke check and in
+    `NothingSecretReachesTheLogTest`. That is narrower than loosening the rule and keeps every shape
+    the scan caught before: no card is ever written as 8-4-4-4-12 hexadecimal. Roughly one uuid in
+    fifty thousand has this shape, so on a platform that has taken tens of thousands of payments this
+    was a matter of when rather than whether.
 - Setting the log level of `org.springframework.web` to DEBUG in a deployment would again write
   request bodies. Nothing stops that, and nothing can; what the test guarantees is that the
   bodies themselves no longer hold a card by the time anything prints them.

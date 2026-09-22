@@ -930,11 +930,19 @@ never = ("a-shared-secret-for-local-runs", "bWl6YW4t", "\"card\":\"", "cardNumbe
          "BEGIN PRIVATE KEY", "password=")
 
 found = []
+# An id is not a card, however much of it happens to be decimal. A correlation id whose first three
+# groups are all digits is sixteen digits with the dashes out, starts with an issuer digit and passes
+# Luhn; one in roughly fifty thousand looks like that, and this check found one. Taken out before the
+# scan rather than the rule being loosened, because no card is ever written in this shape. The same
+# masking is in NothingSecretReachesTheLogTest, which reads the logs of one service the same way.
+# An apostrophe here would close the quoted string this whole program lives in. MIZ-106.
+an_id = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
 for line in sys.stdin.read().splitlines():
     for secret in never:
         if secret in line:
             found.append("names %s: %s" % (secret, line[:160]))
-    for match in card_shaped.finditer(line):
+    for match in card_shaped.finditer(an_id.sub("<an id>", line)):
         digits = re.sub(r"[ -]", "", match.group())
         if luhn(digits):
             found.append("card shaped %s: %s" % (digits, line[:160]))

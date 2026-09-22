@@ -75,6 +75,21 @@ class NothingSecretReachesTheLogTest extends MizanIntegrationTest {
     private static final Pattern CARD_SHAPED =
             Pattern.compile("(?<![0-9A-Za-z-])([3-6](?:[ -]?[0-9]){12,18})(?![0-9A-Za-z])");
 
+    /**
+     * An id, which is not a card however much of it happens to be decimal.
+     *
+     * <p>A correlation id whose first three groups are all digits — `32554113-4101-4442-8b44-…` — is
+     * sixteen digits once the dashes come out, starts with a 3, and passes Luhn. One in roughly fifty
+     * thousand looks like this, so on a platform that has taken tens of thousands of payments it is a
+     * matter of when. The smoke check found one and failed on it (MIZ-106).
+     *
+     * <p>Ids are taken out before the scan rather than the rule being loosened: no card is ever written
+     * in this shape, so nothing real stops being caught. Kept in step with the same masking in
+     * `scripts/smoke.sh`, which reads the whole platform's logs the same way.
+     */
+    private static final Pattern AN_ID = Pattern.compile(
+            "\\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\b");
+
     /** Names that mean the value beside them was never meant to be read. */
     private static final List<String> NEVER_IN_A_LINE = List.of(
             "a-shared-secret-for-local-runs",
@@ -207,8 +222,9 @@ class NothingSecretReachesTheLogTest extends MizanIntegrationTest {
                 .as("a line names %s, which means the value beside it is there too", forbidden)
                 .isEmpty());
 
-        // The general case, which is the one that catches the card nobody thought of.
-        Matcher cardShaped = CARD_SHAPED.matcher(everything);
+        // The general case, which is the one that catches the card nobody thought of. Ids are masked
+        // first: see AN_ID.
+        Matcher cardShaped = CARD_SHAPED.matcher(withoutIds(everything));
         while (cardShaped.find()) {
             String candidate = cardShaped.group().replaceAll("[ -]", "");
             if (!passesLuhn(candidate)) {
@@ -217,6 +233,40 @@ class NothingSecretReachesTheLogTest extends MizanIntegrationTest {
             assertThat(lineAround(everything, cardShaped.start()))
                     .as("something that passes for a card number was logged: %s", candidate)
                     .isEmpty();
+        }
+    }
+
+    @Test
+    void anIdIsNotACardHoweverMuchOfItIsDecimal() {
+        // A real correlation id, from the run that failed the smoke check. Sixteen digits once the
+        // dashes come out, starting with a 3, and it passes Luhn.
+        String correlationId = "32554113-4101-4442-8b44-7485977c445b";
+        assertThat(passesLuhn(correlationId.replaceAll("[ -]", "").substring(0, 16)))
+                .as("this is why it was reported: the first sixteen digits really do pass Luhn")
+                .isTrue();
+
+        String line = "2026-09-17T19:26:22.442Z INFO [payment-service] [" + correlationId + "] took a payment";
+
+        assertThat(CARD_SHAPED.matcher(withoutIds(line)).find())
+                .as("a correlation id is not a card, and a check that says it is gets rerun until green")
+                .isFalse();
+    }
+
+    @Test
+    void andARealCardStillIsOne() {
+        // Every shape the rule catches, with an id beside it, so masking cannot hide the thing it is for.
+        for (String written : new String[] {
+            "4242424242424242",
+            "4242 4242 4242 4242",
+            "4242-4242-4242-4242",
+        }) {
+            String line = "[32554113-4101-4442-8b44-7485977c445b] somebody logged " + written;
+            Matcher found = CARD_SHAPED.matcher(withoutIds(line));
+
+            assertThat(found.find()).as("%s should still be card shaped", written).isTrue();
+            assertThat(passesLuhn(found.group().replaceAll("[ -]", "")))
+                    .as("%s should still pass Luhn", written)
+                    .isTrue();
         }
     }
 
@@ -266,6 +316,11 @@ class NothingSecretReachesTheLogTest extends MizanIntegrationTest {
      * <p>Not security: it is what tells a card apart from an offset, an epoch or an account
      * number, so that this test fails only when it has found something.
      */
+    /** Every uuid replaced by something no rule here can mistake for a number. */
+    private static String withoutIds(String text) {
+        return AN_ID.matcher(text).replaceAll("<an id>");
+    }
+
     private static boolean passesLuhn(String digits) {
         int sum = 0;
         boolean doubling = false;
